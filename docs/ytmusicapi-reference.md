@@ -83,6 +83,8 @@ token = setup_oauth(
     client_id="SEU_CLIENT_ID",
     client_secret="SEU_CLIENT_SECRET",
     filepath="oauth.json",       # Onde salvar o token
+    session=None,                # requests.Session opcional
+    proxies=None,                # Proxies para autenticacao
     open_browser=False           # True para abrir navegador automaticamente
 )
 ```
@@ -190,7 +192,7 @@ yt = YTMusic()  # Sem argumento auth
 | `get_watch_playlist()`   | Sim      | Sim      |
 | `get_home()`             | Sim      | Sim (personalizado) |
 | `get_charts()`           | Parcial* | Sim      |
-| `get_explore()`          | Parcial* | Sim      |
+| ~~`get_explore()`~~      | **Removido na v1.11.5** | — |
 | `get_mood_categories()`  | Sim      | Sim      |
 | Biblioteca pessoal       | Nao      | **Sim**  |
 | Gerenciar playlists      | Nao      | **Sim**  |
@@ -201,7 +203,7 @@ yt = YTMusic()  # Sem argumento auth
 | `get_account_info()`     | Nao      | **Sim**  |
 | `get_tasteprofile()`     | Nao      | **Sim**  |
 
-\* `get_charts()` sem auth retorna artistas sem ranking. `get_explore()` sem Premium nao retorna Top Songs.
+\* `get_charts()` sem auth retorna artistas sem ranking. `get_explore()` foi removido na v1.11.5.
 
 ---
 
@@ -221,13 +223,61 @@ class YTMusic(
 )
 ```
 
-#### Context Manager
+#### Context Manager (Interno)
+
+> **Nota**: `as_mobile()` nao consta na referencia oficial da API. Pode ser interno ou experimental.
 
 ```python
 # Emular cliente mobile Android (retorna resultados diferentes)
 with yt.as_mobile():
     results = yt.search("query")
 ```
+
+### Funcoes Standalone de Setup
+
+#### `ytmusicapi.setup()`
+
+Setup de browser auth via terminal. Solicita headers do navegador.
+
+```python
+def setup(
+    filepath: str | None = None,
+    headers_raw: str | None = None
+) -> str
+```
+
+| Parametro     | Descricao |
+|---------------|-----------|
+| `filepath`    | Caminho para salvar os headers |
+| `headers_raw` | Headers copiados do navegador. Caso contrario, solicitados via terminal |
+
+**Retorno**: String de configuracao de headers.
+
+#### `ytmusicapi.setup_oauth()`
+
+Setup de OAuth via terminal. Inicia o Device Code Flow.
+
+```python
+def setup_oauth(
+    client_id: str,
+    client_secret: str,
+    filepath: str | None = None,
+    session: requests.Session | None = None,
+    proxies: dict[str, str] | None = None,
+    open_browser: bool = False
+) -> RefreshingToken
+```
+
+| Parametro       | Descricao |
+|-----------------|-----------|
+| `client_id`     | Client ID do OAuth |
+| `client_secret` | Client secret do OAuth |
+| `filepath`      | Caminho para salvar o token |
+| `session`       | Session HTTP opcional para autenticacao |
+| `proxies`       | Configuracao de proxies para autenticacao |
+| `open_browser`  | Abrir navegador automaticamente com o link de setup |
+
+**Retorno**: `RefreshingToken` com os tokens de acesso.
 
 ---
 
@@ -261,23 +311,52 @@ def search(
 **Retorno**: Lista de dicts com `resultType` indicando o tipo. Estrutura varia por tipo:
 
 ```typescript
-// Song / Video / Episode
+// Song
 {
-  resultType: "song" | "video" | "episode",
+  resultType: "song",
   category: string,
   videoId: string,
   videoType: string,
   title: string,
   artists: Array<{ name: string, id: string }>,
   album: { name: string, id: string },
-  duration: string,        // "3:45"
+  duration: string,            // "3:45"
+  duration_seconds: number,
   year: string | null,
   isExplicit: boolean,
-  thumbnails: Array<{ url: string, width: number, height: number }>,
-  // Episode extras:
+  inLibrary: boolean,
+  feedbackTokens: { add: string | null, remove: string | null },
+  pinnedToListenAgain: boolean,
+  listenAgainFeedbackTokens: { pin: string | null, unpin: string | null },
+  thumbnails: Array<{ url: string, width: number, height: number }>
+}
+
+// Video
+{
+  resultType: "video",
+  category: string,
+  videoId: string,
+  videoType: string,
+  title: string,
+  artists: Array<{ name: string, id: string }>,
+  views: string,               // "1.4M"
+  duration: string,
+  duration_seconds: number,
+  thumbnails: [...]
+}
+
+// Episode
+{
+  resultType: "episode",
+  category: string,
+  videoId: string,
+  videoType: string,
+  title: string,
   date?: string,
   podcast?: { name: string, id: string },
-  live?: boolean
+  live?: boolean,
+  duration: string,
+  thumbnails: [...]
 }
 
 // Album
@@ -286,10 +365,9 @@ def search(
   category: string,
   title: string,
   type: string,
-  browseId: string,        // "MPREb_..."
+  browseId: string,            // "MPREb_..."
   playlistId: string,
-  artists: Array<{ name: string, id: string }>,
-  duration: string | null,
+  artist: string,              // Nota: string simples, nao array
   year: string,
   isExplicit: boolean,
   thumbnails: [...]
@@ -300,7 +378,9 @@ def search(
   resultType: "artist",
   category: string,
   artist: string,
-  browseId: string,        // channelId
+  browseId: string,            // channelId
+  shuffleId: string,
+  radioId: string,
   subscribers: string | null,
   thumbnails: [...]
 }
@@ -311,9 +391,19 @@ def search(
   category: string,
   title: string,
   playlistId: string,
-  browseId: string,
+  browseId: string,            // "VL" + playlistId
   author: string,
   itemCount: string,
+  thumbnails: [...]
+}
+
+// Profile
+{
+  resultType: "profile",
+  category: string,
+  title: string,
+  name: string,                // "@handle"
+  browseId: string,
   thumbnails: [...]
 }
 ```
@@ -402,36 +492,54 @@ def get_artist(self, channelId: str) -> dict
   description: string,
   views: string,
   name: string,
-  channelId: string,
+  channelId: string,               // AVISO: diferente do channelId passado; usar apenas com subscribe_artists()
   shuffleId: string,
   radioId: string,
   subscribers: string,
   monthlyListeners: string | null,
+  subscribed: boolean,
   thumbnails: [...],
-  songs: {
+  songs: {                         // Passar browseId para get_playlist()
     browseId: string,
     results: Array<Song>,
     params: string | null
   },
-  albums: {
+  albums: {                        // Passar browseId + params para get_artist_albums()
     browseId: string,
     results: Array<Album>,
     params: string
   },
-  singles: {
+  singles: {                       // Passar browseId + params para get_artist_albums()
     browseId: string,
     results: Array<Album>,
     params: string
   },
-  videos: {
+  shows?: {                        // Passar browseId + params para get_artist_albums()
+    browseId: string,
+    results: Array<Album>,
+    params: string
+  },
+  videos: {                        // Passar browseId para get_playlist()
     browseId: string,
     results: Array<Video>,
     params: string | null
+  },
+  episodes?: {
+    browseId: string,
+    results: Array<Episode>,
+    params: string | null
+  },
+  podcasts?: {
+    browseId: string | null,
+    results: Array<Podcast>,
   },
   related: {
     results: Array<RelatedArtist>
   }
 }
+
+// Tipos de conteudo possiveis em get_artist():
+// songs, albums, singles, shows, videos, episodes, podcasts, related
 ```
 
 #### `get_artist_albums()`
@@ -444,7 +552,7 @@ def get_artist_albums(
     channelId: str,
     params: str,
     limit: int | None = 100,
-    order: str | None = None   # "Recency", "Popularity", "Alphabetical order"
+    order: Literal["Recency", "Popularity", "Alphabetical order"] | None = None
 ) -> list[dict]
 ```
 
@@ -647,17 +755,17 @@ def set_tasteprofile(
 
 **Requer auth**: Sim
 
-#### `get_signatureTimestamp()`
+#### `get_signatureTimestamp()` (Interno)
 
-Obtem o signatureTimestamp necessario para URLs de streaming validas.
+Obtem o signatureTimestamp necessario para URLs de streaming validas. Nao listado na referencia oficial, mas disponivel internamente.
 
 ```python
 def get_signatureTimestamp(self, url: str | None = None) -> int
 ```
 
-#### `get_basejs_url()`
+#### `get_basejs_url()` (Interno)
 
-Extrai a URL do script `base.js` do YouTube Music.
+Extrai a URL do script `base.js` do YouTube Music. Nao listado na referencia oficial, mas disponivel internamente.
 
 ```python
 def get_basejs_url(self) -> str
@@ -667,17 +775,9 @@ def get_basejs_url(self) -> str
 
 ### 3.3 Exploracao (Explore)
 
-#### `get_explore()`
+#### `get_explore()` (REMOVIDO)
 
-Dados da pagina "Explorar" do YouTube Music.
-
-```python
-def get_explore(self) -> dict
-```
-
-**Requer auth**: Nao (Top Songs requer Premium)
-
-**Retorno**: Dict com secoes: novos albuns, top songs (Premium), moods & genres, episodios populares, tendencias, novos videos musicais.
+> **AVISO**: Este metodo foi removido da API oficial na versao 1.11.5. Nao consta mais na referencia. Usar `get_mood_categories()`, `get_mood_playlists()` e `get_charts()` como substitutos para explorar conteudo.
 
 #### `get_mood_categories()`
 
@@ -727,17 +827,28 @@ def get_charts(self, country: str = "ZZ") -> dict
 
 ```typescript
 {
-  countries: { ... },
-  videos: {
-    playlist: string,
-    items: Array<Video>     // daily/weekly separados com Premium
+  countries: {
+    selected: { text: string },
+    options: Array<string>          // Codigos ISO dos paises disponiveis
   },
-  artists: Array<{
-    ...Artist,
-    rank: string | null,    // null sem auth
-    trend: string | null    // null sem auth
+  videos: Array<{                   // Playlists de charts (daily/weekly separados com Premium)
+    title: string,
+    playlistId: string,
+    thumbnails: [...]
   }>,
-  genres?: Array<GenreChart>  // Apenas para US
+  artists: Array<{
+    title: string,
+    browseId: string,
+    subscribers: string,
+    thumbnails: [...],
+    rank: string | null,            // null sem auth
+    trend: string | null            // "up", "down", "neutral", null sem auth
+  }>,
+  genres?: Array<{                  // Apenas para US
+    title: string,
+    playlistId: string,
+    thumbnails: [...]
+  }>
 }
 ```
 
@@ -808,7 +919,7 @@ def get_library_songs(
     self,
     limit: int = 25,
     validate_responses: bool = False,
-    order: str | None = None    # "a_to_z", "z_to_a", "recently_added"
+    order: Literal["a_to_z", "z_to_a", "recently_added"] | None = None
 ) -> list[dict]
 ```
 
@@ -824,7 +935,7 @@ def get_library_songs(
 def get_library_albums(
     self,
     limit: int = 25,
-    order: str | None = None
+    order: Literal["a_to_z", "z_to_a", "recently_added"] | None = None
 ) -> list[dict]
 ```
 
@@ -836,7 +947,7 @@ def get_library_albums(
 def get_library_artists(
     self,
     limit: int = 25,
-    order: str | None = None
+    order: Literal["a_to_z", "z_to_a", "recently_added"] | None = None
 ) -> list[dict]
 ```
 
@@ -848,7 +959,7 @@ def get_library_artists(
 def get_library_subscriptions(
     self,
     limit: int = 25,
-    order: str | None = None
+    order: Literal["a_to_z", "z_to_a", "recently_added"] | None = None
 ) -> list[dict]
 ```
 
@@ -860,7 +971,7 @@ Mesmo formato que `get_library_artists()`.
 def get_library_podcasts(
     self,
     limit: int = 25,
-    order: str | None = None
+    order: Literal["a_to_z", "z_to_a", "recently_added"] | None = None
 ) -> list[dict]
 ```
 
@@ -872,7 +983,7 @@ def get_library_podcasts(
 def get_library_channels(
     self,
     limit: int = 25,
-    order: str | None = None
+    order: Literal["a_to_z", "z_to_a", "recently_added"] | None = None
 ) -> list[dict]
 ```
 
@@ -934,6 +1045,8 @@ def rate_song(
 
 `INDIFFERENT` remove avaliacao anterior.
 
+**Raises**: `YTMusicUserError` se um rating invalido for fornecido.
+
 #### `rate_playlist()`
 
 ```python
@@ -945,6 +1058,8 @@ def rate_playlist(
 ```
 
 `LIKE` adiciona a biblioteca. `INDIFFERENT` remove. `DISLIKE` afeta recomendacoes.
+
+**Raises**: `YTMusicUserError` se um rating invalido for fornecido.
 
 #### `edit_song_library_status()`
 
@@ -1011,6 +1126,11 @@ def get_playlist(
   thumbnails: [...],
   description: string,
   author: { name: string, id: string },
+  // Para playlists colaborativas, author e substituido por:
+  collaborators?: {
+    text: string,                  // "by Sample Author and 1 other"
+    avatars: Array<{ url: string }>
+  },
   year: string,
   duration: string,
   duration_seconds: number,
@@ -1147,9 +1267,9 @@ def get_episode(self, videoId: str) -> dict
 |-----------|-----------|
 | `videoId` | `browseId` (MPED..) ou videoId do episodio |
 
-**Retorno**: Dict com `author`, `title`, `date`, `duration`, `description`.
+**Retorno**: Dict com `author`, `title`, `date`, `duration`, `saved` (bool), `playlistId`, `description` (lista de objetos com `text` e opcionalmente `url` ou `seconds` para timestamps).
 
-> Para salvar episodio: usar `add_playlist_items()` na playlist de salvos.
+> Para salvar episodio: usar `add_playlist_items()` na playlist SE (Saved Episodes).
 
 #### `get_episodes_playlist()`
 
@@ -1171,7 +1291,7 @@ Retorna episodios da playlist "New Episodes" (auto-gerada). Formato similar a `g
 def get_library_upload_songs(
     self,
     limit: int | None = 25,
-    order: str | None = None
+    order: Literal["a_to_z", "z_to_a", "recently_added"] | None = None
 ) -> list[dict]
 ```
 
@@ -1183,7 +1303,7 @@ def get_library_upload_songs(
 def get_library_upload_albums(
     self,
     limit: int | None = 25,
-    order: str | None = None
+    order: Literal["a_to_z", "z_to_a", "recently_added"] | None = None
 ) -> list[dict]
 ```
 
@@ -1193,7 +1313,7 @@ def get_library_upload_albums(
 def get_library_upload_artists(
     self,
     limit: int | None = 25,
-    order: str | None = None
+    order: Literal["a_to_z", "z_to_a", "recently_added"] | None = None
 ) -> list[dict]
 ```
 
@@ -1216,7 +1336,7 @@ def get_library_upload_album(self, browseId: str) -> dict
 #### `upload_song()`
 
 ```python
-def upload_song(self, filepath: str) -> str | Response
+def upload_song(self, filepath: str) -> ResponseStatus | Response
 ```
 
 | Parametro  | Descricao |
@@ -1647,7 +1767,7 @@ Seguindo a regra do CLAUDE.md de que modulos inativos devem ser desmontados:
 | `upload_song()`          | **Somente browser auth** — nao funciona com OAuth |
 | `remove_history_items()` | Nao funciona com brand accounts |
 | `get_charts()` sem auth  | Artistas retornam sem ranking (`rank`/`trend` = null) |
-| `get_explore()` sem Premium | Top Songs nao e retornado |
+| ~~`get_explore()`~~        | Removido na v1.11.5 — usar `get_mood_categories()` + `get_charts()` |
 | `edit_song_library_status()` | Bug do YTM pode impedir "desafixar" conteudo |
 
 ### 6.5 BotGuard / PO Token
