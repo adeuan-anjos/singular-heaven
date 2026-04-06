@@ -192,7 +192,7 @@ yt = YTMusic()  # Sem argumento auth
 | `get_watch_playlist()`   | Sim      | Sim      |
 | `get_home()`             | Sim      | Sim (personalizado) |
 | `get_charts()`           | Parcial* | Sim      |
-| ~~`get_explore()`~~      | **Removido na v1.11.5** | — |
+| `get_explore()`          | Sim      | Sim      |
 | `get_mood_categories()`  | Sim      | Sim      |
 | Biblioteca pessoal       | Nao      | **Sim**  |
 | Gerenciar playlists      | Nao      | **Sim**  |
@@ -203,7 +203,7 @@ yt = YTMusic()  # Sem argumento auth
 | `get_account_info()`     | Nao      | **Sim**  |
 | `get_tasteprofile()`     | Nao      | **Sim**  |
 
-\* `get_charts()` sem auth retorna artistas sem ranking. `get_explore()` foi removido na v1.11.5.
+\* `get_charts()` sem auth retorna artistas sem ranking.
 
 ---
 
@@ -775,9 +775,23 @@ def get_basejs_url(self) -> str
 
 ### 3.3 Exploracao (Explore)
 
-#### `get_explore()` (REMOVIDO)
+#### `get_explore()`
 
-> **AVISO**: Este metodo foi removido da API oficial na versao 1.11.5. Nao consta mais na referencia. Usar `get_mood_categories()`, `get_mood_playlists()` e `get_charts()` como substitutos para explorar conteudo.
+Retorna dados de exploracao incluindo novos lancamentos, top songs (premium), trending, novos videos, moods/genres e top episodios de podcast.
+
+```python
+def get_explore(self) -> dict
+```
+
+**Requer auth**: Nao (mas `top_songs` requer conta premium)
+
+**Retorno**: Dict com as chaves:
+- `new_releases` — Albums recem-lancados
+- `top_songs` — Top musicas com playlistId (apenas premium)
+- `moods_and_genres` — Categorias de genero com titulo e params
+- `top_episodes` — Top episodios de podcast
+- `trending` — Itens em alta com playlistId
+- `new_videos` — Videos musicais recentes
 
 #### `get_mood_categories()`
 
@@ -1767,7 +1781,7 @@ Seguindo a regra do CLAUDE.md de que modulos inativos devem ser desmontados:
 | `upload_song()`          | **Somente browser auth** — nao funciona com OAuth |
 | `remove_history_items()` | Nao funciona com brand accounts |
 | `get_charts()` sem auth  | Artistas retornam sem ranking (`rank`/`trend` = null) |
-| ~~`get_explore()`~~        | Removido na v1.11.5 — usar `get_mood_categories()` + `get_charts()` |
+| `get_explore()` `top_songs` | Requer conta premium — retorna vazio sem premium |
 | `edit_song_library_status()` | Bug do YTM pode impedir "desafixar" conteudo |
 
 ### 6.5 BotGuard / PO Token
