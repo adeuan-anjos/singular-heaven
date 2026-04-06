@@ -2,7 +2,7 @@
 
 
 
-**App desktop opensource de utilidades pessoais unificadas. Reprodução de YouTube Music com UI própria e leve (ytmusic-api + yt-dlp). Canal de voz P2P entre amigos via WebRTC. Download manager nativo. Browser minimalista. Participante virtual de IA no canal de voz ("Anjo"). Módulos inativos ficam desligados da memória.**
+**App desktop opensource de utilidades pessoais unificadas. Reprodução de YouTube Music com UI própria e leve (ytmusicapi Python + yt-dlp). Canal de voz P2P entre amigos via WebRTC. Download manager nativo. Browser minimalista. Participante virtual de IA no canal de voz ("Anjo"). Módulos inativos ficam desligados da memória.**
 
 
 
