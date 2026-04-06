@@ -2,5 +2,5 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 fn main() {
-    singular_haven_temp_lib::run()
+    singular_haven_lib::run()
 }
