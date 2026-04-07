@@ -33,22 +33,22 @@ export function TrackRow({ track, index, isPlaying, onPlay, onAddToQueue, onGoTo
     >
       {index !== undefined && (
         <div className="flex w-6 items-center justify-center">
-          {/* Default: number */}
-          {!isPlaying && (
-            <span className="text-center text-sm text-muted-foreground group-hover:hidden">
-              {index + 1}
-            </span>
-          )}
-          {/* Playing: animated equalizer */}
-          {isPlaying && (
-            <div className="equalizer group-hover:hidden">
-              <span /><span /><span /><span /><span />
-            </div>
-          )}
-          {/* Hover: play or pause */}
+          {/* Non-hover state */}
+          <div className="group-hover:hidden">
+            {isPlaying ? (
+              <div className="equalizer">
+                <span /><span /><span />
+              </div>
+            ) : (
+              <span className="text-center text-sm text-muted-foreground">
+                {index + 1}
+              </span>
+            )}
+          </div>
+          {/* Hover state */}
           <button
             type="button"
-            className="hidden group-hover:flex items-center justify-center"
+            className="hidden items-center justify-center group-hover:flex"
             onClick={() => onPlay?.(track)}
           >
             {isPlaying ? <Pause className="h-4 w-4 text-foreground" /> : <Play className="h-4 w-4 text-foreground" />}
