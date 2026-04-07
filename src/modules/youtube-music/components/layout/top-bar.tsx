@@ -20,7 +20,7 @@ export function TopBar({
   return (
     <div className="flex shrink-0 border-b border-border">
       {/* Spacer matching side panel width */}
-      <div className="w-64 shrink-0" />
+      <div className="w-64 shrink-0 border-r border-border" />
 
       {/* Navigation controls */}
       <div className="flex items-center gap-1 px-4 py-2">
