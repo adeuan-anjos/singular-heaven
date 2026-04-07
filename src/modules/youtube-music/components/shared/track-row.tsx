@@ -42,7 +42,7 @@ export function TrackRow({ track, index, isPlaying, onPlay, onAddToQueue, onGoTo
           {/* Playing: animated equalizer */}
           {isPlaying && (
             <div className="equalizer group-hover:hidden">
-              <span /><span /><span />
+              <span /><span /><span /><span /><span />
             </div>
           )}
           {/* Hover: play or pause */}
