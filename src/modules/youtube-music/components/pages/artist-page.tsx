@@ -28,7 +28,6 @@ export function ArtistPage({ artistId, onNavigate, onPlayTrack, onAddToQueue }: 
   const [subscribed, setSubscribed] = useState(artist.subscribed ?? false);
   const [liked, setLiked] = useState(false);
   const [bioExpanded, setBioExpanded] = useState(false);
-  const [showAllSongs, setShowAllSongs] = useState(false);
 
   return (
     <ScrollArea className="group/page h-full">
@@ -93,22 +92,20 @@ export function ArtistPage({ artistId, onNavigate, onPlayTrack, onAddToQueue }: 
           <div className="space-y-2">
             <h2 className="text-lg font-semibold text-foreground">Músicas</h2>
             <TrackTable
-              tracks={showAllSongs ? artist.topSongs : artist.topSongs.slice(0, 5)}
+              tracks={artist.topSongs.slice(0, 5)}
               showViews
               onPlay={onPlayTrack}
               onAddToQueue={onAddToQueue}
               onGoToArtist={(id) => onNavigate({ type: "artist", artistId: id })}
               onGoToAlbum={(id) => onNavigate({ type: "album", albumId: id })}
             />
-            {artist.topSongs.length > 5 && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setShowAllSongs(!showAllSongs)}
-              >
-                {showAllSongs ? "Mostrar menos" : "Mostrar tudo"}
-              </Button>
-            )}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => onNavigate({ type: "playlist", playlistId: `artist-songs-${artistId}` })}
+            >
+              Mostrar tudo
+            </Button>
           </div>
         )}
 
