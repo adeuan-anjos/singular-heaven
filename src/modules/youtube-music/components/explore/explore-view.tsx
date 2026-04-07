@@ -18,42 +18,63 @@ export function ExploreView({ onNavigate, onPlayTrack }: ExploreViewProps) {
     <ScrollArea className="h-full">
       <div className="space-y-6 p-4">
         <CarouselSection title="Novos lançamentos">
-          {data.newReleases.map((album) => (
-            <MediaCard
-              key={album.browseId}
-              title={album.title}
-              subtitle={`Álbum • ${album.artists.map((a) => a.name).join(", ")}`}
-              thumbnails={album.thumbnails}
-              onClick={() => onNavigate({ type: "album", albumId: album.browseId })}
-              onPlay={() => onNavigate({ type: "album", albumId: album.browseId })}
-            />
-          ))}
+          {data.newReleases.map((album) => {
+            const firstArtistId = album.artists[0]?.id;
+            return (
+              <MediaCard
+                key={album.browseId}
+                title={album.title}
+                typeLabel="Álbum"
+                artistName={album.artists.map((a) => a.name).join(", ")}
+                thumbnails={album.thumbnails}
+                onClick={() => onNavigate({ type: "album", albumId: album.browseId })}
+                onPlay={() => onNavigate({ type: "album", albumId: album.browseId })}
+                onGoToArtist={firstArtistId ? () => onNavigate({ type: "artist", artistId: firstArtistId }) : undefined}
+              />
+            );
+          })}
         </CarouselSection>
 
         <CarouselSection title="Em alta">
-          {data.trending.map((track) => (
-            <MediaCard
-              key={track.videoId}
-              title={track.title}
-              subtitle={`Música • ${track.artists.map((a) => a.name).join(", ")}`}
-              thumbnails={track.thumbnails}
-              onClick={() => onPlayTrack(track)}
-              onPlay={() => onPlayTrack(track)}
-            />
-          ))}
+          {data.trending.map((track) => {
+            const firstArtistId = track.artists[0]?.id;
+            const albumId = track.album?.id;
+            return (
+              <MediaCard
+                key={track.videoId}
+                title={track.title}
+                typeLabel="Música"
+                artistName={track.artists.map((a) => a.name).join(", ")}
+                albumName={track.album?.name}
+                thumbnails={track.thumbnails}
+                onClick={() => onPlayTrack(track)}
+                onPlay={() => onPlayTrack(track)}
+                onGoToArtist={firstArtistId ? () => onNavigate({ type: "artist", artistId: firstArtistId }) : undefined}
+                onGoToAlbum={albumId ? () => onNavigate({ type: "album", albumId }) : undefined}
+              />
+            );
+          })}
         </CarouselSection>
 
         <CarouselSection title="Novos vídeos">
-          {data.newVideos.map((track) => (
-            <MediaCard
-              key={track.videoId}
-              title={track.title}
-              subtitle={`Música • ${track.artists.map((a) => a.name).join(", ")}`}
-              thumbnails={track.thumbnails}
-              onClick={() => onPlayTrack(track)}
-              onPlay={() => onPlayTrack(track)}
-            />
-          ))}
+          {data.newVideos.map((track) => {
+            const firstArtistId = track.artists[0]?.id;
+            const albumId = track.album?.id;
+            return (
+              <MediaCard
+                key={track.videoId}
+                title={track.title}
+                typeLabel="Música"
+                artistName={track.artists.map((a) => a.name).join(", ")}
+                albumName={track.album?.name}
+                thumbnails={track.thumbnails}
+                onClick={() => onPlayTrack(track)}
+                onPlay={() => onPlayTrack(track)}
+                onGoToArtist={firstArtistId ? () => onNavigate({ type: "artist", artistId: firstArtistId }) : undefined}
+                onGoToAlbum={albumId ? () => onNavigate({ type: "album", albumId }) : undefined}
+              />
+            );
+          })}
         </CarouselSection>
 
         <div className="space-y-3">

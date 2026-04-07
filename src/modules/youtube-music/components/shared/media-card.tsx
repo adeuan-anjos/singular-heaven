@@ -1,20 +1,89 @@
 import { Button } from "@/components/ui/button";
 import { Play } from "lucide-react";
+import React from "react";
 import type { Thumbnail } from "../../types/music";
 
 interface MediaCardProps {
   title: string;
-  subtitle?: string;
+  typeLabel?: string;
+  artistName?: string;
+  albumName?: string;
   thumbnails: Thumbnail[];
   onClick?: () => void;
   onPlay?: () => void;
+  onGoToArtist?: () => void;
+  onGoToAlbum?: () => void;
 }
 
-export function MediaCard({ title, subtitle, thumbnails, onClick, onPlay }: MediaCardProps) {
+export function MediaCard({
+  title,
+  typeLabel,
+  artistName,
+  albumName,
+  thumbnails,
+  onClick,
+  onPlay,
+  onGoToArtist,
+  onGoToAlbum,
+}: MediaCardProps) {
   const imgUrl = thumbnails[0]?.url ?? "";
 
+  const subtitleParts: React.ReactNode[] = [];
+
+  if (typeLabel) {
+    subtitleParts.push(
+      <span key="type">{typeLabel}</span>
+    );
+  }
+
+  if (artistName) {
+    if (subtitleParts.length > 0) {
+      subtitleParts.push(<span key="sep-artist"> &bull; </span>);
+    }
+    subtitleParts.push(
+      onGoToArtist ? (
+        <button
+          key="artist"
+          type="button"
+          className="hover:underline"
+          onClick={(e) => {
+            e.stopPropagation();
+            onGoToArtist();
+          }}
+        >
+          {artistName}
+        </button>
+      ) : (
+        <span key="artist">{artistName}</span>
+      )
+    );
+  }
+
+  if (albumName) {
+    if (subtitleParts.length > 0) {
+      subtitleParts.push(<span key="sep-album"> &bull; </span>);
+    }
+    subtitleParts.push(
+      onGoToAlbum ? (
+        <button
+          key="album"
+          type="button"
+          className="hover:underline"
+          onClick={(e) => {
+            e.stopPropagation();
+            onGoToAlbum();
+          }}
+        >
+          {albumName}
+        </button>
+      ) : (
+        <span key="album">{albumName}</span>
+      )
+    );
+  }
+
   return (
-    <div className="group/card flex min-w-0 w-44 flex-shrink-0 flex-col gap-2 rounded-md p-2 text-left hover:bg-accent">
+    <div className="group/card flex min-w-0 flex-col gap-2 rounded-md p-2 text-left hover:bg-accent">
       <button
         type="button"
         className="relative aspect-square w-full overflow-hidden rounded-md bg-muted"
@@ -55,8 +124,10 @@ export function MediaCard({ title, subtitle, thumbnails, onClick, onPlay }: Medi
         >
           {title}
         </button>
-        {subtitle && (
-          <p className="truncate text-xs text-muted-foreground">{subtitle}</p>
+        {subtitleParts.length > 0 && (
+          <p className="truncate text-xs text-muted-foreground">
+            {subtitleParts}
+          </p>
         )}
       </div>
     </div>

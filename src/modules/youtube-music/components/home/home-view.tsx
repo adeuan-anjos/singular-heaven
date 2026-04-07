@@ -28,32 +28,65 @@ function isAlbum(item: Track | Album | Artist | Playlist): item is Album {
 
 function getItemProps(item: Track | Album | Artist | Playlist) {
   if (isTrack(item)) {
-    return { title: item.title, subtitle: `Música • ${item.artists.map((a) => a.name).join(", ")}`, thumbnails: item.thumbnails };
+    return {
+      title: item.title,
+      typeLabel: "Música",
+      artistName: item.artists.map((a) => a.name).join(", "),
+      albumName: item.album?.name,
+      thumbnails: item.thumbnails,
+    };
   }
   if (isArtist(item)) {
-    return { title: item.name, subtitle: "Artista", thumbnails: item.thumbnails };
+    return { title: item.name, typeLabel: "Artista", thumbnails: item.thumbnails };
   }
   if (isPlaylist(item)) {
-    return { title: item.title, subtitle: `Playlist • ${item.author.name}`, thumbnails: item.thumbnails };
+    return {
+      title: item.title,
+      typeLabel: "Playlist",
+      artistName: item.author.name,
+      thumbnails: item.thumbnails,
+    };
   }
   if (isAlbum(item)) {
-    return { title: item.title, subtitle: `Álbum • ${item.artists?.map((a) => a.name).join(", ") ?? ""}`, thumbnails: item.thumbnails };
+    return {
+      title: item.title,
+      typeLabel: "Álbum",
+      artistName: item.artists?.map((a) => a.name).join(", "),
+      thumbnails: item.thumbnails,
+    };
   }
-  return { title: "", subtitle: "", thumbnails: [] };
+  return { title: "", thumbnails: [] };
 }
 
 function getItemActions(item: Track | Album | Artist | Playlist, onNavigate: (page: StackPage) => void, onPlayTrack: (track: Track) => void) {
   if (isTrack(item)) {
-    return { onClick: () => onPlayTrack(item), onPlay: () => onPlayTrack(item) };
+    const firstArtistId = item.artists[0]?.id;
+    const albumId = item.album?.id;
+    return {
+      onClick: () => onPlayTrack(item),
+      onPlay: () => onPlayTrack(item),
+      onGoToArtist: firstArtistId ? () => onNavigate({ type: "artist", artistId: firstArtistId }) : undefined,
+      onGoToAlbum: albumId ? () => onNavigate({ type: "album", albumId }) : undefined,
+    };
   }
   if (isArtist(item)) {
     return { onClick: () => onNavigate({ type: "artist", artistId: item.browseId }) };
   }
   if (isPlaylist(item)) {
-    return { onClick: () => onNavigate({ type: "playlist", playlistId: item.playlistId }), onPlay: () => onNavigate({ type: "playlist", playlistId: item.playlistId }) };
+    const authorId = item.author.id;
+    return {
+      onClick: () => onNavigate({ type: "playlist", playlistId: item.playlistId }),
+      onPlay: () => onNavigate({ type: "playlist", playlistId: item.playlistId }),
+      onGoToArtist: authorId ? () => onNavigate({ type: "artist", artistId: authorId }) : undefined,
+    };
   }
   if (isAlbum(item)) {
-    return { onClick: () => onNavigate({ type: "album", albumId: item.browseId }), onPlay: () => onNavigate({ type: "album", albumId: item.browseId }) };
+    const firstArtistId = item.artists?.[0]?.id;
+    return {
+      onClick: () => onNavigate({ type: "album", albumId: item.browseId }),
+      onPlay: () => onNavigate({ type: "album", albumId: item.browseId }),
+      onGoToArtist: firstArtistId ? () => onNavigate({ type: "artist", artistId: firstArtistId }) : undefined,
+    };
   }
   return {};
 }
@@ -74,10 +107,14 @@ export function HomeView({ onNavigate, onPlayTrack }: HomeViewProps) {
                 <MediaCard
                   key={i}
                   title={props.title}
-                  subtitle={props.subtitle}
+                  typeLabel={props.typeLabel}
+                  artistName={props.artistName}
+                  albumName={props.albumName}
                   thumbnails={props.thumbnails}
                   onClick={actions.onClick}
                   onPlay={actions.onPlay}
+                  onGoToArtist={actions.onGoToArtist}
+                  onGoToAlbum={actions.onGoToAlbum}
                 />
               );
             })}

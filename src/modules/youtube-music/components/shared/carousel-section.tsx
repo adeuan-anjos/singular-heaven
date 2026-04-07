@@ -1,4 +1,4 @@
-import { useRef, useState, useCallback, useEffect } from "react";
+import React, { useRef, useState, useCallback, useEffect } from "react";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
 import { ChevronLeft, ChevronRight } from "lucide-react";
@@ -54,7 +54,7 @@ export function CarouselSection({ title, onSeeAll, children }: CarouselSectionPr
   };
 
   return (
-    <div className="group/carousel space-y-3">
+    <div className="group/carousel mx-auto max-w-screen-xl space-y-3">
       <div className="flex items-center justify-between px-2">
         <h2 className="text-lg font-semibold text-foreground">{title}</h2>
         <div className="flex items-center gap-1">
@@ -84,8 +84,12 @@ export function CarouselSection({ title, onSeeAll, children }: CarouselSectionPr
         </div>
       </div>
       <ScrollArea ref={scrollAreaRef} className="w-full">
-        <div className="flex gap-1 pb-4">
-          {children}
+        <div className="flex gap-3 pb-4">
+          {React.Children.map(children, (child, index) => (
+            <div key={index} className="shrink-0 basis-1/5">
+              {child}
+            </div>
+          ))}
         </div>
         <ScrollBar orientation="horizontal" className="opacity-0 transition-opacity group-hover/carousel:opacity-100" />
       </ScrollArea>
