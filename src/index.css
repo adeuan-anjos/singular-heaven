@@ -129,6 +129,17 @@
     }
 }
 
+/* Auto-hide scrollbars — appear on hover/scroll, fade after inactivity */
+[data-slot="scroll-area-scrollbar"] {
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+[data-slot="scroll-area"]:hover [data-slot="scroll-area-scrollbar"],
+[data-slot="scroll-area-scrollbar"]:hover {
+  opacity: 1;
+}
+
 /* Styled scrollbar for virtualized lists */
 .styled-scrollbar::-webkit-scrollbar {
   width: 10px;
