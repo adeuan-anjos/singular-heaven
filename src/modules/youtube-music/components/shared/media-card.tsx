@@ -101,11 +101,11 @@ export function MediaCard({
           </div>
         )}
         {onPlay && (
-          <div className="absolute inset-0 flex items-center justify-center opacity-0 transition-opacity group-hover/card:opacity-100">
+          <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 transition-opacity group-hover/card:opacity-100">
             <Button
-              variant="secondary"
+              variant="default"
               size="icon"
-              className="h-10 w-10 rounded-full bg-background/80 shadow-md hover:bg-background/90"
+              className="h-12 w-12 rounded-full shadow-lg"
               onClick={(e) => {
                 e.stopPropagation();
                 onPlay();

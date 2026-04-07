@@ -16,6 +16,11 @@ export function CarouselSection({ title, onSeeAll, children }: CarouselSectionPr
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(false);
 
+  // Drag-to-scroll state
+  const isDragging = useRef(false);
+  const dragStartX = useRef(0);
+  const dragScrollLeft = useRef(0);
+
   const checkScroll = useCallback(() => {
     const el = viewportRef.current;
     if (!el) return;
@@ -40,16 +45,46 @@ export function CarouselSection({ title, onSeeAll, children }: CarouselSectionPr
   useEffect(() => {
     checkScroll();
     const el = viewportRef.current;
+    if (!el) return;
+
+    const handleMouseDown = (e: MouseEvent) => {
+      isDragging.current = true;
+      dragStartX.current = e.pageX;
+      dragScrollLeft.current = el.scrollLeft;
+      el.style.cursor = "grabbing";
+      el.style.userSelect = "none";
+    };
+
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isDragging.current) return;
+      const dx = e.pageX - dragStartX.current;
+      el.scrollLeft = dragScrollLeft.current - dx;
+    };
+
+    const handleMouseUp = () => {
+      if (!isDragging.current) return;
+      isDragging.current = false;
+      el.style.cursor = "";
+      el.style.userSelect = "";
+    };
+
+    el.addEventListener("mousedown", handleMouseDown);
+    window.addEventListener("mousemove", handleMouseMove);
+    window.addEventListener("mouseup", handleMouseUp);
+
     return () => {
-      if (el) el.removeEventListener("scroll", checkScroll);
+      el.removeEventListener("scroll", checkScroll);
+      el.removeEventListener("mousedown", handleMouseDown);
+      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("mouseup", handleMouseUp);
     };
   }, [checkScroll]);
 
-  const scrollLeft = () => {
+  const scrollLeftFn = () => {
     viewportRef.current?.scrollBy({ left: -SCROLL_AMOUNT, behavior: "smooth" });
   };
 
-  const scrollRight = () => {
+  const scrollRightFn = () => {
     viewportRef.current?.scrollBy({ left: SCROLL_AMOUNT, behavior: "smooth" });
   };
 
@@ -68,7 +103,7 @@ export function CarouselSection({ title, onSeeAll, children }: CarouselSectionPr
             size="icon"
             className="h-8 w-8 rounded-full opacity-0 transition-opacity group-hover/carousel:opacity-100 disabled:opacity-0"
             disabled={!canScrollLeft}
-            onClick={scrollLeft}
+            onClick={scrollLeftFn}
           >
             <ChevronLeft className="h-4 w-4" />
           </Button>
@@ -77,13 +112,13 @@ export function CarouselSection({ title, onSeeAll, children }: CarouselSectionPr
             size="icon"
             className="h-8 w-8 rounded-full opacity-0 transition-opacity group-hover/carousel:opacity-100 disabled:opacity-0"
             disabled={!canScrollRight}
-            onClick={scrollRight}
+            onClick={scrollRightFn}
           >
             <ChevronRight className="h-4 w-4" />
           </Button>
         </div>
       </div>
-      <ScrollArea ref={scrollAreaRef} className="w-full">
+      <ScrollArea ref={scrollAreaRef} className="w-full cursor-grab">
         <div className="flex gap-3 pb-4">
           {React.Children.map(children, (child, index) => (
             <div key={index} className="shrink-0 basis-1/5">
