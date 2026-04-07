@@ -46,7 +46,11 @@ export function PlaylistPage({
         <CollectionHeader
           title={playlist.title}
           subtitle={playlist.author.name}
+          description="As músicas que você marcou com 'Gostei' em todos os apps do YouTube aparecerão aqui."
+          year="2026"
           trackCount={playlist.trackCount}
+          duration="Mais de 1 hora"
+          privacy="Playlist automática"
           thumbnailUrl={playlist.thumbnails[0]?.url}
           onPlay={() => onPlayAll(tracks)}
           onShuffle={() => onPlayAll([...tracks].sort(() => Math.random() - 0.5))}
