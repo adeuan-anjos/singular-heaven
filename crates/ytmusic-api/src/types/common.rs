@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 
 /// Thumbnail with URL and dimensions.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Thumbnail {
     pub url: String,
     pub width: u32,
@@ -10,6 +11,7 @@ pub struct Thumbnail {
 
 /// Reference to an artist (name + optional browse ID).
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ArtistRef {
     pub name: String,
     pub id: Option<String>,
@@ -17,6 +19,7 @@ pub struct ArtistRef {
 
 /// Reference to an album (name + optional browse ID).
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct AlbumRef {
     pub name: String,
     pub id: Option<String>,

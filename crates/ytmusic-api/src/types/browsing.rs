@@ -4,6 +4,7 @@ use super::common::{Thumbnail, ArtistRef};
 // ---- Artist ----
 
 #[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ArtistPage {
     pub name: String,
     pub browse_id: String,
@@ -18,6 +19,7 @@ pub struct ArtistPage {
 }
 
 #[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ArtistSong {
     pub title: String,
     pub video_id: String,
@@ -27,6 +29,7 @@ pub struct ArtistSong {
 }
 
 #[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ArtistAlbum {
     pub title: String,
     pub browse_id: String,
@@ -35,6 +38,7 @@ pub struct ArtistAlbum {
 }
 
 #[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ArtistVideo {
     pub title: String,
     pub video_id: String,
@@ -43,6 +47,7 @@ pub struct ArtistVideo {
 }
 
 #[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct SimilarArtist {
     pub name: String,
     pub browse_id: String,
@@ -53,6 +58,7 @@ pub struct SimilarArtist {
 // ---- Album ----
 
 #[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct AlbumPage {
     pub title: String,
     pub browse_id: String,
@@ -67,6 +73,7 @@ pub struct AlbumPage {
 }
 
 #[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct AlbumTrack {
     pub title: String,
     pub video_id: String,
@@ -79,13 +86,14 @@ pub struct AlbumTrack {
 // ---- Home ----
 
 #[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct HomeSection {
     pub title: String,
     pub contents: Vec<HomeItem>,
 }
 
 #[derive(Debug, Clone, Serialize)]
-#[serde(tag = "type")]
+#[serde(tag = "type", rename_all = "camelCase")]
 pub enum HomeItem {
     #[serde(rename = "song")]
     Song {

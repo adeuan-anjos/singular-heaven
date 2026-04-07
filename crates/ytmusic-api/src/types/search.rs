@@ -3,6 +3,7 @@ use super::common::{Thumbnail, ArtistRef, AlbumRef};
 
 /// Top-level search response.
 #[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct SearchResponse {
     pub top_result: Option<TopResult>,
     pub results: Vec<SearchResult>,
@@ -10,6 +11,7 @@ pub struct SearchResponse {
 
 /// The featured "top result" card.
 #[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct TopResult {
     pub result_type: String,
     pub title: String,
@@ -21,7 +23,7 @@ pub struct TopResult {
 
 /// A single search result.
 #[derive(Debug, Clone, Serialize)]
-#[serde(tag = "resultType")]
+#[serde(tag = "resultType", rename_all = "camelCase")]
 pub enum SearchResult {
     #[serde(rename = "song")]
     Song(SearchSong),
@@ -38,6 +40,7 @@ pub enum SearchResult {
 }
 
 #[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct SearchSong {
     pub title: String,
     pub video_id: String,
@@ -48,6 +51,7 @@ pub struct SearchSong {
 }
 
 #[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct SearchVideo {
     pub title: String,
     pub video_id: String,
@@ -58,6 +62,7 @@ pub struct SearchVideo {
 }
 
 #[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct SearchAlbum {
     pub title: String,
     pub browse_id: String,
@@ -68,6 +73,7 @@ pub struct SearchAlbum {
 }
 
 #[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct SearchArtist {
     pub name: String,
     pub browse_id: String,
@@ -76,6 +82,7 @@ pub struct SearchArtist {
 }
 
 #[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct SearchPlaylist {
     pub title: String,
     pub playlist_id: String,
@@ -85,6 +92,7 @@ pub struct SearchPlaylist {
 }
 
 #[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct SearchEpisode {
     pub title: String,
     pub video_id: String,
@@ -95,6 +103,7 @@ pub struct SearchEpisode {
 
 /// Search suggestion entry.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct SearchSuggestion {
     pub text: String,
 }

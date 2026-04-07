@@ -3,6 +3,7 @@ use serde::Serialize;
 use super::common::{ArtistRef, Thumbnail};
 
 #[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ExplorePage {
     pub new_releases: Vec<ExploreAlbum>,
     pub top_songs: Vec<ExploreSong>,
@@ -12,6 +13,7 @@ pub struct ExplorePage {
 }
 
 #[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ExploreAlbum {
     pub title: String,
     pub browse_id: String,
@@ -21,6 +23,7 @@ pub struct ExploreAlbum {
 }
 
 #[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ExploreSong {
     pub title: String,
     pub video_id: String,
@@ -30,6 +33,7 @@ pub struct ExploreSong {
 }
 
 #[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ExploreVideo {
     pub title: String,
     pub video_id: Option<String>,
@@ -40,6 +44,7 @@ pub struct ExploreVideo {
 }
 
 #[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct MoodItem {
     pub title: String,
     pub params: String,
@@ -47,6 +52,7 @@ pub struct MoodItem {
 }
 
 #[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct MoodCategory {
     pub title: String,
     pub items: Vec<MoodItem>,

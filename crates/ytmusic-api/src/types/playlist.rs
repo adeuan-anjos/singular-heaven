@@ -2,6 +2,7 @@ use serde::Serialize;
 use super::common::{Thumbnail, ArtistRef, AlbumRef};
 
 #[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct PlaylistPage {
     pub title: String,
     pub playlist_id: String,
@@ -15,6 +16,7 @@ pub struct PlaylistPage {
 }
 
 #[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct PlaylistTrack {
     pub title: String,
     pub video_id: String,
