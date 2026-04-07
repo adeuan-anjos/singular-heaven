@@ -106,6 +106,8 @@ export default function YouTubeMusicModule() {
           );
         case "search":
           return <SearchView onNavigate={nav.push} onPlayTrack={handlePlayTrack} />;
+        case "mood":
+          return <ExploreView onNavigate={nav.push} onPlayTrack={handlePlayTrack} />;
         default:
           return null;
       }

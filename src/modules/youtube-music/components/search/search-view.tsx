@@ -23,7 +23,7 @@ export function SearchView({ onNavigate, onPlayTrack }: SearchViewProps) {
 
   return (
     <div className="flex h-full flex-col">
-      <Command className="border-b border-border" shouldFilter={false}>
+      <Command className="flex flex-1 flex-col border-b border-border" shouldFilter={false}>
         <CommandInput
           placeholder="Buscar músicas, artistas, álbuns..."
           value={query}
@@ -31,7 +31,7 @@ export function SearchView({ onNavigate, onPlayTrack }: SearchViewProps) {
         />
         {results && (
           <CommandList className="max-h-none">
-            <ScrollArea className="h-[calc(100vh-12rem)]">
+            <ScrollArea className="flex-1 overflow-auto">
               {results.songs.length > 0 && (
                 <CommandGroup heading="Músicas">
                   {results.songs.map((track) => (

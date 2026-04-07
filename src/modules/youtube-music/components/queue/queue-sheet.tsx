@@ -23,11 +23,11 @@ interface QueueSheetProps {
 export function QueueSheet({ open, onOpenChange, queue, currentIndex, onPlayIndex, onRemove }: QueueSheetProps) {
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="right" className="w-96 p-0">
+      <SheetContent side="right" className="flex w-96 flex-col p-0">
         <SheetHeader className="border-b border-border px-4 py-3">
           <SheetTitle>Fila de reprodução</SheetTitle>
         </SheetHeader>
-        <ScrollArea className="h-[calc(100%-3.5rem)]">
+        <ScrollArea className="flex-1 overflow-auto">
           <div className="space-y-1 p-2">
             {queue.length === 0 && (
               <p className="px-2 py-8 text-center text-sm text-muted-foreground">
