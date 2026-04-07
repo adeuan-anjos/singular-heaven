@@ -3,7 +3,7 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import { TrackRow } from "./track-row";
 import type { Track } from "../../types/music";
 
-const ROW_HEIGHT = 56; // px — matches px-2 py-1.5 + avatar h-10 with border-box
+const ROW_HEIGHT = 56;
 const OVERSCAN = 5;
 
 interface VirtualTrackListProps {
