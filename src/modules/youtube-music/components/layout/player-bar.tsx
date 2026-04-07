@@ -2,7 +2,6 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import { Toggle } from "@/components/ui/toggle";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   SkipBack,
   SkipForward,
@@ -12,7 +11,7 @@ import {
   Repeat,
   Repeat1,
   Volume2,
-  ListMusic,
+  List,
 } from "lucide-react";
 import { usePlayerStore } from "../../stores/player-store";
 import { useQueueStore } from "../../stores/queue-store";
@@ -71,49 +70,46 @@ export function PlayerBar({ onOpenQueue, onGoToArtist, onGoToAlbum }: PlayerBarP
   };
 
   return (
-    <div className="flex items-center gap-4 border-t border-border bg-background px-4 py-2">
-      <button
-        type="button"
-        className="flex items-center gap-3 min-w-0 flex-shrink-0"
-        onClick={() => track.album && onGoToAlbum?.(track.album.id)}
-      >
-        <Avatar className="h-12 w-12 rounded-md">
-          <AvatarImage src={imgUrl} alt={track.title} className="object-cover" />
-          <AvatarFallback className="rounded-md">{track.title.charAt(0)}</AvatarFallback>
-        </Avatar>
-      </button>
-
-      <div className="min-w-0 w-48 flex-shrink-0">
-        <p className="truncate text-sm font-medium text-foreground">{track.title}</p>
+    <div className="grid grid-cols-3 items-center border-t border-border bg-background px-4 py-2">
+      {/* Left: Track info */}
+      <div className="flex items-center gap-3 min-w-0">
         <button
           type="button"
-          className="truncate text-xs text-muted-foreground hover:underline"
-          onClick={() => track.artists[0]?.id && onGoToArtist?.(track.artists[0].id)}
+          className="shrink-0"
+          onClick={() => track.album && onGoToAlbum?.(track.album.id)}
         >
-          {artistName}
+          <Avatar className="h-12 w-12 rounded-md">
+            <AvatarImage src={imgUrl} alt={track.title} className="object-cover" />
+            <AvatarFallback className="rounded-md">{track.title.charAt(0)}</AvatarFallback>
+          </Avatar>
         </button>
+        <div className="min-w-0">
+          <p className="truncate text-sm font-medium text-foreground">{track.title}</p>
+          <button
+            type="button"
+            className="truncate text-xs text-muted-foreground hover:underline"
+            onClick={() => track.artists[0]?.id && onGoToArtist?.(track.artists[0].id)}
+          >
+            {artistName}
+          </button>
+        </div>
       </div>
 
-      <div className="flex flex-1 flex-col items-center gap-1">
+      {/* Center: Controls + progress */}
+      <div className="flex flex-col items-center gap-1">
         <div className="flex items-center gap-2">
           <Toggle size="sm" pressed={shuffleOn} onPressedChange={() => toggleShuffle()} aria-label="Shuffle">
             <Shuffle className="h-4 w-4" />
           </Toggle>
-          <Tooltip>
-            <TooltipTrigger render={<Button variant="ghost" size="icon" className="h-8 w-8" onClick={handlePrevious} />}>
-              <SkipBack className="h-4 w-4" />
-            </TooltipTrigger>
-            <TooltipContent>Anterior</TooltipContent>
-          </Tooltip>
+          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={handlePrevious}>
+            <SkipBack className="h-4 w-4" />
+          </Button>
           <Button size="icon" className="h-9 w-9" onClick={togglePlay}>
             {isPlaying ? <Pause className="h-5 w-5" /> : <PlayIcon className="h-5 w-5" />}
           </Button>
-          <Tooltip>
-            <TooltipTrigger render={<Button variant="ghost" size="icon" className="h-8 w-8" onClick={handleNext} />}>
-              <SkipForward className="h-4 w-4" />
-            </TooltipTrigger>
-            <TooltipContent>Próxima</TooltipContent>
-          </Tooltip>
+          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={handleNext}>
+            <SkipForward className="h-4 w-4" />
+          </Button>
           <Toggle
             size="sm"
             pressed={repeat !== "off"}
@@ -136,7 +132,8 @@ export function PlayerBar({ onOpenQueue, onGoToArtist, onGoToAlbum }: PlayerBarP
         </div>
       </div>
 
-      <div className="flex items-center gap-2">
+      {/* Right: Volume + queue */}
+      <div className="flex items-center justify-end gap-2">
         <Volume2 className="h-4 w-4 text-muted-foreground" />
         <Slider
           value={[volume]}
@@ -145,12 +142,9 @@ export function PlayerBar({ onOpenQueue, onGoToArtist, onGoToAlbum }: PlayerBarP
           onValueChange={(v) => setVolume(Array.isArray(v) ? v[0] : v)}
           className="w-24"
         />
-        <Tooltip>
-          <TooltipTrigger render={<Button variant="ghost" size="icon" className="h-8 w-8" onClick={onOpenQueue} />}>
-            <ListMusic className="h-4 w-4" />
-          </TooltipTrigger>
-          <TooltipContent>Fila de reprodução</TooltipContent>
-        </Tooltip>
+        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onOpenQueue}>
+          <List className="h-4 w-4" />
+        </Button>
       </div>
     </div>
   );
