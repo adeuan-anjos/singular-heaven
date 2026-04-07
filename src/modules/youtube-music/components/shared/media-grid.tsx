@@ -1,0 +1,23 @@
+import React from "react";
+
+interface MediaGridProps {
+  title?: string;
+  children: React.ReactNode;
+}
+
+export function MediaGrid({ title, children }: MediaGridProps) {
+  return (
+    <div className="space-y-3">
+      {title && (
+        <h2 className="text-lg font-semibold text-foreground">{title}</h2>
+      )}
+      <div className="grid gap-4" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))" }}>
+        {React.Children.map(children, (child, index) => (
+          <div key={index} className="min-w-0">
+            {child}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
