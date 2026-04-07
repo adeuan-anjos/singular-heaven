@@ -37,7 +37,27 @@ export function TrackRow({ track, index, onPlay, onAddToQueue, onGoToArtist, onG
       </Avatar>
       <div className="min-w-0 flex-1">
         <p className="truncate text-sm font-medium text-foreground">{track.title}</p>
-        <p className="truncate text-xs text-muted-foreground">{artistName}</p>
+        <p className="truncate text-xs text-muted-foreground">
+          <button
+            type="button"
+            className="hover:underline"
+            onClick={(e) => { e.stopPropagation(); track.artists[0]?.id && onGoToArtist?.(track.artists[0].id!); }}
+          >
+            {artistName}
+          </button>
+          {track.album && (
+            <>
+              {" • "}
+              <button
+                type="button"
+                className="hover:underline"
+                onClick={(e) => { e.stopPropagation(); onGoToAlbum?.(track.album!.id); }}
+              >
+                {track.album.name}
+              </button>
+            </>
+          )}
+        </p>
       </div>
       <span className="text-xs text-muted-foreground">{track.duration}</span>
       <DropdownMenu>
