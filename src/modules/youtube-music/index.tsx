@@ -1,5 +1,7 @@
 import { useState, useCallback, useEffect } from "react";
+import { invoke } from "@tauri-apps/api/core";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { LoginScreen } from "./components/auth/login-screen";
 import { SidePanel } from "./components/layout/side-panel";
 import { TopBar } from "./components/layout/top-bar";
 import { PlayerBar } from "./components/layout/player-bar";
@@ -18,9 +20,12 @@ import { useQueueStore } from "./stores/queue-store";
 import type { Track } from "./types/music";
 import { useRenderTracker, useLeakDetector } from "@/lib/debug";
 
+type AuthState = "loading" | "unauthenticated" | "authenticated" | "skipped";
+
 export default function YouTubeMusicModule() {
   useRenderTracker("YouTubeMusicModule", {});
   useLeakDetector("YouTubeMusicModule");
+  const [authState, setAuthState] = useState<AuthState>("loading");
   const [activeTab, setActiveTab] = useState("home");
   const [queueOpen, setQueueOpen] = useState(false);
   const nav = useNavigation();
@@ -31,16 +36,46 @@ export default function YouTubeMusicModule() {
   const queueAddNext = useQueueStore((s) => s.addNext);
   const queueCleanup = useQueueStore((s) => s.cleanup);
 
-  console.log("[YouTubeMusicModule] render", { activeTab, page: nav.currentPage?.type });
+  console.log("[YouTubeMusicModule] render", { authState, activeTab, page: nav.currentPage?.type });
 
   useEffect(() => {
-    console.log("[YouTubeMusicModule] mounted");
+    console.log("[YouTubeMusicModule] mounted — checking auth status");
+    let cancelled = false;
+
+    async function checkAuth() {
+      try {
+        const status = await invoke<{ authenticated: boolean }>("yt_auth_status");
+        console.log("[YouTubeMusicModule] yt_auth_status result", status);
+        if (!cancelled) {
+          setAuthState(status.authenticated ? "authenticated" : "unauthenticated");
+        }
+      } catch (err) {
+        console.error("[YouTubeMusicModule] yt_auth_status failed", err);
+        if (!cancelled) {
+          setAuthState("unauthenticated");
+        }
+      }
+    }
+
+    checkAuth();
+
     return () => {
+      cancelled = true;
       console.log("[YouTubeMusicModule] unmounting — cleaning up stores");
       playerCleanup();
       queueCleanup();
     };
   }, [playerCleanup, queueCleanup]);
+
+  const handleAuthenticated = useCallback(() => {
+    console.log("[YouTubeMusicModule] user authenticated successfully");
+    setAuthState("authenticated");
+  }, []);
+
+  const handleSkip = useCallback(() => {
+    console.log("[YouTubeMusicModule] user skipped authentication");
+    setAuthState("skipped");
+  }, []);
 
   const handlePlayTrack = useCallback((track: Track) => {
     console.log("[YouTubeMusicModule] handlePlayTrack", { title: track.title });
@@ -148,6 +183,23 @@ export default function YouTubeMusicModule() {
         return null;
     }
   };
+
+  if (authState === "loading") {
+    return (
+      <div className="flex h-full items-center justify-center">
+        <div className="text-sm text-muted-foreground">Verificando autenticação...</div>
+      </div>
+    );
+  }
+
+  if (authState === "unauthenticated") {
+    return (
+      <LoginScreen
+        onAuthenticated={handleAuthenticated}
+        onSkip={handleSkip}
+      />
+    );
+  }
 
   return (
     <TooltipProvider delay={0}>
