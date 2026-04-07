@@ -1,12 +1,7 @@
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
 import {
   Command,
   CommandList,
@@ -36,8 +31,9 @@ export function TopBar({
   onPlayTrack,
 }: TopBarProps) {
   const [query, setQuery] = useState("");
-  const [open, setOpen] = useState(false);
+  const [dropdownOpen, setDropdownOpen] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
 
   const results = query.length > 0 ? mockSearchResults : null;
 
@@ -45,43 +41,47 @@ export function TopBar({
     (e: React.ChangeEvent<HTMLInputElement>) => {
       const value = e.target.value;
       setQuery(value);
-      setOpen(value.length > 0);
+      setDropdownOpen(value.length > 0);
     },
     [],
   );
 
   const handleClear = useCallback(() => {
     setQuery("");
-    setOpen(false);
+    setDropdownOpen(false);
     inputRef.current?.focus();
   }, []);
 
-  const handleSelectTrack = useCallback(
-    (track: Track) => {
-      console.log("[TopBar] search result selected: track", { title: track.title });
-      onPlayTrack(track);
+  const handleSelect = useCallback(
+    (action: () => void) => {
+      action();
       setQuery("");
-      setOpen(false);
+      setDropdownOpen(false);
     },
-    [onPlayTrack],
-  );
-
-  const handleSelectPage = useCallback(
-    (page: StackPage) => {
-      console.log("[TopBar] search result selected: page", { type: page.type });
-      onNavigate(page);
-      setQuery("");
-      setOpen(false);
-    },
-    [onNavigate],
+    [],
   );
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === "Escape") {
       setQuery("");
-      setOpen(false);
+      setDropdownOpen(false);
+      inputRef.current?.blur();
     }
   }, []);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    if (!dropdownOpen) return;
+
+    const handleClickOutside = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setDropdownOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [dropdownOpen]);
 
   return (
     <div className="flex shrink-0 border-b border-border">
@@ -126,41 +126,33 @@ export function TopBar({
         </div>
 
         {/* Search input with dropdown */}
-        <Popover open={open} onOpenChange={setOpen}>
-          <PopoverTrigger
-            render={
-              <div className="relative mx-auto flex w-full max-w-xl items-center">
-                <Search className="pointer-events-none absolute left-2.5 h-4 w-4 text-muted-foreground" />
-                <Input
-                  ref={inputRef}
-                  value={query}
-                  onChange={handleInputChange}
-                  onKeyDown={handleKeyDown}
-                  onFocus={() => {
-                    if (query.length > 0) setOpen(true);
-                  }}
-                  placeholder="Buscar músicas, artistas, álbuns..."
-                  className="pl-8"
-                />
-                {query.length > 0 && (
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="absolute right-0 h-8 w-8"
-                    onClick={handleClear}
-                  >
-                    <X className="h-3.5 w-3.5" />
-                  </Button>
-                )}
-              </div>
-            }
-          />
-          <PopoverContent
-            align="center"
-            sideOffset={4}
-            className="w-[var(--anchor-width)] p-0"
-          >
-            {results && (
+        <div ref={containerRef} className="relative mx-auto w-full max-w-xl">
+          <div className="relative flex items-center">
+            <Search className="pointer-events-none absolute left-2.5 h-4 w-4 text-muted-foreground" />
+            <Input
+              ref={inputRef}
+              value={query}
+              onChange={handleInputChange}
+              onKeyDown={handleKeyDown}
+              onFocus={() => { if (query.length > 0) setDropdownOpen(true); }}
+              placeholder="Buscar músicas, artistas, álbuns..."
+              className="pl-8"
+            />
+            {query.length > 0 && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="absolute right-0 h-8 w-8"
+                onClick={handleClear}
+              >
+                <X className="h-3.5 w-3.5" />
+              </Button>
+            )}
+          </div>
+
+          {/* Dropdown results */}
+          {dropdownOpen && results && (
+            <div className="absolute left-0 top-full z-50 mt-1 w-full rounded-lg bg-popover shadow-md ring-1 ring-foreground/10">
               <Command className="rounded-lg" shouldFilter={false}>
                 <CommandList className="max-h-80">
                   {results.songs.length > 0 && (
@@ -168,30 +160,20 @@ export function TopBar({
                       {results.songs.map((track) => (
                         <CommandItem
                           key={track.videoId}
-                          onSelect={() => handleSelectTrack(track)}
+                          onSelect={() => handleSelect(() => onPlayTrack(track))}
                         >
                           <div className="mr-3 flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-sm bg-muted">
                             {track.thumbnails[0]?.url ? (
-                              <img
-                                src={track.thumbnails[0].url}
-                                alt={track.title}
-                                className="h-full w-full object-cover"
-                              />
+                              <img src={track.thumbnails[0].url} alt={track.title} className="h-full w-full object-cover" />
                             ) : (
-                              <span className="text-xs text-muted-foreground">
-                                {track.title.charAt(0)}
-                              </span>
+                              <span className="text-xs text-muted-foreground">{track.title.charAt(0)}</span>
                             )}
                           </div>
                           <div className="min-w-0 flex-1">
                             <p className="truncate text-sm">{track.title}</p>
-                            <p className="truncate text-xs text-muted-foreground">
-                              {track.artists.map((a) => a.name).join(", ")}
-                            </p>
+                            <p className="truncate text-xs text-muted-foreground">{track.artists.map((a) => a.name).join(", ")}</p>
                           </div>
-                          <span className="text-xs text-muted-foreground">
-                            {track.duration}
-                          </span>
+                          <span className="text-xs text-muted-foreground">{track.duration}</span>
                         </CommandItem>
                       ))}
                     </CommandGroup>
@@ -202,24 +184,13 @@ export function TopBar({
                       {results.artists.map((artist) => (
                         <CommandItem
                           key={artist.browseId}
-                          onSelect={() =>
-                            handleSelectPage({
-                              type: "artist",
-                              artistId: artist.browseId,
-                            })
-                          }
+                          onSelect={() => handleSelect(() => onNavigate({ type: "artist", artistId: artist.browseId }))}
                         >
                           <div className="mr-3 flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-sm bg-muted">
                             {artist.thumbnails[0]?.url ? (
-                              <img
-                                src={artist.thumbnails[0].url}
-                                alt={artist.name}
-                                className="h-full w-full object-cover"
-                              />
+                              <img src={artist.thumbnails[0].url} alt={artist.name} className="h-full w-full object-cover" />
                             ) : (
-                              <span className="text-xs text-muted-foreground">
-                                {artist.name.charAt(0)}
-                              </span>
+                              <span className="text-xs text-muted-foreground">{artist.name.charAt(0)}</span>
                             )}
                           </div>
                           <p className="text-sm">{artist.name}</p>
@@ -233,32 +204,18 @@ export function TopBar({
                       {results.albums.map((album) => (
                         <CommandItem
                           key={album.browseId}
-                          onSelect={() =>
-                            handleSelectPage({
-                              type: "album",
-                              albumId: album.browseId,
-                            })
-                          }
+                          onSelect={() => handleSelect(() => onNavigate({ type: "album", albumId: album.browseId }))}
                         >
                           <div className="mr-3 flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-sm bg-muted">
                             {album.thumbnails[0]?.url ? (
-                              <img
-                                src={album.thumbnails[0].url}
-                                alt={album.title}
-                                className="h-full w-full object-cover"
-                              />
+                              <img src={album.thumbnails[0].url} alt={album.title} className="h-full w-full object-cover" />
                             ) : (
-                              <span className="text-xs text-muted-foreground">
-                                {album.title.charAt(0)}
-                              </span>
+                              <span className="text-xs text-muted-foreground">{album.title.charAt(0)}</span>
                             )}
                           </div>
                           <div className="min-w-0 flex-1">
                             <p className="truncate text-sm">{album.title}</p>
-                            <p className="truncate text-xs text-muted-foreground">
-                              {album.artists.map((a) => a.name).join(", ")}{" "}
-                              {album.year && `\u2022 ${album.year}`}
-                            </p>
+                            <p className="truncate text-xs text-muted-foreground">{album.artists.map((a) => a.name).join(", ")} {album.year && `• ${album.year}`}</p>
                           </div>
                         </CommandItem>
                       ))}
@@ -270,31 +227,18 @@ export function TopBar({
                       {results.playlists.map((pl) => (
                         <CommandItem
                           key={pl.playlistId}
-                          onSelect={() =>
-                            handleSelectPage({
-                              type: "playlist",
-                              playlistId: pl.playlistId,
-                            })
-                          }
+                          onSelect={() => handleSelect(() => onNavigate({ type: "playlist", playlistId: pl.playlistId }))}
                         >
                           <div className="mr-3 flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-sm bg-muted">
                             {pl.thumbnails[0]?.url ? (
-                              <img
-                                src={pl.thumbnails[0].url}
-                                alt={pl.title}
-                                className="h-full w-full object-cover"
-                              />
+                              <img src={pl.thumbnails[0].url} alt={pl.title} className="h-full w-full object-cover" />
                             ) : (
-                              <span className="text-xs text-muted-foreground">
-                                {pl.title.charAt(0)}
-                              </span>
+                              <span className="text-xs text-muted-foreground">{pl.title.charAt(0)}</span>
                             )}
                           </div>
                           <div className="min-w-0 flex-1">
                             <p className="truncate text-sm">{pl.title}</p>
-                            <p className="truncate text-xs text-muted-foreground">
-                              {pl.author.name}
-                            </p>
+                            <p className="truncate text-xs text-muted-foreground">{pl.author.name}</p>
                           </div>
                         </CommandItem>
                       ))}
@@ -304,9 +248,9 @@ export function TopBar({
                   <CommandEmpty>Nenhum resultado encontrado</CommandEmpty>
                 </CommandList>
               </Command>
-            )}
-          </PopoverContent>
-        </Popover>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
