@@ -3,39 +3,12 @@ use std::sync::Arc;
 use serde::Serialize;
 use tauri::{AppHandle, Manager, State};
 use tokio::sync::Mutex;
-use ytmapi_rs::{
-    auth::oauth::{OAuthDeviceCode, OAuthToken, OAuthTokenGenerator},
-    parse::SearchResults,
-    query::SearchQuery,
-};
 
-use super::client::YtMusicClient;
-
-/// Google TV OAuth credentials (same as ytmusicapi Python / youtui / all unofficial clients).
-const OAUTH_CLIENT_ID: &str =
-    "REDACTED_OAUTH_CLIENT_ID";
-const OAUTH_CLIENT_SECRET: &str = "REDACTED_OAUTH_SECRET";
-
-// ---------------------------------------------------------------------------
-// Shared state for pending OAuth device code (between start and complete)
-// ---------------------------------------------------------------------------
-pub struct PendingOAuthCode(pub Mutex<Option<OAuthDeviceCode>>);
+use super::client::YtMusicState;
 
 // ---------------------------------------------------------------------------
 // Auth response DTOs
 // ---------------------------------------------------------------------------
-#[derive(Serialize)]
-pub struct AuthStartResponse {
-    pub url: String,
-    #[serde(rename = "userCode")]
-    pub user_code: String,
-}
-
-#[derive(Serialize)]
-pub struct AuthCompleteResponse {
-    pub success: bool,
-}
-
 #[derive(Serialize)]
 pub struct AuthStatusResponse {
     pub authenticated: bool,
@@ -128,38 +101,181 @@ fn extract_cookies_auto() -> Result<(String, String), String> {
 }
 
 // ---------------------------------------------------------------------------
-// Search command
+// Search
 // ---------------------------------------------------------------------------
 
-/// Test command: search YouTube Music matching the given query.
-/// Returns a JSON string of search results.
 #[tauri::command]
 pub async fn yt_search(
     query: String,
-    client: State<'_, Arc<Mutex<YtMusicClient>>>,
+    filter: Option<String>,
+    state: State<'_, Arc<Mutex<YtMusicState>>>,
 ) -> Result<String, String> {
-    println!("[yt_search] query: {query}");
-    let client = client.lock().await;
+    println!("[yt_search] query={query} filter={filter:?}");
+    let state = state.lock().await;
+    let result = state.client.search(&query, filter.as_deref()).await
+        .map_err(|e| format!("[yt_search] {e}"))?;
+    serde_json::to_string(&result)
+        .map_err(|e| format!("[yt_search] serialization: {e}"))
+}
 
-    let results: SearchResults = match &*client {
-        YtMusicClient::Unauthenticated(c) => c
-            .query(SearchQuery::new(&query))
-            .await
-            .map_err(|e| format!("[yt_search] error: {e}"))?,
-        YtMusicClient::Authenticated(c) => c
-            .query(SearchQuery::new(&query))
-            .await
-            .map_err(|e| format!("[yt_search] error: {e}"))?,
-        YtMusicClient::CookieAuth(c) => c
-            .query(SearchQuery::new(&query))
-            .await
-            .map_err(|e| format!("[yt_search] error: {e}"))?,
-    };
+#[tauri::command]
+pub async fn yt_search_suggestions(
+    query: String,
+    state: State<'_, Arc<Mutex<YtMusicState>>>,
+) -> Result<String, String> {
+    println!("[yt_search_suggestions] query={query}");
+    let state = state.lock().await;
+    let result = state.client.get_search_suggestions(&query).await
+        .map_err(|e| format!("[yt_search_suggestions] {e}"))?;
+    serde_json::to_string(&result)
+        .map_err(|e| format!("[yt_search_suggestions] serialization: {e}"))
+}
 
-    let json = serde_json::to_string(&results)
-        .map_err(|e| format!("[yt_search] serialization error: {e}"))?;
-    println!("[yt_search] returned {} bytes", json.len());
-    Ok(json)
+// ---------------------------------------------------------------------------
+// Browsing
+// ---------------------------------------------------------------------------
+
+#[tauri::command]
+pub async fn yt_get_home(
+    limit: Option<usize>,
+    state: State<'_, Arc<Mutex<YtMusicState>>>,
+) -> Result<String, String> {
+    let limit = limit.unwrap_or(6);
+    println!("[yt_get_home] limit={limit}");
+    let state = state.lock().await;
+    let result = state.client.get_home(limit).await
+        .map_err(|e| format!("[yt_get_home] {e}"))?;
+    serde_json::to_string(&result)
+        .map_err(|e| format!("[yt_get_home] serialization: {e}"))
+}
+
+#[tauri::command]
+pub async fn yt_get_artist(
+    browse_id: String,
+    state: State<'_, Arc<Mutex<YtMusicState>>>,
+) -> Result<String, String> {
+    println!("[yt_get_artist] browse_id={browse_id}");
+    let state = state.lock().await;
+    let result = state.client.get_artist(&browse_id).await
+        .map_err(|e| format!("[yt_get_artist] {e}"))?;
+    serde_json::to_string(&result)
+        .map_err(|e| format!("[yt_get_artist] serialization: {e}"))
+}
+
+#[tauri::command]
+pub async fn yt_get_album(
+    browse_id: String,
+    state: State<'_, Arc<Mutex<YtMusicState>>>,
+) -> Result<String, String> {
+    println!("[yt_get_album] browse_id={browse_id}");
+    let state = state.lock().await;
+    let result = state.client.get_album(&browse_id).await
+        .map_err(|e| format!("[yt_get_album] {e}"))?;
+    serde_json::to_string(&result)
+        .map_err(|e| format!("[yt_get_album] serialization: {e}"))
+}
+
+// ---------------------------------------------------------------------------
+// Explore
+// ---------------------------------------------------------------------------
+
+#[tauri::command]
+pub async fn yt_get_explore(
+    state: State<'_, Arc<Mutex<YtMusicState>>>,
+) -> Result<String, String> {
+    println!("[yt_get_explore]");
+    let state = state.lock().await;
+    let result = state.client.get_explore().await
+        .map_err(|e| format!("[yt_get_explore] {e}"))?;
+    serde_json::to_string(&result)
+        .map_err(|e| format!("[yt_get_explore] serialization: {e}"))
+}
+
+#[tauri::command]
+pub async fn yt_get_mood_categories(
+    state: State<'_, Arc<Mutex<YtMusicState>>>,
+) -> Result<String, String> {
+    println!("[yt_get_mood_categories]");
+    let state = state.lock().await;
+    let result = state.client.get_mood_categories().await
+        .map_err(|e| format!("[yt_get_mood_categories] {e}"))?;
+    serde_json::to_string(&result)
+        .map_err(|e| format!("[yt_get_mood_categories] serialization: {e}"))
+}
+
+// ---------------------------------------------------------------------------
+// Library
+// ---------------------------------------------------------------------------
+
+#[tauri::command]
+pub async fn yt_get_library_playlists(
+    state: State<'_, Arc<Mutex<YtMusicState>>>,
+) -> Result<String, String> {
+    println!("[yt_get_library_playlists]");
+    let state = state.lock().await;
+    let result = state.client.get_library_playlists().await
+        .map_err(|e| format!("[yt_get_library_playlists] {e}"))?;
+    serde_json::to_string(&result)
+        .map_err(|e| format!("[yt_get_library_playlists] serialization: {e}"))
+}
+
+#[tauri::command]
+pub async fn yt_get_library_songs(
+    state: State<'_, Arc<Mutex<YtMusicState>>>,
+) -> Result<String, String> {
+    println!("[yt_get_library_songs]");
+    let state = state.lock().await;
+    let result = state.client.get_library_songs().await
+        .map_err(|e| format!("[yt_get_library_songs] {e}"))?;
+    serde_json::to_string(&result)
+        .map_err(|e| format!("[yt_get_library_songs] serialization: {e}"))
+}
+
+// ---------------------------------------------------------------------------
+// Playlist
+// ---------------------------------------------------------------------------
+
+#[tauri::command]
+pub async fn yt_get_playlist(
+    playlist_id: String,
+    state: State<'_, Arc<Mutex<YtMusicState>>>,
+) -> Result<String, String> {
+    println!("[yt_get_playlist] playlist_id={playlist_id}");
+    let state = state.lock().await;
+    let result = state.client.get_playlist(&playlist_id).await
+        .map_err(|e| format!("[yt_get_playlist] {e}"))?;
+    serde_json::to_string(&result)
+        .map_err(|e| format!("[yt_get_playlist] serialization: {e}"))
+}
+
+// ---------------------------------------------------------------------------
+// Watch / Player
+// ---------------------------------------------------------------------------
+
+#[tauri::command]
+pub async fn yt_get_watch_playlist(
+    video_id: String,
+    state: State<'_, Arc<Mutex<YtMusicState>>>,
+) -> Result<String, String> {
+    println!("[yt_get_watch_playlist] video_id={video_id}");
+    let state = state.lock().await;
+    let result = state.client.get_watch_playlist(&video_id).await
+        .map_err(|e| format!("[yt_get_watch_playlist] {e}"))?;
+    serde_json::to_string(&result)
+        .map_err(|e| format!("[yt_get_watch_playlist] serialization: {e}"))
+}
+
+#[tauri::command]
+pub async fn yt_get_lyrics(
+    browse_id: String,
+    state: State<'_, Arc<Mutex<YtMusicState>>>,
+) -> Result<String, String> {
+    println!("[yt_get_lyrics] browse_id={browse_id}");
+    let state = state.lock().await;
+    let result = state.client.get_lyrics(&browse_id).await
+        .map_err(|e| format!("[yt_get_lyrics] {e}"))?;
+    serde_json::to_string(&result)
+        .map_err(|e| format!("[yt_get_lyrics] serialization: {e}"))
 }
 
 // ---------------------------------------------------------------------------
@@ -167,7 +283,6 @@ pub async fn yt_search(
 // ---------------------------------------------------------------------------
 
 /// Detect which installed browsers have YouTube cookies.
-/// Returns a list of browser info objects.
 #[tauri::command]
 pub async fn yt_detect_browsers() -> Result<Vec<BrowserInfo>, String> {
     println!("[yt_detect_browsers] Scanning installed browsers for YouTube cookies...");
@@ -185,8 +300,6 @@ pub async fn yt_detect_browsers() -> Result<Vec<BrowserInfo>, String> {
             Err(_) => (false, 0),
         };
 
-        // Only include browsers that could be accessed (even if no cookies)
-        // We detect availability by whether the call didn't error with "not found"
         let display_name = match browser {
             "edge" => "Microsoft Edge",
             "chrome" => "Google Chrome",
@@ -226,7 +339,7 @@ pub async fn yt_detect_browsers() -> Result<Vec<BrowserInfo>, String> {
 pub async fn yt_auth_from_browser(
     browser: String,
     app: AppHandle,
-    client: State<'_, Arc<Mutex<YtMusicClient>>>,
+    state: State<'_, Arc<Mutex<YtMusicState>>>,
 ) -> Result<AuthStatusResponse, String> {
     println!("[yt_auth_from_browser] browser={browser}");
 
@@ -244,19 +357,19 @@ pub async fn yt_auth_from_browser(
         cookie_string.len()
     );
 
-    // 2. Create YtMusic client with cookies
-    let new_client = YtMusicClient::new_from_cookies(&cookie_string).await?;
+    // 2. Create YtMusicState with cookies (sync — no .await)
+    let new_state = YtMusicState::new_from_cookies(cookie_string.clone())?;
 
     // 3. Save cookies to disk for persistence
     let app_data_dir = app
         .path()
         .app_data_dir()
         .map_err(|e| format!("[yt_auth_from_browser] Failed to resolve app data dir: {e}"))?;
-    YtMusicClient::save_cookies(&app_data_dir, &cookie_string)?;
+    YtMusicState::save_cookies(&app_data_dir, &cookie_string)?;
 
-    // 4. Replace client in state
-    let mut client_guard = client.lock().await;
-    *client_guard = new_client;
+    // 4. Replace state
+    let mut state_guard = state.lock().await;
+    *state_guard = new_state;
     println!("[yt_auth_from_browser] Cookie-auth client is now active (from {used_browser}).");
 
     Ok(AuthStatusResponse {
@@ -265,102 +378,14 @@ pub async fn yt_auth_from_browser(
     })
 }
 
-// ---------------------------------------------------------------------------
-// OAuth auth commands
-// ---------------------------------------------------------------------------
-
-/// Step 1: Generate OAuth device code + verification URL.
-/// Returns the URL and user code for the frontend to display.
-#[tauri::command]
-pub async fn yt_auth_start(
-    pending_code: State<'_, PendingOAuthCode>,
-) -> Result<AuthStartResponse, String> {
-    println!("[yt_auth_start] Generating OAuth device code...");
-
-    let http_client = ytmapi_rs::Client::new()
-        .map_err(|e| format!("[yt_auth_start] Failed to create HTTP client: {e}"))?;
-
-    let generator = OAuthTokenGenerator::new(&http_client, OAUTH_CLIENT_ID)
-        .await
-        .map_err(|e| format!("[yt_auth_start] Failed to generate device code: {e}"))?;
-
-    let url = format!(
-        "{}?user_code={}",
-        generator.verification_url, generator.user_code
-    );
-    let user_code = generator.user_code.clone();
-
-    println!("[yt_auth_start] Verification URL: {url}");
-    println!("[yt_auth_start] User code: {user_code}");
-
-    // Store the device code for step 2
-    let mut pending = pending_code.0.lock().await;
-    *pending = Some(generator.device_code);
-    println!("[yt_auth_start] Device code stored in state.");
-
-    Ok(AuthStartResponse { url, user_code })
-}
-
-/// Step 2: Exchange device code for OAuth token after user completes browser flow.
-/// Saves the token to disk and recreates the client with authentication.
-#[tauri::command]
-pub async fn yt_auth_complete(
-    app: AppHandle,
-    client: State<'_, Arc<Mutex<YtMusicClient>>>,
-    pending_code: State<'_, PendingOAuthCode>,
-) -> Result<AuthCompleteResponse, String> {
-    println!("[yt_auth_complete] Exchanging device code for token...");
-
-    // Take the pending device code
-    let device_code = {
-        let mut pending = pending_code.0.lock().await;
-        pending
-            .take()
-            .ok_or_else(|| "[yt_auth_complete] No pending device code. Call yt_auth_start first.".to_string())?
-    };
-    println!("[yt_auth_complete] Device code retrieved from state.");
-
-    // Exchange for token
-    let http_client = ytmapi_rs::Client::new()
-        .map_err(|e| format!("[yt_auth_complete] Failed to create HTTP client: {e}"))?;
-
-    let token: OAuthToken = ytmapi_rs::generate_oauth_token(
-        &http_client,
-        device_code,
-        OAUTH_CLIENT_ID,
-        OAUTH_CLIENT_SECRET,
-    )
-    .await
-    .map_err(|e| format!("[yt_auth_complete] Failed to exchange device code for token: {e}"))?;
-
-    println!("[yt_auth_complete] Token obtained successfully.");
-
-    // Save token to disk
-    let app_data_dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| format!("[yt_auth_complete] Failed to resolve app data dir: {e}"))?;
-    YtMusicClient::save_token(&app_data_dir, &token)?;
-
-    // Recreate client with OAuth authentication
-    println!("[yt_auth_complete] Recreating YtMusicClient with OAuth...");
-    let new_client = YtMusicClient::new_authenticated(token);
-
-    let mut client_guard = client.lock().await;
-    *client_guard = new_client;
-    println!("[yt_auth_complete] Authenticated client is now active.");
-
-    Ok(AuthCompleteResponse { success: true })
-}
-
 /// Check whether the client is authenticated and which method is active.
 #[tauri::command]
 pub async fn yt_auth_status(
-    client: State<'_, Arc<Mutex<YtMusicClient>>>,
+    state: State<'_, Arc<Mutex<YtMusicState>>>,
 ) -> Result<AuthStatusResponse, String> {
-    let client = client.lock().await;
-    let authenticated = client.is_authenticated();
-    let method = client.auth_method().as_str().to_string();
+    let state = state.lock().await;
+    let authenticated = state.is_authenticated();
+    let method = state.auth_method().to_string();
     println!("[yt_auth_status] authenticated={authenticated}, method={method}");
     Ok(AuthStatusResponse {
         authenticated,
@@ -368,11 +393,11 @@ pub async fn yt_auth_status(
     })
 }
 
-/// Delete saved token/cookies and revert to unauthenticated client.
+/// Delete saved cookies and revert to unauthenticated client.
 #[tauri::command]
 pub async fn yt_auth_logout(
     app: AppHandle,
-    client: State<'_, Arc<Mutex<YtMusicClient>>>,
+    state: State<'_, Arc<Mutex<YtMusicState>>>,
 ) -> Result<AuthStatusResponse, String> {
     println!("[yt_auth_logout] Logging out...");
 
@@ -381,18 +406,15 @@ pub async fn yt_auth_logout(
         .app_data_dir()
         .map_err(|e| format!("[yt_auth_logout] Failed to resolve app data dir: {e}"))?;
 
-    // Delete both token and cookie files
-    YtMusicClient::delete_token(&app_data_dir)?;
-    YtMusicClient::delete_cookies(&app_data_dir)?;
+    // Delete saved cookie file
+    YtMusicState::delete_cookies(&app_data_dir)?;
 
-    // Recreate unauthenticated client
+    // Recreate unauthenticated state (sync — no .await)
     println!("[yt_auth_logout] Recreating unauthenticated client...");
-    let new_client = YtMusicClient::new_unauthenticated()
-        .await
-        .map_err(|e| format!("[yt_auth_logout] Failed to create unauthenticated client: {e}"))?;
+    let new_state = YtMusicState::new_unauthenticated()?;
 
-    let mut client_guard = client.lock().await;
-    *client_guard = new_client;
+    let mut state_guard = state.lock().await;
+    *state_guard = new_state;
     println!("[yt_auth_logout] Reverted to unauthenticated client.");
 
     Ok(AuthStatusResponse {

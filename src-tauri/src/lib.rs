@@ -4,8 +4,7 @@ use std::sync::Arc;
 use tauri::Manager;
 use tokio::sync::Mutex;
 
-use youtube_music::client::YtMusicClient;
-use youtube_music::commands::PendingOAuthCode;
+use youtube_music::client::YtMusicState;
 
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 #[tauri::command]
@@ -56,82 +55,66 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .setup(|app| {
-            // Register the pending OAuth code state (empty initially)
-            app.manage(PendingOAuthCode(Mutex::new(None)));
+            println!("[setup] Initializing YtMusicState...");
 
-            let handle = app.handle().clone();
-            tauri::async_runtime::spawn(async move {
-                println!("[setup] Initializing YtMusicClient...");
+            let app_data_dir = app.handle().path().app_data_dir().ok();
 
-                let app_data_dir = handle.path().app_data_dir().ok();
-
-                // Priority 1: Try loading saved cookies from disk
-                let saved_cookies = app_data_dir.as_ref().and_then(|dir| {
-                    println!("[setup] Checking for saved cookies...");
-                    match YtMusicClient::load_cookies(dir) {
-                        Ok(cookies) => cookies,
-                        Err(e) => {
-                            eprintln!("[setup] Error loading saved cookies: {e}");
-                            None
-                        }
-                    }
-                });
-
-                if let Some(cookie_string) = saved_cookies {
-                    println!("[setup] Found saved cookies, creating cookie-auth client...");
-                    match YtMusicClient::new_from_cookies(&cookie_string).await {
-                        Ok(client) => {
-                            println!("[setup] Cookie-auth client created from saved cookies.");
-                            handle.manage(Arc::new(Mutex::new(client)));
-                            println!("[setup] YtMusicClient added to managed state.");
-                            return;
-                        }
-                        Err(e) => {
-                            eprintln!("[setup] Failed to create cookie-auth client: {e}");
-                            println!("[setup] Falling back to OAuth token...");
-                        }
+            // Priority 1: Try loading saved cookies from disk
+            let saved_cookies = app_data_dir.as_ref().and_then(|dir| {
+                println!("[setup] Checking for saved cookies...");
+                match YtMusicState::load_cookies(dir) {
+                    Ok(cookies) => cookies,
+                    Err(e) => {
+                        eprintln!("[setup] Error loading saved cookies: {e}");
+                        None
                     }
                 }
-
-                // Priority 2: Try loading saved OAuth token from disk
-                let saved_token = app_data_dir.as_ref().and_then(|dir| {
-                    println!("[setup] Checking for saved OAuth token...");
-                    match YtMusicClient::load_token(dir) {
-                        Ok(token) => token,
-                        Err(e) => {
-                            eprintln!("[setup] Error loading saved token: {e}");
-                            None
-                        }
-                    }
-                });
-
-                let client = if let Some(token) = saved_token {
-                    println!("[setup] Found saved token, creating authenticated client...");
-                    let c = YtMusicClient::new_authenticated(token);
-                    println!("[setup] Authenticated client created from saved token.");
-                    c
-                } else {
-                    // Priority 3: Unauthenticated
-                    println!("[setup] No saved credentials, creating unauthenticated client...");
-                    match YtMusicClient::new_unauthenticated().await {
-                        Ok(c) => c,
-                        Err(e) => {
-                            eprintln!("[setup] Failed to create YtMusicClient: {e}");
-                            return;
-                        }
-                    }
-                };
-
-                handle.manage(Arc::new(Mutex::new(client)));
-                println!("[setup] YtMusicClient added to managed state.");
             });
+
+            if let Some(cookie_string) = saved_cookies {
+                println!("[setup] Found saved cookies, creating cookie-auth client...");
+                match YtMusicState::new_from_cookies(cookie_string) {
+                    Ok(state) => {
+                        println!("[setup] Cookie-auth client created from saved cookies.");
+                        app.manage(Arc::new(Mutex::new(state)));
+                        println!("[setup] YtMusicState added to managed state.");
+                        return Ok(());
+                    }
+                    Err(e) => {
+                        eprintln!("[setup] Failed to create cookie-auth client: {e}");
+                        println!("[setup] Falling back to unauthenticated...");
+                    }
+                }
+            }
+
+            // Priority 2: Unauthenticated
+            println!("[setup] No saved credentials, creating unauthenticated client...");
+            let state = match YtMusicState::new_unauthenticated() {
+                Ok(s) => s,
+                Err(e) => {
+                    eprintln!("[setup] Failed to create YtMusicState: {e}");
+                    return Ok(());
+                }
+            };
+
+            app.manage(Arc::new(Mutex::new(state)));
+            println!("[setup] YtMusicState added to managed state.");
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
             greet,
             youtube_music::commands::yt_search,
-            youtube_music::commands::yt_auth_start,
-            youtube_music::commands::yt_auth_complete,
+            youtube_music::commands::yt_search_suggestions,
+            youtube_music::commands::yt_get_home,
+            youtube_music::commands::yt_get_artist,
+            youtube_music::commands::yt_get_album,
+            youtube_music::commands::yt_get_explore,
+            youtube_music::commands::yt_get_mood_categories,
+            youtube_music::commands::yt_get_library_playlists,
+            youtube_music::commands::yt_get_library_songs,
+            youtube_music::commands::yt_get_playlist,
+            youtube_music::commands::yt_get_watch_playlist,
+            youtube_music::commands::yt_get_lyrics,
             youtube_music::commands::yt_auth_status,
             youtube_music::commands::yt_auth_logout,
             youtube_music::commands::yt_detect_browsers,
