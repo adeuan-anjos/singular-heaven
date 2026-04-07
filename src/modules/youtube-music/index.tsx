@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect } from "react";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { SidePanel } from "./components/layout/side-panel";
+import { TopBar } from "./components/layout/top-bar";
 import { MusicHeader } from "./components/layout/music-header";
 import { PlayerBar } from "./components/layout/player-bar";
 import { HomeView } from "./components/home/home-view";
@@ -161,18 +162,23 @@ export default function YouTubeMusicModule() {
   return (
     <TooltipProvider delay={0}>
       <div className="flex h-full flex-col">
+        {/* Top bar — full width, splits into side-panel spacer + nav controls */}
+        <TopBar
+          onBack={nav.pop}
+          onForward={nav.forward}
+          canGoBack={nav.canGoBack}
+          canGoForward={nav.canGoForward}
+          onSearch={() => nav.push({ type: "search" })}
+        />
+
+        {/* Main area */}
         <div className="flex min-h-0 flex-1">
           <SidePanel
             activeView={activeTab}
             onViewChange={handleViewChange}
             onSelectPlaylist={handleSelectPlaylist}
-            onBack={nav.pop}
-            onForward={nav.forward}
-            canGoBack={nav.canGoBack}
-            canGoForward={nav.canGoForward}
-            onSearch={() => nav.push({ type: "search" })}
           />
-          <div className="flex min-w-0 flex-1 flex-col overflow-hidden pt-12">
+          <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
             {renderContent()}
           </div>
         </div>

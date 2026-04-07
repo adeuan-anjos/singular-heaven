@@ -1,8 +1,6 @@
-import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { ArrowLeft, ArrowRight, Search, Home, Compass, Library, Heart } from "lucide-react";
+import { Home, Compass, Library, Heart } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { mockTracks, mockPlaylists } from "../../mock/data";
 
@@ -10,11 +8,6 @@ interface SidePanelProps {
   activeView: string;
   onViewChange: (view: string) => void;
   onSelectPlaylist: (id: string | null) => void;
-  onBack: () => void;
-  onForward: () => void;
-  canGoBack: boolean;
-  canGoForward: boolean;
-  onSearch: () => void;
 }
 
 const NAV_ITEMS = [
@@ -27,60 +20,13 @@ export function SidePanel({
   activeView,
   onViewChange,
   onSelectPlaylist,
-  onBack,
-  onForward,
-  canGoBack,
-  canGoForward,
-  onSearch,
 }: SidePanelProps) {
   const handleNavClick = (key: string) => {
     onViewChange(key);
   };
 
   return (
-    <div className="flex h-full w-64 shrink-0 flex-col border-r border-border">
-      {/* Top: Navigation buttons */}
-      <div className="flex items-center gap-1 px-3 py-2">
-        <Tooltip>
-          <TooltipTrigger
-            render={
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={onBack}
-                disabled={!canGoBack}
-              />
-            }
-          >
-            <ArrowLeft className="h-4 w-4" />
-          </TooltipTrigger>
-          <TooltipContent>Voltar</TooltipContent>
-        </Tooltip>
-        <Tooltip>
-          <TooltipTrigger
-            render={
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={onForward}
-                disabled={!canGoForward}
-              />
-            }
-          >
-            <ArrowRight className="h-4 w-4" />
-          </TooltipTrigger>
-          <TooltipContent>Avançar</TooltipContent>
-        </Tooltip>
-        <Tooltip>
-          <TooltipTrigger
-            render={<Button variant="ghost" size="icon" onClick={onSearch} />}
-          >
-            <Search className="h-4 w-4" />
-          </TooltipTrigger>
-          <TooltipContent>Buscar</TooltipContent>
-        </Tooltip>
-      </div>
-
+    <div className="flex h-full w-64 shrink-0 flex-col border-r border-border pt-4">
       {/* Navigation items */}
       <div className="flex flex-col gap-0.5 px-2">
         {NAV_ITEMS.map(({ key, label, icon: Icon }) => {
