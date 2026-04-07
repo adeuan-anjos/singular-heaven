@@ -8,7 +8,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Ellipsis, Play, Pause, ListPlus, User, Disc3, AudioLines, Heart } from "lucide-react";
+import { Ellipsis, Play, Pause, ListPlus, User, Disc3, Heart } from "lucide-react";
 import type { Track } from "../../types/music";
 
 interface TrackRowProps {
@@ -28,39 +28,31 @@ export function TrackRow({ track, index, isPlaying, onPlay, onAddToQueue, onGoTo
 
   return (
     <div
-      className="group flex items-center gap-3 rounded-md px-2 py-1.5 hover:bg-accent"
+      className={`group flex items-center gap-3 rounded-md px-2 py-1.5 hover:bg-accent ${isPlaying ? "bg-accent/50" : ""}`}
       onDoubleClick={() => onPlay?.(track)}
     >
       {index !== undefined && (
         <div className="flex w-6 items-center justify-center">
-          {/* Default: number (not hovered, not playing) */}
-          <span className={`text-center text-sm text-muted-foreground group-hover:hidden ${isPlaying ? "hidden" : ""}`}>
-            {index + 1}
-          </span>
-          {/* Not hovered, playing: audio wave icon */}
-          {isPlaying && (
-            <AudioLines className="h-4 w-4 text-primary group-hover:hidden" />
-          )}
-          {/* Hovered, not playing: play button */}
+          {/* Default: number */}
           {!isPlaying && (
-            <button
-              type="button"
-              className="hidden group-hover:flex items-center justify-center"
-              onClick={() => onPlay?.(track)}
-            >
-              <Play className="h-4 w-4 text-foreground" />
-            </button>
+            <span className="text-center text-sm text-muted-foreground group-hover:hidden">
+              {index + 1}
+            </span>
           )}
-          {/* Hovered, playing: pause button */}
+          {/* Playing: animated equalizer */}
           {isPlaying && (
-            <button
-              type="button"
-              className="hidden group-hover:flex items-center justify-center"
-              onClick={() => onPlay?.(track)}
-            >
-              <Pause className="h-4 w-4 text-foreground" />
-            </button>
+            <div className="equalizer group-hover:hidden">
+              <span /><span /><span />
+            </div>
           )}
+          {/* Hover: play or pause */}
+          <button
+            type="button"
+            className="hidden group-hover:flex items-center justify-center"
+            onClick={() => onPlay?.(track)}
+          >
+            {isPlaying ? <Pause className="h-4 w-4 text-foreground" /> : <Play className="h-4 w-4 text-foreground" />}
+          </button>
         </div>
       )}
       <Avatar className="h-10 w-10 rounded-sm">

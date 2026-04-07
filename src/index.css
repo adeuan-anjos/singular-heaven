@@ -150,3 +150,28 @@
   border: 2px solid transparent;
   background-clip: content-box;
 }
+
+/* Animated equalizer bars for now-playing indicator */
+.equalizer {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 14px;
+}
+
+.equalizer span {
+  display: block;
+  width: 3px;
+  border-radius: 1px;
+  background: var(--primary);
+  animation: equalizer-bounce 1s ease-in-out infinite;
+}
+
+.equalizer span:nth-child(1) { height: 60%; animation-delay: 0s; }
+.equalizer span:nth-child(2) { height: 100%; animation-delay: 0.15s; }
+.equalizer span:nth-child(3) { height: 40%; animation-delay: 0.3s; }
+
+@keyframes equalizer-bounce {
+  0%, 100% { transform: scaleY(0.3); }
+  50% { transform: scaleY(1); }
+}
