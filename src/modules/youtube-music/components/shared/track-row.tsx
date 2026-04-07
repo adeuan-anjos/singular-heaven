@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -55,10 +54,13 @@ export function TrackRow({ track, index, isPlaying, onPlay, onAddToQueue, onGoTo
           </button>
         </div>
       )}
-      <Avatar className="h-10 w-10 rounded-sm">
-        <AvatarImage src={imgUrl} alt={track.title} className="object-cover" />
-        <AvatarFallback className="rounded-sm">{track.title.charAt(0)}</AvatarFallback>
-      </Avatar>
+      <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-sm bg-muted">
+        {imgUrl ? (
+          <img src={imgUrl} alt={track.title} className="h-full w-full object-cover" />
+        ) : (
+          <span className="text-sm text-muted-foreground">{track.title.charAt(0)}</span>
+        )}
+      </div>
       <div className="min-w-0 flex-1">
         <p className={`truncate text-sm font-medium ${isPlaying ? "text-primary" : "text-foreground"}`}>{track.title}</p>
         <p className="truncate text-xs text-muted-foreground">

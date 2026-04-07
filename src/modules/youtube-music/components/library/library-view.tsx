@@ -1,10 +1,5 @@
 import React, { useState } from "react";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import {
-  Avatar,
-  AvatarImage,
-  AvatarFallback,
-} from "@/components/ui/avatar";
 import { Heart } from "lucide-react";
 import { VirtualTrackList } from "../shared/virtual-track-list";
 import {
@@ -92,12 +87,13 @@ export const LibraryView = React.memo(function LibraryView({
                     isActive && "bg-accent"
                   )}
                 >
-                  <Avatar className="size-9 shrink-0 rounded-sm">
-                    <AvatarImage src={thumbUrl} alt={pl.title} className="rounded-sm object-cover" />
-                    <AvatarFallback className="rounded-sm text-xs">
-                      {initials}
-                    </AvatarFallback>
-                  </Avatar>
+                  <div className="flex size-9 shrink-0 items-center justify-center overflow-hidden rounded-sm bg-muted">
+                    {thumbUrl ? (
+                      <img src={thumbUrl} alt={pl.title} className="h-full w-full object-cover" />
+                    ) : (
+                      <span className="text-xs text-muted-foreground">{initials}</span>
+                    )}
+                  </div>
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-medium leading-tight">
                       {pl.title}
