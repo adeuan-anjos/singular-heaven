@@ -20,17 +20,12 @@ import {
 import { usePlayerStore } from "../../stores/player-store";
 import { useQueueStore } from "../../stores/queue-store";
 import { useRenderTracker } from "@/lib/debug";
+import { ProgressBar } from "./progress-bar";
 
 interface PlayerBarProps {
   onOpenQueue: () => void;
   onGoToArtist?: (artistId: string) => void;
   onGoToAlbum?: (albumId: string) => void;
-}
-
-function formatTime(seconds: number): string {
-  const m = Math.floor(seconds / 60);
-  const s = Math.floor(seconds % 60);
-  return `${m}:${s.toString().padStart(2, "0")}`;
 }
 
 export function PlayerBar({ onOpenQueue, onGoToArtist, onGoToAlbum }: PlayerBarProps) {
@@ -39,7 +34,6 @@ export function PlayerBar({ onOpenQueue, onGoToArtist, onGoToAlbum }: PlayerBarP
 
   const track = usePlayerStore((s) => s.currentTrack);
   const isPlaying = usePlayerStore((s) => s.isPlaying);
-  const progress = usePlayerStore((s) => s.progress);
   const volume = usePlayerStore((s) => s.volume);
   const shuffleOn = usePlayerStore((s) => s.shuffle);
   const repeat = usePlayerStore((s) => s.repeat);
@@ -54,7 +48,7 @@ export function PlayerBar({ onOpenQueue, onGoToArtist, onGoToAlbum }: PlayerBarP
   const queueNext = useQueueStore((s) => s.next);
   const queuePrevious = useQueueStore((s) => s.previous);
 
-  console.log("[PlayerBar] render", { track: track?.title, progress });
+  console.log("[PlayerBar] render", { track: track?.title });
 
   if (!track) return null;
 
@@ -67,7 +61,7 @@ export function PlayerBar({ onOpenQueue, onGoToArtist, onGoToAlbum }: PlayerBarP
   };
 
   const handlePrevious = () => {
-    if (progress > 3) {
+    if (usePlayerStore.getState().progress > 3) {
       seek(0);
       return;
     }
@@ -148,17 +142,7 @@ export function PlayerBar({ onOpenQueue, onGoToArtist, onGoToAlbum }: PlayerBarP
             {repeat === "one" ? <Repeat1 className="h-4 w-4" /> : <Repeat className="h-4 w-4" />}
           </Toggle>
         </div>
-        <div className="flex w-full max-w-md items-center gap-2">
-          <span className="w-10 text-right text-xs text-muted-foreground">{formatTime(progress)}</span>
-          <Slider
-            value={[progress]}
-            max={track.durationSeconds}
-            step={1}
-            onValueChange={(v) => seek(Array.isArray(v) ? v[0] : v)}
-            className="flex-1"
-          />
-          <span className="w-10 text-xs text-muted-foreground">{track.duration}</span>
-        </div>
+        <ProgressBar />
       </div>
 
       {/* Right: Volume + queue */}
