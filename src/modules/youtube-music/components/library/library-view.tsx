@@ -43,7 +43,7 @@ export function LibraryView({
   return (
     <ResizablePanelGroup orientation="horizontal" className="h-full">
       {/* Left column: Playlists */}
-      <ResizablePanel defaultSize={30} minSize={15}>
+      <ResizablePanel defaultSize={20} minSize={15} maxSize={25}>
         <div className="flex h-full flex-col">
           <div className="shrink-0 px-4 pt-4 pb-2">
             <SectionHeader title="Playlists" />
@@ -89,7 +89,7 @@ export function LibraryView({
       <ResizableHandle />
 
       {/* Right column: Curtidas */}
-      <ResizablePanel defaultSize={70} minSize={40}>
+      <ResizablePanel defaultSize={80} minSize={60}>
         <div className="flex h-full flex-col">
           <div className="shrink-0 px-4 pt-4 pb-2">
             <SectionHeader title="Curtidas" />
