@@ -16,7 +16,7 @@ function thumb(url = PLACEHOLDER_IMG): { url: string; width: number; height: num
   return [{ url, width: 160, height: 160 }];
 }
 
-export const mockTracks: Track[] = [
+const BASE_TRACKS: Track[] = [
   { videoId: "t1", title: "Blinding Lights", artists: [{ id: "a1", name: "The Weeknd" }], album: { id: "al1", name: "After Hours" }, duration: "3:20", durationSeconds: 200, thumbnails: thumb() },
   { videoId: "t2", title: "Levitating", artists: [{ id: "a2", name: "Dua Lipa" }], album: { id: "al2", name: "Future Nostalgia" }, duration: "3:23", durationSeconds: 203, thumbnails: thumb() },
   { videoId: "t3", title: "Watermelon Sugar", artists: [{ id: "a3", name: "Harry Styles" }], album: { id: "al3", name: "Fine Line" }, duration: "2:54", durationSeconds: 174, thumbnails: thumb() },
@@ -28,6 +28,17 @@ export const mockTracks: Track[] = [
   { videoId: "t9", title: "Good 4 U", artists: [{ id: "a8", name: "Olivia Rodrigo" }], album: { id: "al7", name: "SOUR" }, duration: "2:58", durationSeconds: 178, thumbnails: thumb() },
   { videoId: "t10", title: "Happier Than Ever", artists: [{ id: "a9", name: "Billie Eilish" }], album: { id: "al8", name: "Happier Than Ever" }, duration: "4:58", durationSeconds: 298, thumbnails: thumb() },
 ];
+
+// Generate 50 liked tracks from the 10 base tracks for virtual scroll testing
+export const mockTracks: Track[] = Array.from({ length: 50 }, (_, i) => {
+  const base = BASE_TRACKS[i % BASE_TRACKS.length];
+  const batch = Math.floor(i / BASE_TRACKS.length);
+  return {
+    ...base,
+    videoId: `${base.videoId}_${batch}_${i}`,
+    title: batch === 0 ? base.title : `${base.title} (Remix ${batch})`,
+  };
+});
 
 export const mockAlbums: Album[] = [
   { browseId: "al1", title: "After Hours", artists: [{ id: "a1", name: "The Weeknd" }], year: "2020", thumbnails: thumb(), tracks: mockTracks.filter((t) => t.album?.id === "al1") },

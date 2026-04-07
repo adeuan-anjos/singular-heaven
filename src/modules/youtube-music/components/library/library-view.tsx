@@ -1,8 +1,7 @@
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { CarouselSection } from "../shared/carousel-section";
 import { MediaCard } from "../shared/media-card";
-import { SectionHeader } from "../shared/section-header";
-import { TrackRow } from "../shared/track-row";
+import { VirtualTrackList } from "../shared/virtual-track-list";
 import { mockTracks, mockPlaylists, mockArtists, mockAlbums } from "../../mock/data";
 import type { Track, StackPage } from "../../types/music";
 
@@ -17,18 +16,15 @@ export function LibraryView({ onNavigate, onPlayTrack, onAddToQueue }: LibraryVi
     <ScrollArea className="h-full">
       <div className="space-y-6 p-4">
         <div className="space-y-2">
-          <SectionHeader title="Curtidas" />
-          {mockTracks.slice(0, 5).map((track, i) => (
-            <TrackRow
-              key={track.videoId}
-              track={track}
-              index={i}
-              onPlay={onPlayTrack}
-              onAddToQueue={onAddToQueue}
-              onGoToArtist={(id) => onNavigate({ type: "artist", artistId: id })}
-              onGoToAlbum={(id) => onNavigate({ type: "album", albumId: id })}
-            />
-          ))}
+          <h3 className="text-sm font-semibold text-foreground">Curtidas</h3>
+          <VirtualTrackList
+            tracks={mockTracks}
+            className="h-96 rounded-md border border-border"
+            onPlay={onPlayTrack}
+            onAddToQueue={onAddToQueue}
+            onGoToArtist={(id) => onNavigate({ type: "artist", artistId: id })}
+            onGoToAlbum={(id) => onNavigate({ type: "album", albumId: id })}
+          />
         </div>
 
         <CarouselSection title="Suas playlists">
