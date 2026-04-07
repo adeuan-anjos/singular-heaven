@@ -189,7 +189,7 @@ export default function YouTubeMusicModule() {
             canGoForward={nav.canGoForward}
             onSearch={() => nav.push({ type: "search" })}
           />
-          <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+          <div className="flex min-w-0 flex-1 flex-col overflow-hidden pt-12">
             {renderContent()}
           </div>
         </div>
