@@ -5,7 +5,11 @@ import { Play, Shuffle, Heart, Ellipsis } from "lucide-react";
 interface CollectionHeaderProps {
   title: string;
   subtitle?: string;
+  description?: string;
+  year?: string;
   trackCount?: number;
+  duration?: string;
+  privacy?: string;
   thumbnailUrl?: string;
   onPlay: () => void;
   onShuffle: () => void;
@@ -15,13 +19,26 @@ interface CollectionHeaderProps {
 export function CollectionHeader({
   title,
   subtitle,
+  description,
+  year,
   trackCount,
+  duration,
+  privacy,
   thumbnailUrl,
   onPlay,
   onShuffle,
   onGoToAuthor,
 }: CollectionHeaderProps) {
   const [liked, setLiked] = useState(false);
+
+  // Build meta line: "Playlist automática • 2026" or "990 músicas • Mais de 7 horas"
+  const metaParts: string[] = [];
+  if (privacy) metaParts.push(privacy);
+  if (year) metaParts.push(year);
+
+  const statParts: string[] = [];
+  if (trackCount !== undefined) statParts.push(`${trackCount} músicas`);
+  if (duration) statParts.push(duration);
 
   return (
     <div className="space-y-4">
@@ -34,19 +51,32 @@ export function CollectionHeader({
             <span className="text-4xl text-muted-foreground">{title.charAt(0)}</span>
           )}
         </div>
-        <div className="flex flex-1 flex-col gap-2">
+        <div className="flex flex-1 flex-col gap-1">
           <h1 className="text-4xl font-bold text-foreground">{title}</h1>
-          <p className="text-sm text-muted-foreground">
-            {subtitle && onGoToAuthor ? (
-              <button type="button" className="hover:underline" onClick={onGoToAuthor}>
-                {subtitle}
-              </button>
-            ) : (
-              subtitle && <span>{subtitle}</span>
-            )}
-            {subtitle && trackCount !== undefined && " • "}
-            {trackCount !== undefined && `${trackCount} músicas`}
-          </p>
+          {subtitle && (
+            <p className="text-sm text-muted-foreground">
+              {onGoToAuthor ? (
+                <button type="button" className="hover:underline" onClick={onGoToAuthor}>
+                  {subtitle}
+                </button>
+              ) : (
+                <span>{subtitle}</span>
+              )}
+            </p>
+          )}
+          {description && (
+            <p className="line-clamp-2 text-sm text-muted-foreground">{description}</p>
+          )}
+          {metaParts.length > 0 && (
+            <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+              {metaParts.join(" • ")}
+            </p>
+          )}
+          {statParts.length > 0 && (
+            <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+              {statParts.join(" • ")}
+            </p>
+          )}
         </div>
       </div>
 
