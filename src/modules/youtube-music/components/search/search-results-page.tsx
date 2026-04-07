@@ -192,7 +192,7 @@ export function SearchResultsPage({
           Resultados para &apos;{query}&apos;
         </h1>
 
-        <Tabs defaultValue="all">
+        <Tabs defaultValue="all" className="space-y-6">
           <TabsList variant="line">
             {FILTER_TABS.map((tab) => (
               <TabsTrigger key={tab.value} value={tab.value}>
