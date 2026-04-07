@@ -6,7 +6,6 @@ import { PlayerBar } from "./components/layout/player-bar";
 import { HomeView } from "./components/home/home-view";
 import { ExploreView } from "./components/explore/explore-view";
 import { LibraryView } from "./components/library/library-view";
-import { SearchView } from "./components/search/search-view";
 import { ArtistPage } from "./components/pages/artist-page";
 import { AlbumPage } from "./components/pages/album-page";
 import { PlaylistPage } from "./components/pages/playlist-page";
@@ -106,8 +105,6 @@ export default function YouTubeMusicModule() {
               onPlayAll={handlePlayAll}
             />
           );
-        case "search":
-          return <SearchView onNavigate={nav.push} onPlayTrack={handlePlayTrack} />;
         case "mood":
           return <ExploreView onNavigate={nav.push} onPlayTrack={handlePlayTrack} />;
         default:
@@ -136,7 +133,8 @@ export default function YouTubeMusicModule() {
           onForward={nav.forward}
           canGoBack={nav.canGoBack}
           canGoForward={nav.canGoForward}
-          onSearch={() => nav.push({ type: "search" })}
+          onNavigate={nav.push}
+          onPlayTrack={handlePlayTrack}
         />
 
         {/* Main area */}

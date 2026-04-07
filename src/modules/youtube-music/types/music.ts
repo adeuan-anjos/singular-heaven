@@ -78,7 +78,6 @@ export type StackPage =
   | { type: "artist"; artistId: string }
   | { type: "album"; albumId: string }
   | { type: "playlist"; playlistId: string }
-  | { type: "search" }
   | { type: "mood"; params: string; title: string };
 
 export interface ChartTrack extends Track {
