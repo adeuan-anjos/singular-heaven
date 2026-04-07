@@ -4,7 +4,9 @@ import { TrackRow } from "../shared/track-row";
 import { MediaCard } from "../shared/media-card";
 import { MediaGrid } from "../shared/media-grid";
 import { CarouselSection } from "../shared/carousel-section";
+import { TopResultSection } from "./top-result-section";
 import { mockSearchResults } from "../../mock/data";
+import { usePlayerStore } from "../../stores/player-store";
 import type { Track, StackPage } from "../../types/music";
 
 interface SearchResultsPageProps {
@@ -32,6 +34,7 @@ export function SearchResultsPage({
   onAddToQueue,
 }: SearchResultsPageProps) {
   const results = mockSearchResults;
+  const currentTrackId = usePlayerStore((s) => s.currentTrack?.videoId);
 
   console.log("[SearchResultsPage] render", { query });
 
@@ -110,8 +113,28 @@ export function SearchResultsPage({
     </MediaGrid>
   );
 
+  const topResult = results.artists[0]
+    ? { kind: "artist" as const, artist: results.artists[0] }
+    : results.albums[0]
+      ? { kind: "album" as const, album: results.albums[0] }
+      : results.songs[0]
+        ? { kind: "song" as const, song: results.songs[0] }
+        : null;
+
   const renderAllTab = () => (
     <div className="space-y-6">
+      {topResult && results.songs.length > 0 && (
+        <TopResultSection
+          topResult={topResult}
+          topSongs={results.songs}
+          currentTrackId={currentTrackId}
+          onNavigate={onNavigate}
+          onPlayTrack={onPlayTrack}
+          onAddToQueue={onAddToQueue}
+          onGoToArtist={handleGoToArtist}
+          onGoToAlbum={handleGoToAlbum}
+        />
+      )}
       {results.songs.length > 0 && renderSongsSection("Músicas")}
       {results.albums.length > 0 && (
         <CarouselSection title="Álbuns">
