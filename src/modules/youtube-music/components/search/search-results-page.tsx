@@ -16,7 +16,7 @@ interface SearchResultsPageProps {
   onAddToQueue: (track: Track) => void;
 }
 
-type FilterTab = "all" | "songs" | "videos" | "albums" | "artists" | "playlists";
+type FilterTab = "all" | "songs" | "videos" | "albums" | "artists" | "community_playlists" | "featured_playlists";
 
 const FILTER_TABS: { value: FilterTab; label: string }[] = [
   { value: "all", label: "Tudo" },
@@ -24,7 +24,8 @@ const FILTER_TABS: { value: FilterTab; label: string }[] = [
   { value: "videos", label: "Vídeos" },
   { value: "albums", label: "Álbuns" },
   { value: "artists", label: "Artistas" },
-  { value: "playlists", label: "Playlists" },
+  { value: "community_playlists", label: "Playlists da comunidade" },
+  { value: "featured_playlists", label: "Playlists em destaque" },
 ];
 
 export function SearchResultsPage({
@@ -222,7 +223,11 @@ export function SearchResultsPage({
             {renderArtistsSection()}
           </TabsContent>
 
-          <TabsContent value="playlists">
+          <TabsContent value="community_playlists">
+            {renderPlaylistsSection()}
+          </TabsContent>
+
+          <TabsContent value="featured_playlists">
             {renderPlaylistsSection()}
           </TabsContent>
         </Tabs>
