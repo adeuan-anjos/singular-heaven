@@ -1,16 +1,19 @@
-import { useRef, useCallback } from "react";
+import { useState, useRef, useCallback } from "react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Avatar,
   AvatarImage,
   AvatarFallback,
 } from "@/components/ui/avatar";
+import { Heart } from "lucide-react";
 import { VirtualTrackList } from "../shared/virtual-track-list";
 import {
   mockTracks,
   mockPlaylists,
+  getMockPlaylist,
 } from "../../mock/data";
 import type { Track, StackPage } from "../../types/music";
+import { cn } from "@/lib/utils";
 
 interface LibraryViewProps {
   onNavigate: (page: StackPage) => void;
@@ -23,16 +26,28 @@ export function LibraryView({
   onPlayTrack,
   onAddToQueue,
 }: LibraryViewProps) {
-  const curtidasScrollRef = useRef<HTMLElement | null>(null);
+  const [selectedPlaylistId, setSelectedPlaylistId] = useState<string | null>(null);
 
-  const curtidasAreaRef = useCallback((node: HTMLDivElement | null) => {
+  const rightScrollRef = useRef<HTMLElement | null>(null);
+
+  const rightAreaRef = useCallback((node: HTMLDivElement | null) => {
     if (node) {
       const viewport = node.querySelector(
         '[data-slot="scroll-area-viewport"]'
       );
-      curtidasScrollRef.current = viewport as HTMLElement | null;
+      rightScrollRef.current = viewport as HTMLElement | null;
     }
   }, []);
+
+  const activeTracks =
+    selectedPlaylistId === null
+      ? mockTracks
+      : getMockPlaylist(selectedPlaylistId).tracks ?? mockTracks;
+
+  const activeTitle =
+    selectedPlaylistId === null
+      ? "Curtidas"
+      : (mockPlaylists.find((p) => p.playlistId === selectedPlaylistId)?.title ?? "Playlist");
 
   return (
     <div className="flex h-full">
@@ -43,19 +58,40 @@ export function LibraryView({
         </div>
         <ScrollArea className="flex-1">
           <div className="flex flex-col gap-0.5 px-2 pb-4">
+            {/* Permanent "Curtidas" entry */}
+            <button
+              onClick={() => setSelectedPlaylistId(null)}
+              className={cn(
+                "flex w-full items-center gap-3 rounded-md px-2 py-1.5 text-left transition-colors hover:bg-accent",
+                selectedPlaylistId === null && "bg-accent"
+              )}
+            >
+              <div className="flex size-9 shrink-0 items-center justify-center rounded-sm bg-primary/10">
+                <Heart className="size-4 text-primary" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-medium leading-tight">
+                  Curtidas
+                </p>
+                <p className="truncate text-xs text-muted-foreground leading-tight mt-0.5">
+                  {mockTracks.length} músicas
+                </p>
+              </div>
+            </button>
+
+            {/* User playlists */}
             {mockPlaylists.map((pl) => {
               const thumbUrl = pl.thumbnails?.[0]?.url;
               const initials = pl.title.slice(0, 2).toUpperCase();
+              const isActive = selectedPlaylistId === pl.playlistId;
               return (
                 <button
                   key={pl.playlistId}
-                  onClick={() =>
-                    onNavigate({
-                      type: "playlist",
-                      playlistId: pl.playlistId,
-                    })
-                  }
-                  className="flex w-full items-center gap-3 rounded-md px-2 py-1.5 text-left transition-colors hover:bg-accent"
+                  onClick={() => setSelectedPlaylistId(pl.playlistId)}
+                  className={cn(
+                    "flex w-full items-center gap-3 rounded-md px-2 py-1.5 text-left transition-colors hover:bg-accent",
+                    isActive && "bg-accent"
+                  )}
                 >
                   <Avatar className="size-9 shrink-0 rounded-sm">
                     <AvatarImage src={thumbUrl} alt={pl.title} className="rounded-sm object-cover" />
@@ -78,19 +114,19 @@ export function LibraryView({
         </ScrollArea>
       </div>
 
-      {/* Right: Curtidas */}
+      {/* Right: Selected playlist or Curtidas */}
       <div className="flex flex-1 flex-col min-w-0">
         <div className="shrink-0 px-4 pt-4 pb-2">
-          <h2 className="text-lg font-semibold text-foreground">Curtidas</h2>
+          <h2 className="text-lg font-semibold text-foreground">{activeTitle}</h2>
         </div>
         <ScrollArea
-          ref={curtidasAreaRef}
+          ref={rightAreaRef}
           className="flex-1"
         >
           <div className="px-4 pb-4">
             <VirtualTrackList
-              tracks={mockTracks}
-              scrollElementRef={curtidasScrollRef}
+              tracks={activeTracks}
+              scrollElementRef={rightScrollRef}
               scrollMargin={0}
               onPlay={onPlayTrack}
               onAddToQueue={onAddToQueue}
