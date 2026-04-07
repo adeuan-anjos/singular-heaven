@@ -1,12 +1,13 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Input } from "@/components/ui/input";
 import { CollectionHeader } from "../shared/collection-header";
 import { TrackTable } from "../shared/track-table";
-import { getMockPlaylist } from "../../mock/data";
+import { ytGetPlaylist } from "../../services/yt-api";
+import { mapPlaylistPage } from "../../services/mappers";
 import { usePlayerStore } from "../../stores/player-store";
-import { Play, Shuffle, Search } from "lucide-react";
-import type { Track, StackPage } from "../../types/music";
+import { Play, Shuffle, Search, Loader2 } from "lucide-react";
+import type { Playlist, Track, StackPage } from "../../types/music";
 
 interface PlaylistPageProps {
   playlistId: string;
@@ -23,10 +24,56 @@ export function PlaylistPage({
   onAddToQueue,
   onPlayAll,
 }: PlaylistPageProps) {
-  const playlist = getMockPlaylist(playlistId);
+  const [playlist, setPlaylist] = useState<Playlist | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const currentTrack = usePlayerStore((s) => s.currentTrack);
   const isPlaying = usePlayerStore((s) => s.isPlaying);
   const [filter, setFilter] = useState("");
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+    console.log("[PlaylistPage] Fetching playlist:", playlistId);
+
+    ytGetPlaylist(playlistId)
+      .then((raw) => {
+        if (cancelled) return;
+        const mapped = mapPlaylistPage(raw);
+        console.log("[PlaylistPage] Playlist loaded:", mapped.title, "tracks:", mapped.tracks?.length);
+        setPlaylist(mapped);
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        const msg = err instanceof Error ? err.message : String(err);
+        console.error("[PlaylistPage] Failed to fetch playlist:", msg);
+        setError(msg);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+
+    return () => { cancelled = true; };
+  }, [playlistId]);
+
+  if (loading) {
+    return (
+      <div className="flex h-full items-center justify-center">
+        <Loader2 className="size-6 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex h-full items-center justify-center">
+        <p className="text-sm text-destructive">{error}</p>
+      </div>
+    );
+  }
+
+  if (!playlist) return null;
 
   const tracks = playlist.tracks ?? [];
   const filteredTracks = filter

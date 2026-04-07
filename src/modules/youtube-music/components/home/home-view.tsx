@@ -1,12 +1,11 @@
-import { useState } from "react";
-import { invoke } from "@tauri-apps/api/core";
+import { useState, useEffect } from "react";
+import { Loader2 } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { CarouselSection } from "../shared/carousel-section";
 import { MediaCard } from "../shared/media-card";
-import { mockHomeSections, getMockArtist } from "../../mock/data";
-import type { Track, Album, Artist, Playlist, StackPage } from "../../types/music";
+import { ytGetHome } from "../../services/yt-api";
+import { mapHomeSections } from "../../services/mappers";
+import type { Track, Album, Artist, Playlist, HomeSection, StackPage } from "../../types/music";
 import { useRenderTracker } from "@/lib/debug";
 
 interface HomeViewProps {
@@ -74,11 +73,9 @@ function getItemActions(item: Track | Album | Artist | Playlist, onNavigate: (pa
     };
   }
   if (isArtist(item)) {
-    const artistData = getMockArtist(item.browseId);
-    const firstTrack = artistData.topSongs?.[0];
     return {
       onClick: () => onNavigate({ type: "artist", artistId: item.browseId }),
-      onPlay: firstTrack ? () => onPlayTrack(firstTrack) : undefined,
+      onPlay: () => onNavigate({ type: "artist", artistId: item.browseId }),
     };
   }
   if (isPlaylist(item)) {
@@ -102,53 +99,57 @@ function getItemActions(item: Track | Album | Artist | Playlist, onNavigate: (pa
 
 export function HomeView({ onNavigate, onPlayTrack }: HomeViewProps) {
   useRenderTracker("HomeView", { onNavigate, onPlayTrack });
-  const sections = mockHomeSections;
-  const [testQuery, setTestQuery] = useState("The Weeknd");
-  const [testResult, setTestResult] = useState<string | null>(null);
-  const [testLoading, setTestLoading] = useState(false);
+  const [sections, setSections] = useState<HomeSection[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const handleTestSearch = async () => {
-    setTestLoading(true);
-    setTestResult(null);
-    try {
-      console.log("[TEST] Calling yt_search with query:", testQuery);
-      const json = await invoke<string>("yt_search", { query: testQuery });
-      console.log("[TEST] Raw response length:", json.length);
-      const parsed = JSON.parse(json);
-      console.log("[TEST] Parsed search results:", parsed);
-      setTestResult(JSON.stringify(parsed, null, 2));
-    } catch (err) {
-      console.error("[TEST] yt_search failed:", err);
-      setTestResult(`Error: ${err}`);
-    } finally {
-      setTestLoading(false);
+  useEffect(() => {
+    let cancelled = false;
+
+    async function fetchHome() {
+      console.log("[HomeView] Fetching home sections...");
+      setLoading(true);
+      setError(null);
+      try {
+        const apiSections = await ytGetHome(6);
+        if (cancelled) return;
+        const mapped = mapHomeSections(apiSections);
+        console.log("[HomeView] Loaded home sections:", mapped.length);
+        setSections(mapped);
+      } catch (err) {
+        if (cancelled) return;
+        const msg = err instanceof Error ? err.message : String(err);
+        console.error("[HomeView] Failed to load home:", msg);
+        setError(msg);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
     }
-  };
+
+    fetchHome();
+    return () => { cancelled = true; };
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="flex h-full items-center justify-center">
+        <Loader2 className="size-6 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex h-full flex-col items-center justify-center gap-2 text-muted-foreground">
+        <p className="text-sm">Erro ao carregar a página inicial</p>
+        <p className="text-xs">{error}</p>
+      </div>
+    );
+  }
 
   return (
     <ScrollArea className="group/page h-full">
       <div className="mx-auto max-w-screen-xl space-y-6 p-4">
-        {/* DEBUG: API Test */}
-        <div className="space-y-3 rounded-lg border border-border bg-card p-4">
-          <h3 className="text-sm font-semibold text-foreground">🔬 Teste da API (debug)</h3>
-          <div className="flex gap-2">
-            <Input
-              value={testQuery}
-              onChange={(e) => setTestQuery(e.target.value)}
-              placeholder="Buscar..."
-              className="flex-1"
-              onKeyDown={(e) => e.key === "Enter" && handleTestSearch()}
-            />
-            <Button onClick={handleTestSearch} disabled={testLoading}>
-              {testLoading ? "Buscando..." : "Buscar"}
-            </Button>
-          </div>
-          {testResult && (
-            <pre className="max-h-96 overflow-auto rounded bg-muted p-3 text-xs text-foreground">
-              {testResult}
-            </pre>
-          )}
-        </div>
         {sections.map((section) => (
           <CarouselSection key={section.title} title={section.title}>
             {section.contents.map((item, i) => {

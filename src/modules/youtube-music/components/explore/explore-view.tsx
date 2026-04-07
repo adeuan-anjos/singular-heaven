@@ -1,11 +1,14 @@
+import { useState, useEffect } from "react";
+import { Loader2 } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { CarouselSection } from "../shared/carousel-section";
 import { MediaCard } from "../shared/media-card";
 import { MoodGrid } from "./mood-grid";
 import { SectionHeader } from "../shared/section-header";
 import { ChartList } from "../shared/chart-list";
-import { mockExploreData, mockChartTracks } from "../../mock/data";
-import type { Track, StackPage } from "../../types/music";
+import { ytGetExplore } from "../../services/yt-api";
+import { mapExplorePage, mapExploreSongToChart } from "../../services/mappers";
+import type { Track, ExploreData, ChartTrack, StackPage } from "../../types/music";
 
 interface ExploreViewProps {
   onNavigate: (page: StackPage) => void;
@@ -13,7 +16,62 @@ interface ExploreViewProps {
 }
 
 export function ExploreView({ onNavigate, onPlayTrack }: ExploreViewProps) {
-  const data = mockExploreData;
+  const [data, setData] = useState<ExploreData | null>(null);
+  const [chartTracks, setChartTracks] = useState<ChartTrack[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function fetchExplore() {
+      console.log("[ExploreView] Fetching explore data...");
+      setLoading(true);
+      setError(null);
+      try {
+        const apiData = await ytGetExplore();
+        if (cancelled) return;
+        const mapped = mapExplorePage(apiData);
+        const charts = apiData.topSongs.map((s, i) => mapExploreSongToChart(s, i));
+        console.log("[ExploreView] Loaded explore data:", {
+          newReleases: mapped.newReleases.length,
+          trending: mapped.trending.length,
+          chartTracks: charts.length,
+          moods: mapped.moodsAndGenres.length,
+          newVideos: mapped.newVideos.length,
+        });
+        setData(mapped);
+        setChartTracks(charts);
+      } catch (err) {
+        if (cancelled) return;
+        const msg = err instanceof Error ? err.message : String(err);
+        console.error("[ExploreView] Failed to load explore:", msg);
+        setError(msg);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+
+    fetchExplore();
+    return () => { cancelled = true; };
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="flex h-full items-center justify-center">
+        <Loader2 className="size-6 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  if (error || !data) {
+    return (
+      <div className="flex h-full flex-col items-center justify-center gap-2 text-muted-foreground">
+        <p className="text-sm">Erro ao carregar a página de exploração</p>
+        {error && <p className="text-xs">{error}</p>}
+      </div>
+    );
+  }
 
   return (
     <ScrollArea className="group/page h-full">
@@ -39,7 +97,7 @@ export function ExploreView({ onNavigate, onPlayTrack }: ExploreViewProps) {
         <div>
           <ChartList
             title="Top músicas"
-            tracks={mockChartTracks}
+            tracks={chartTracks}
             onPlayTrack={onPlayTrack}
             onGoToArtist={(artistId) => onNavigate({ type: "artist", artistId })}
             onGoToAlbum={(albumId) => onNavigate({ type: "album", albumId })}

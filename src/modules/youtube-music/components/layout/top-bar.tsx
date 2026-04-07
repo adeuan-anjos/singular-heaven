@@ -9,9 +9,10 @@ import {
   CommandGroup,
   CommandItem,
 } from "@/components/ui/command";
-import { ChevronLeft, ChevronRight, Search, X } from "lucide-react";
-import { mockSearchResults } from "../../mock/data";
-import type { Track, StackPage } from "../../types/music";
+import { ChevronLeft, ChevronRight, Search, X, Loader2 } from "lucide-react";
+import { ytSearchSuggestions, ytSearch } from "../../services/yt-api";
+import { mapSearchResults } from "../../services/mappers";
+import type { Track, SearchResults, StackPage } from "../../types/music";
 
 interface TopBarProps {
   onBack: () => void;
@@ -34,10 +35,55 @@ export function TopBar({
 }: TopBarProps) {
   const [query, setQuery] = useState("");
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [results, setResults] = useState<SearchResults | null>(null);
+  const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [searchLoading, setSearchLoading] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const results = query.length > 0 ? mockSearchResults : null;
+  // Debounced search as user types
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+
+    if (query.length === 0) {
+      setResults(null);
+      setSuggestions([]);
+      setSearchLoading(false);
+      return;
+    }
+
+    setSearchLoading(true);
+    debounceRef.current = setTimeout(async () => {
+      try {
+        console.log("[TopBar] Fetching suggestions/results for:", query);
+        const [suggestionsData, searchData] = await Promise.all([
+          ytSearchSuggestions(query).catch(() => []),
+          ytSearch(query).catch(() => null),
+        ]);
+        setSuggestions(suggestionsData.map((s) => s.text));
+        if (searchData) {
+          const mapped = mapSearchResults(searchData);
+          console.log("[TopBar] Inline search results:", {
+            songs: mapped.songs.length,
+            artists: mapped.artists.length,
+            albums: mapped.albums.length,
+            playlists: mapped.playlists.length,
+            suggestions: suggestionsData.length,
+          });
+          setResults(mapped);
+        }
+      } catch (err) {
+        console.error("[TopBar] Search suggestions failed:", err);
+      } finally {
+        setSearchLoading(false);
+      }
+    }, 350);
+
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, [query]);
 
   const handleInputChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -51,6 +97,8 @@ export function TopBar({
   const handleClear = useCallback(() => {
     setQuery("");
     setDropdownOpen(false);
+    setResults(null);
+    setSuggestions([]);
     inputRef.current?.focus();
   }, []);
 
@@ -59,6 +107,8 @@ export function TopBar({
       action();
       setQuery("");
       setDropdownOpen(false);
+      setResults(null);
+      setSuggestions([]);
     },
     [],
   );
@@ -87,6 +137,13 @@ export function TopBar({
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [dropdownOpen]);
+
+  const hasResults = results && (
+    results.songs.length > 0 ||
+    results.artists.length > 0 ||
+    results.albums.length > 0 ||
+    results.playlists.length > 0
+  );
 
   return (
     <div className="flex shrink-0 border-b border-border">
@@ -156,13 +213,33 @@ export function TopBar({
           </div>
 
           {/* Dropdown results */}
-          {dropdownOpen && results && (
+          {dropdownOpen && query.length > 0 && (
             <div className="absolute left-0 top-full z-50 mt-1 w-full rounded-lg bg-popover shadow-md ring-1 ring-foreground/10">
               <Command className="rounded-lg" shouldFilter={false}>
                 <CommandList className="max-h-80">
-                  {results.songs.length > 0 && (
+                  {searchLoading && !hasResults && (
+                    <div className="flex items-center justify-center py-6">
+                      <Loader2 className="size-4 animate-spin text-muted-foreground" />
+                    </div>
+                  )}
+
+                  {suggestions.length > 0 && (
+                    <CommandGroup heading="Sugestões">
+                      {suggestions.slice(0, 5).map((text, i) => (
+                        <CommandItem
+                          key={`suggestion-${i}`}
+                          onSelect={() => handleSelect(() => onSearchSubmit(text))}
+                        >
+                          <Search className="mr-2 h-3.5 w-3.5 text-muted-foreground" />
+                          <span className="text-sm">{text}</span>
+                        </CommandItem>
+                      ))}
+                    </CommandGroup>
+                  )}
+
+                  {results?.songs && results.songs.length > 0 && (
                     <CommandGroup heading="Músicas">
-                      {results.songs.map((track) => (
+                      {results.songs.slice(0, 4).map((track) => (
                         <CommandItem
                           key={track.videoId}
                           onSelect={() => handleSelect(() => onPlayTrack(track))}
@@ -184,9 +261,9 @@ export function TopBar({
                     </CommandGroup>
                   )}
 
-                  {results.artists.length > 0 && (
+                  {results?.artists && results.artists.length > 0 && (
                     <CommandGroup heading="Artistas">
-                      {results.artists.map((artist) => (
+                      {results.artists.slice(0, 3).map((artist) => (
                         <CommandItem
                           key={artist.browseId}
                           onSelect={() => handleSelect(() => onNavigate({ type: "artist", artistId: artist.browseId }))}
@@ -204,9 +281,9 @@ export function TopBar({
                     </CommandGroup>
                   )}
 
-                  {results.albums.length > 0 && (
+                  {results?.albums && results.albums.length > 0 && (
                     <CommandGroup heading="Álbuns">
-                      {results.albums.map((album) => (
+                      {results.albums.slice(0, 3).map((album) => (
                         <CommandItem
                           key={album.browseId}
                           onSelect={() => handleSelect(() => onNavigate({ type: "album", albumId: album.browseId }))}
@@ -220,16 +297,16 @@ export function TopBar({
                           </div>
                           <div className="min-w-0 flex-1">
                             <p className="truncate text-sm">{album.title}</p>
-                            <p className="truncate text-xs text-muted-foreground">{album.artists.map((a) => a.name).join(", ")} {album.year && `• ${album.year}`}</p>
+                            <p className="truncate text-xs text-muted-foreground">{album.artists.map((a) => a.name).join(", ")} {album.year && `\u2022 ${album.year}`}</p>
                           </div>
                         </CommandItem>
                       ))}
                     </CommandGroup>
                   )}
 
-                  {results.playlists.length > 0 && (
+                  {results?.playlists && results.playlists.length > 0 && (
                     <CommandGroup heading="Playlists">
-                      {results.playlists.map((pl) => (
+                      {results.playlists.slice(0, 3).map((pl) => (
                         <CommandItem
                           key={pl.playlistId}
                           onSelect={() => handleSelect(() => onNavigate({ type: "playlist", playlistId: pl.playlistId }))}
@@ -250,7 +327,9 @@ export function TopBar({
                     </CommandGroup>
                   )}
 
-                  <CommandEmpty>Nenhum resultado encontrado</CommandEmpty>
+                  {!searchLoading && !hasResults && suggestions.length === 0 && (
+                    <CommandEmpty>Nenhum resultado encontrado</CommandEmpty>
+                  )}
                 </CommandList>
               </Command>
             </div>

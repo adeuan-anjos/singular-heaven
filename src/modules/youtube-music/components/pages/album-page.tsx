@@ -1,12 +1,13 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Input } from "@/components/ui/input";
 import { CollectionHeader } from "../shared/collection-header";
 import { TrackTable } from "../shared/track-table";
-import { getMockAlbum } from "../../mock/data";
+import { ytGetAlbum } from "../../services/yt-api";
+import { mapAlbumPage } from "../../services/mappers";
 import { usePlayerStore } from "../../stores/player-store";
-import { Play, Shuffle, Search } from "lucide-react";
-import type { Track, StackPage } from "../../types/music";
+import { Play, Shuffle, Search, Loader2 } from "lucide-react";
+import type { Album, Track, StackPage } from "../../types/music";
 
 interface AlbumPageProps {
   albumId: string;
@@ -23,12 +24,58 @@ export function AlbumPage({
   onAddToQueue,
   onPlayAll,
 }: AlbumPageProps) {
-  const album = getMockAlbum(albumId);
-  const artistName = album.artists.map((a) => a.name).join(", ");
+  const [album, setAlbum] = useState<Album | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const currentTrack = usePlayerStore((s) => s.currentTrack);
   const isPlaying = usePlayerStore((s) => s.isPlaying);
   const [filter, setFilter] = useState("");
 
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+    console.log("[AlbumPage] Fetching album:", albumId);
+
+    ytGetAlbum(albumId)
+      .then((raw) => {
+        if (cancelled) return;
+        const mapped = mapAlbumPage(raw);
+        console.log("[AlbumPage] Album loaded:", mapped.title, "tracks:", mapped.tracks?.length);
+        setAlbum(mapped);
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        const msg = err instanceof Error ? err.message : String(err);
+        console.error("[AlbumPage] Failed to fetch album:", msg);
+        setError(msg);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+
+    return () => { cancelled = true; };
+  }, [albumId]);
+
+  if (loading) {
+    return (
+      <div className="flex h-full items-center justify-center">
+        <Loader2 className="size-6 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex h-full items-center justify-center">
+        <p className="text-sm text-destructive">{error}</p>
+      </div>
+    );
+  }
+
+  if (!album) return null;
+
+  const artistName = album.artists.map((a) => a.name).join(", ");
   const tracks = album.tracks ?? [];
   const filteredTracks = filter
     ? tracks.filter((t) => {

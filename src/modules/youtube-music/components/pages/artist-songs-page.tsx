@@ -1,18 +1,20 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Input } from "@/components/ui/input";
 import { CollectionHeader } from "../shared/collection-header";
 import type { CollectionHeaderAction } from "../shared/collection-header";
 import { TrackTable } from "../shared/track-table";
-import { getMockArtist } from "../../mock/data";
+import { ytGetArtist } from "../../services/yt-api";
+import { mapArtistPage } from "../../services/mappers";
 import { usePlayerStore } from "../../stores/player-store";
 import { useQueueStore } from "../../stores/queue-store";
 import {
   Shuffle,
   Radio,
   Search,
+  Loader2,
 } from "lucide-react";
-import type { Track, StackPage } from "../../types/music";
+import type { Artist, Track, StackPage } from "../../types/music";
 
 interface ArtistSongsPageProps {
   artistId: string;
@@ -27,15 +29,63 @@ export function ArtistSongsPage({
   onPlayTrack,
   onAddToQueue,
 }: ArtistSongsPageProps) {
-  const artist = getMockArtist(artistId);
-  const imgUrl = artist.thumbnails[0]?.url ?? "";
+  const [artist, setArtist] = useState<Artist | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const currentTrack = usePlayerStore((s) => s.currentTrack);
   const isPlaying = usePlayerStore((s) => s.isPlaying);
   const play = usePlayerStore((s) => s.play);
   const setTracks = useQueueStore((s) => s.setTracks);
-  const [subscribed, setSubscribed] = useState(artist.subscribed ?? false);
+  const [subscribed, setSubscribed] = useState(false);
   const [liked, setLiked] = useState(false);
   const [filter, setFilter] = useState("");
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+    console.log("[ArtistSongsPage] Fetching artist:", artistId);
+
+    ytGetArtist(artistId)
+      .then((raw) => {
+        if (cancelled) return;
+        const mapped = mapArtistPage(raw);
+        console.log("[ArtistSongsPage] Artist loaded:", mapped.name, "songs:", mapped.topSongs?.length);
+        setArtist(mapped);
+        setSubscribed(mapped.subscribed ?? false);
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        const msg = err instanceof Error ? err.message : String(err);
+        console.error("[ArtistSongsPage] Failed to fetch artist:", msg);
+        setError(msg);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+
+    return () => { cancelled = true; };
+  }, [artistId]);
+
+  if (loading) {
+    return (
+      <div className="flex h-full items-center justify-center">
+        <Loader2 className="size-6 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex h-full items-center justify-center">
+        <p className="text-sm text-destructive">{error}</p>
+      </div>
+    );
+  }
+
+  if (!artist) return null;
+
+  const imgUrl = artist.thumbnails[0]?.url ?? "";
 
   const infoLines: string[] = [];
   if (artist.monthlyListeners) infoLines.push(artist.monthlyListeners);

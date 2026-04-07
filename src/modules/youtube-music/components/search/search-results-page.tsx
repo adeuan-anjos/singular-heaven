@@ -1,3 +1,5 @@
+import { useState, useEffect } from "react";
+import { Loader2 } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { TrackRow } from "../shared/track-row";
@@ -5,9 +7,10 @@ import { MediaCard } from "../shared/media-card";
 import { MediaGrid } from "../shared/media-grid";
 import { CarouselSection } from "../shared/carousel-section";
 import { TopResultSection } from "./top-result-section";
-import { mockSearchResults } from "../../mock/data";
+import { ytSearch } from "../../services/yt-api";
+import { mapSearchResults } from "../../services/mappers";
 import { usePlayerStore } from "../../stores/player-store";
-import type { Track, StackPage } from "../../types/music";
+import type { Track, SearchResults, StackPage } from "../../types/music";
 
 interface SearchResultsPageProps {
   query: string;
@@ -34,8 +37,48 @@ export function SearchResultsPage({
   onPlayTrack,
   onAddToQueue,
 }: SearchResultsPageProps) {
-  const results = mockSearchResults;
+  const [results, setResults] = useState<SearchResults | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const currentTrackId = usePlayerStore((s) => s.currentTrack?.videoId);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function fetchResults() {
+      if (!query.trim()) {
+        setResults(null);
+        setLoading(false);
+        return;
+      }
+
+      console.log("[SearchResultsPage] Searching for:", query);
+      setLoading(true);
+      setError(null);
+      try {
+        const apiResponse = await ytSearch(query);
+        if (cancelled) return;
+        const mapped = mapSearchResults(apiResponse);
+        console.log("[SearchResultsPage] Search results:", {
+          songs: mapped.songs.length,
+          artists: mapped.artists.length,
+          albums: mapped.albums.length,
+          playlists: mapped.playlists.length,
+        });
+        setResults(mapped);
+      } catch (err) {
+        if (cancelled) return;
+        const msg = err instanceof Error ? err.message : String(err);
+        console.error("[SearchResultsPage] Search failed:", msg);
+        setError(msg);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+
+    fetchResults();
+    return () => { cancelled = true; };
+  }, [query]);
 
   console.log("[SearchResultsPage] render", { query });
 
@@ -46,6 +89,31 @@ export function SearchResultsPage({
   const handleGoToAlbum = (albumId: string) => {
     onNavigate({ type: "album", albumId });
   };
+
+  if (loading) {
+    return (
+      <div className="flex h-full items-center justify-center">
+        <Loader2 className="size-6 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex h-full flex-col items-center justify-center gap-2 text-muted-foreground">
+        <p className="text-sm">Erro ao buscar resultados</p>
+        <p className="text-xs">{error}</p>
+      </div>
+    );
+  }
+
+  if (!results) {
+    return (
+      <div className="flex h-full items-center justify-center text-muted-foreground">
+        <p className="text-sm">Nenhum resultado encontrado</p>
+      </div>
+    );
+  }
 
   const renderSongsSection = (title?: string) => (
     <div className="space-y-1">
@@ -76,7 +144,7 @@ export function SearchResultsPage({
             artistName={album.artists.map((a) => a.name).join(", ")}
             thumbnails={album.thumbnails}
             onClick={() => onNavigate({ type: "album", albumId: album.browseId })}
-            onPlay={() => onPlayTrack(results.songs[0])}
+            onPlay={() => onNavigate({ type: "album", albumId: album.browseId })}
             onGoToArtist={firstArtistId ? () => handleGoToArtist(firstArtistId) : undefined}
           />
         );
@@ -148,7 +216,7 @@ export function SearchResultsPage({
                 artistName={album.artists.map((a) => a.name).join(", ")}
                 thumbnails={album.thumbnails}
                 onClick={() => onNavigate({ type: "album", albumId: album.browseId })}
-                onPlay={() => onPlayTrack(results.songs[0])}
+                onPlay={() => onNavigate({ type: "album", albumId: album.browseId })}
                 onGoToArtist={firstArtistId ? () => handleGoToArtist(firstArtistId) : undefined}
               />
             );
@@ -211,7 +279,6 @@ export function SearchResultsPage({
           </TabsContent>
 
           <TabsContent value="videos">
-            {/* Videos reuse songs data for now (mock) */}
             {renderSongsSection()}
           </TabsContent>
 

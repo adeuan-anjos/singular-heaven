@@ -1,8 +1,11 @@
+import { useState, useEffect } from "react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
-import { Home, Compass, Library, Heart } from "lucide-react";
+import { Home, Compass, Library, Heart, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { mockTracks, mockPlaylists } from "../../mock/data";
+import { ytGetLibraryPlaylists, ytGetLibrarySongs } from "../../services/yt-api";
+import { mapLibraryPlaylists, mapLibrarySongs } from "../../services/mappers";
+import type { Playlist } from "../../types/music";
 
 interface SidePanelProps {
   activeView: string;
@@ -21,6 +24,42 @@ export function SidePanel({
   onViewChange,
   onSelectPlaylist,
 }: SidePanelProps) {
+  const [playlists, setPlaylists] = useState<Playlist[]>([]);
+  const [likedCount, setLikedCount] = useState(0);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function fetchSidebarData() {
+      console.log("[SidePanel] Fetching sidebar playlists and liked count...");
+      setLoading(true);
+      try {
+        const [apiPlaylists, apiSongs] = await Promise.all([
+          ytGetLibraryPlaylists(),
+          ytGetLibrarySongs(),
+        ]);
+        if (cancelled) return;
+        const mappedPlaylists = mapLibraryPlaylists(apiPlaylists);
+        const mappedSongs = mapLibrarySongs(apiSongs);
+        console.log("[SidePanel] Loaded sidebar data:", {
+          playlistCount: mappedPlaylists.length,
+          likedCount: mappedSongs.length,
+        });
+        setPlaylists(mappedPlaylists);
+        setLikedCount(mappedSongs.length);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        console.error("[SidePanel] Failed to load sidebar data:", msg);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+
+    fetchSidebarData();
+    return () => { cancelled = true; };
+  }, []);
+
   const handleNavClick = (key: string) => {
     onViewChange(key);
   };
@@ -58,60 +97,66 @@ export function SidePanel({
         </h3>
       </div>
       <ScrollArea className="flex-1">
-        <div className="flex flex-col gap-0.5 px-2 pb-4">
-          {/* Curtidas */}
-          <button
-            onClick={() => onSelectPlaylist(null)}
-            className="flex w-full items-center gap-3 rounded-md px-2 py-1.5 text-left transition-colors hover:bg-accent"
-          >
-            <div className="flex size-9 shrink-0 items-center justify-center rounded-sm bg-primary/10">
-              <Heart className="size-4 text-primary" />
-            </div>
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-medium leading-tight">
-                Curtidas
-              </p>
-              <p className="mt-0.5 truncate text-xs leading-tight text-muted-foreground">
-                {mockTracks.length} músicas
-              </p>
-            </div>
-          </button>
+        {loading ? (
+          <div className="flex items-center justify-center py-8">
+            <Loader2 className="size-4 animate-spin text-muted-foreground" />
+          </div>
+        ) : (
+          <div className="flex flex-col gap-0.5 px-2 pb-4">
+            {/* Curtidas */}
+            <button
+              onClick={() => onSelectPlaylist(null)}
+              className="flex w-full items-center gap-3 rounded-md px-2 py-1.5 text-left transition-colors hover:bg-accent"
+            >
+              <div className="flex size-9 shrink-0 items-center justify-center rounded-sm bg-primary/10">
+                <Heart className="size-4 text-primary" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-medium leading-tight">
+                  Curtidas
+                </p>
+                <p className="mt-0.5 truncate text-xs leading-tight text-muted-foreground">
+                  {likedCount} músicas
+                </p>
+              </div>
+            </button>
 
-          {/* User playlists */}
-          {mockPlaylists.map((pl) => {
-            const thumbUrl = pl.thumbnails?.[0]?.url;
-            const initials = pl.title.slice(0, 2).toUpperCase();
-            return (
-              <button
-                key={pl.playlistId}
-                onClick={() => onSelectPlaylist(pl.playlistId)}
-                className="flex w-full items-center gap-3 rounded-md px-2 py-1.5 text-left transition-colors hover:bg-accent"
-              >
-                <div className="flex size-9 shrink-0 items-center justify-center overflow-hidden rounded-sm bg-muted">
-                  {thumbUrl ? (
-                    <img
-                      src={thumbUrl}
-                      alt={pl.title}
-                      className="h-full w-full object-cover"
-                    />
-                  ) : (
-                    <span className="text-xs text-muted-foreground">
-                      {initials}
-                    </span>
-                  )}
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium leading-tight">
-                    {pl.title}
-                  </p>
-                  <p className="mt-0.5 truncate text-xs leading-tight text-muted-foreground">
-                    {pl.author?.name} • {pl.trackCount} músicas
-                  </p>
-                </div>
-              </button>
-            );
-          })}
-        </div>
+            {/* User playlists */}
+            {playlists.map((pl) => {
+              const thumbUrl = pl.thumbnails?.[0]?.url;
+              const initials = pl.title.slice(0, 2).toUpperCase();
+              return (
+                <button
+                  key={pl.playlistId}
+                  onClick={() => onSelectPlaylist(pl.playlistId)}
+                  className="flex w-full items-center gap-3 rounded-md px-2 py-1.5 text-left transition-colors hover:bg-accent"
+                >
+                  <div className="flex size-9 shrink-0 items-center justify-center overflow-hidden rounded-sm bg-muted">
+                    {thumbUrl ? (
+                      <img
+                        src={thumbUrl}
+                        alt={pl.title}
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      <span className="text-xs text-muted-foreground">
+                        {initials}
+                      </span>
+                    )}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium leading-tight">
+                      {pl.title}
+                    </p>
+                    <p className="mt-0.5 truncate text-xs leading-tight text-muted-foreground">
+                      {pl.author?.name} {pl.trackCount != null && `\u2022 ${pl.trackCount} músicas`}
+                    </p>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        )}
       </ScrollArea>
     </div>
   );

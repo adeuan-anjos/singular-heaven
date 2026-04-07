@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
 import { CollectionHeader } from "../shared/collection-header";
@@ -6,13 +6,15 @@ import type { CollectionHeaderAction } from "../shared/collection-header";
 import { CarouselSection } from "../shared/carousel-section";
 import { MediaCard } from "../shared/media-card";
 import { TrackTable } from "../shared/track-table";
-import { getMockArtist } from "../../mock/data";
-import type { Track, StackPage } from "../../types/music";
+import { ytGetArtist } from "../../services/yt-api";
+import { mapArtistPage } from "../../services/mappers";
+import type { Artist, Track, StackPage } from "../../types/music";
 import {
   Shuffle,
   Radio,
   ChevronDown,
   ChevronUp,
+  Loader2,
 } from "lucide-react";
 
 interface ArtistPageProps {
@@ -23,11 +25,59 @@ interface ArtistPageProps {
 }
 
 export function ArtistPage({ artistId, onNavigate, onPlayTrack, onAddToQueue }: ArtistPageProps) {
-  const artist = getMockArtist(artistId);
-  const imgUrl = artist.thumbnails[0]?.url ?? "";
-  const [subscribed, setSubscribed] = useState(artist.subscribed ?? false);
+  const [artist, setArtist] = useState<Artist | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [subscribed, setSubscribed] = useState(false);
   const [liked, setLiked] = useState(false);
   const [bioExpanded, setBioExpanded] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+    console.log("[ArtistPage] Fetching artist:", artistId);
+
+    ytGetArtist(artistId)
+      .then((raw) => {
+        if (cancelled) return;
+        const mapped = mapArtistPage(raw);
+        console.log("[ArtistPage] Artist loaded:", mapped.name);
+        setArtist(mapped);
+        setSubscribed(mapped.subscribed ?? false);
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        const msg = err instanceof Error ? err.message : String(err);
+        console.error("[ArtistPage] Failed to fetch artist:", msg);
+        setError(msg);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+
+    return () => { cancelled = true; };
+  }, [artistId]);
+
+  if (loading) {
+    return (
+      <div className="flex h-full items-center justify-center">
+        <Loader2 className="size-6 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex h-full items-center justify-center">
+        <p className="text-sm text-destructive">{error}</p>
+      </div>
+    );
+  }
+
+  if (!artist) return null;
+
+  const imgUrl = artist.thumbnails[0]?.url ?? "";
 
   const infoLines: string[] = [];
   if (artist.monthlyListeners) infoLines.push(artist.monthlyListeners);
@@ -169,20 +219,15 @@ export function ArtistPage({ artistId, onNavigate, onPlayTrack, onAddToQueue }: 
         {/* Similar artists */}
         {artist.similarArtists && artist.similarArtists.length > 0 && (
           <CarouselSection title="Artistas similares">
-            {artist.similarArtists.map((a) => {
-              const similarData = getMockArtist(a.browseId);
-              const firstTrack = similarData.topSongs?.[0];
-              return (
-                <MediaCard
-                  key={a.browseId}
-                  title={a.name}
-                  typeLabel="Artista"
-                  thumbnails={a.thumbnails}
-                  onClick={() => onNavigate({ type: "artist", artistId: a.browseId })}
-                  onPlay={firstTrack ? () => onPlayTrack(firstTrack) : undefined}
-                />
-              );
-            })}
+            {artist.similarArtists.map((a) => (
+              <MediaCard
+                key={a.browseId}
+                title={a.name}
+                typeLabel="Artista"
+                thumbnails={a.thumbnails}
+                onClick={() => onNavigate({ type: "artist", artistId: a.browseId })}
+              />
+            ))}
           </CarouselSection>
         )}
       </div>
