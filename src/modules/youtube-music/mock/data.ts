@@ -53,13 +53,13 @@ export const mockAlbums: Album[] = [
 ];
 
 export const mockArtists: Artist[] = [
-  { browseId: "a1", name: "The Weeknd", thumbnails: thumb(PLACEHOLDER_ARTIST_IMG), subscribers: "35M", topSongs: mockTracks.filter((t) => t.artists[0].id === "a1"), albums: mockAlbums.filter((a) => a.artists[0].id === "a1"), singles: [], similarArtists: [] },
-  { browseId: "a2", name: "Dua Lipa", thumbnails: thumb(PLACEHOLDER_ARTIST_IMG), subscribers: "28M" },
-  { browseId: "a3", name: "Harry Styles", thumbnails: thumb(PLACEHOLDER_ARTIST_IMG), subscribers: "22M" },
-  { browseId: "a5", name: "Justin Bieber", thumbnails: thumb(PLACEHOLDER_ARTIST_IMG), subscribers: "70M" },
-  { browseId: "a7", name: "Doja Cat", thumbnails: thumb(PLACEHOLDER_ARTIST_IMG), subscribers: "18M" },
-  { browseId: "a8", name: "Olivia Rodrigo", thumbnails: thumb(PLACEHOLDER_ARTIST_IMG), subscribers: "15M" },
-  { browseId: "a9", name: "Billie Eilish", thumbnails: thumb(PLACEHOLDER_ARTIST_IMG), subscribers: "45M" },
+  { browseId: "a1", name: "The Weeknd", thumbnails: thumb(PLACEHOLDER_ARTIST_IMG), subscribers: "35M", monthlyListeners: "355 mi ouvintes mensais", views: "12B visualizações", description: "Abel Makkonen Tesfaye, conhecido profissionalmente como The Weeknd, é um cantor, compositor e produtor canadense. Conhecido por sua versatilidade vocal e produção sombria, ele é um dos artistas mais influentes da música pop contemporânea.", subscribed: false, shuffleId: "shuffle_a1", radioId: "radio_a1", topSongs: mockTracks.filter((t) => t.artists[0].id === "a1"), albums: mockAlbums.filter((a) => a.artists[0].id === "a1"), singles: [], videos: [], similarArtists: [] },
+  { browseId: "a2", name: "Dua Lipa", thumbnails: thumb(PLACEHOLDER_ARTIST_IMG), subscribers: "28M", monthlyListeners: "280 mi ouvintes mensais", views: "8B visualizações", description: "Dua Lipa é uma cantora e compositora britânica de origem albanesa. Ganhou destaque mundial com hits como 'New Rules' e 'Don't Start Now'.", subscribed: true, shuffleId: "shuffle_a2", radioId: "radio_a2" },
+  { browseId: "a3", name: "Harry Styles", thumbnails: thumb(PLACEHOLDER_ARTIST_IMG), subscribers: "22M", monthlyListeners: "190 mi ouvintes mensais", views: "5B visualizações", description: "Harry Styles é um cantor, compositor e ator britânico, ex-integrante do One Direction.", subscribed: false, shuffleId: "shuffle_a3", radioId: "radio_a3" },
+  { browseId: "a5", name: "Justin Bieber", thumbnails: thumb(PLACEHOLDER_ARTIST_IMG), subscribers: "70M", monthlyListeners: "400 mi ouvintes mensais", views: "30B visualizações", description: "Justin Bieber é um cantor e compositor canadense. Descoberto na internet, tornou-se um dos artistas mais vendidos de todos os tempos.", subscribed: false, shuffleId: "shuffle_a5", radioId: "radio_a5" },
+  { browseId: "a7", name: "Doja Cat", thumbnails: thumb(PLACEHOLDER_ARTIST_IMG), subscribers: "18M", monthlyListeners: "150 mi ouvintes mensais", views: "4B visualizações", description: "Doja Cat é uma rapper, cantora e compositora americana conhecida por sua versatilidade musical e presença criativa.", subscribed: false, shuffleId: "shuffle_a7", radioId: "radio_a7" },
+  { browseId: "a8", name: "Olivia Rodrigo", thumbnails: thumb(PLACEHOLDER_ARTIST_IMG), subscribers: "15M", monthlyListeners: "120 mi ouvintes mensais", views: "3B visualizações", description: "Olivia Rodrigo é uma cantora, compositora e atriz americana. Seu álbum de estreia 'SOUR' foi um fenômeno cultural.", subscribed: false, shuffleId: "shuffle_a8", radioId: "radio_a8" },
+  { browseId: "a9", name: "Billie Eilish", thumbnails: thumb(PLACEHOLDER_ARTIST_IMG), subscribers: "45M", monthlyListeners: "300 mi ouvintes mensais", views: "15B visualizações", description: "Billie Eilish é uma cantora e compositora americana que redefiniu o pop com seu estilo único e produção intimista.", subscribed: true, shuffleId: "shuffle_a9", radioId: "radio_a9" },
 ];
 
 export const mockPlaylists: Playlist[] = [
@@ -142,6 +142,7 @@ export function getMockArtist(artistId: string): Artist {
     topSongs: mockTracks.filter((t) => t.artists.some((a) => a.id === artistId)).concat(mockTracks.slice(0, 3)),
     albums: mockAlbums.filter((a) => a.artists.some((ar) => ar.id === artistId)).concat(mockAlbums.slice(0, 2)),
     singles: mockAlbums.slice(2, 4),
+    videos: mockTracks.slice(0, 4),
     similarArtists: mockArtists.filter((a) => a.browseId !== artistId).slice(0, 4),
   };
 }

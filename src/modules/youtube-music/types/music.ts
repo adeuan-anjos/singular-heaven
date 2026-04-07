@@ -34,9 +34,16 @@ export interface Artist {
   name: string;
   thumbnails: Thumbnail[];
   subscribers?: string;
+  description?: string;
+  monthlyListeners?: string;
+  views?: string;
+  subscribed?: boolean;
+  shuffleId?: string;
+  radioId?: string;
   topSongs?: Track[];
   albums?: Album[];
   singles?: Album[];
+  videos?: Track[];
   similarArtists?: Artist[];
 }
 
