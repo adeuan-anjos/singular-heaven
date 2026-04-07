@@ -30,8 +30,6 @@ export function useLeakDetector(componentName: string): void {
 
     registry.register(sentinel, componentName);
 
-    let timeoutId: ReturnType<typeof setTimeout> | null = null;
-
     return () => {
       console.log(`[LeakDetector] ${componentName} unmounted — cleanup OK`);
 
@@ -40,11 +38,10 @@ export function useLeakDetector(componentName: string): void {
 
       // Warn if the FinalizationRegistry callback hasn't fired after GC_TIMEOUT_MS.
       // GC timing is not guaranteed; this is a heuristic nudge, not a hard assertion.
-      timeoutId = setTimeout(() => {
+      setTimeout(() => {
         console.warn(
           `[LeakDetector] WARNING: ${componentName} not GC'd after ${GC_TIMEOUT_MS / 1000}s — potential leak!`,
         );
-        timeoutId = null;
       }, GC_TIMEOUT_MS);
     };
   // componentName is a stable debug label — intentionally omitted from deps
