@@ -1,3 +1,4 @@
+import { useRef } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { TrackRow } from "./track-row";
 import type { Track } from "../../types/music";
@@ -7,9 +8,7 @@ const OVERSCAN = 5;
 
 interface VirtualTrackListProps {
   tracks: Track[];
-  scrollElementRef: React.RefObject<HTMLElement | null>;
-  /** Offset in px from the top of the scroll container to where this list starts (accounts for carousels above) */
-  scrollMargin?: number;
+  className?: string;
   onPlay?: (track: Track) => void;
   onAddToQueue?: (track: Track) => void;
   onGoToArtist?: (artistId: string) => void;
@@ -18,56 +17,84 @@ interface VirtualTrackListProps {
 
 export function VirtualTrackList({
   tracks,
-  scrollElementRef,
-  scrollMargin = 0,
+  className,
   onPlay,
   onAddToQueue,
   onGoToArtist,
   onGoToAlbum,
 }: VirtualTrackListProps) {
+  const parentRef = useRef<HTMLDivElement>(null);
+
   const virtualizer = useVirtualizer({
     count: tracks.length,
-    getScrollElement: () => scrollElementRef.current,
+    getScrollElement: () => parentRef.current,
     estimateSize: () => ROW_HEIGHT,
     overscan: OVERSCAN,
-    scrollMargin,
   });
 
   const items = virtualizer.getVirtualItems();
+  const totalSize = virtualizer.getTotalSize();
+
+  console.log("[VirtualTrackList] render", {
+    totalTracks: tracks.length,
+    renderedItems: items.length,
+    containerHeight: parentRef.current?.clientHeight ?? 0,
+    scrollTop: parentRef.current?.scrollTop ?? 0,
+    totalVirtualHeight: totalSize,
+    isScrollable:
+      (parentRef.current?.scrollHeight ?? 0) >
+      (parentRef.current?.clientHeight ?? 0),
+  });
 
   return (
-    <div
-      style={{
-        height: virtualizer.getTotalSize(),
-        width: "100%",
-        position: "relative",
-      }}
-    >
-      {items.map((virtualItem) => {
-        const track = tracks[virtualItem.index];
-        return (
-          <div
-            key={virtualItem.key}
-            style={{
-              position: "absolute",
-              top: 0,
-              left: 0,
-              width: "100%",
-              height: `${virtualItem.size}px`,
-              transform: `translateY(${virtualItem.start - scrollMargin}px)`,
-            }}
-          >
-            <TrackRow
-              track={track}
-              index={virtualItem.index}
-              onPlay={onPlay}
-              onAddToQueue={onAddToQueue}
-              onGoToArtist={onGoToArtist}
-              onGoToAlbum={onGoToAlbum}
-            />
-          </div>
-        );
-      })}
+    <div ref={parentRef} className={className} style={{ overflowY: "auto" }}>
+      <div
+        style={{
+          height: totalSize,
+          width: "100%",
+          position: "relative",
+        }}
+      >
+        {items.map((virtualItem) => {
+          const track = tracks[virtualItem.index];
+          return (
+            <div
+              key={virtualItem.key}
+              style={{
+                position: "absolute",
+                top: 0,
+                left: 0,
+                width: "100%",
+                height: `${virtualItem.size}px`,
+                transform: `translateY(${virtualItem.start}px)`,
+              }}
+            >
+              <TrackRow
+                track={track}
+                index={virtualItem.index}
+                onPlay={onPlay}
+                onAddToQueue={onAddToQueue}
+                onGoToArtist={onGoToArtist}
+                onGoToAlbum={onGoToAlbum}
+              />
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Debug overlay */}
+      <div className="pointer-events-none fixed bottom-20 right-4 z-50 rounded bg-black/80 p-2 text-xs text-green-400 font-mono">
+        <div>Tracks: {tracks.length}</div>
+        <div>Rendered: {items.length}</div>
+        <div>Container H: {parentRef.current?.clientHeight ?? 0}px</div>
+        <div>
+          Scrollable:{" "}
+          {(parentRef.current?.scrollHeight ?? 0) >
+          (parentRef.current?.clientHeight ?? 0)
+            ? "YES"
+            : "NO"}
+        </div>
+      </div>
     </div>
   );
 }

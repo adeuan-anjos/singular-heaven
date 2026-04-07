@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from "react";
+import { useState } from "react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Avatar,
@@ -28,17 +28,6 @@ export function LibraryView({
 }: LibraryViewProps) {
   const [selectedPlaylistId, setSelectedPlaylistId] = useState<string | null>(null);
 
-  const rightScrollRef = useRef<HTMLElement | null>(null);
-
-  const rightAreaRef = useCallback((node: HTMLDivElement | null) => {
-    if (node) {
-      const viewport = node.querySelector(
-        '[data-slot="scroll-area-viewport"]'
-      );
-      rightScrollRef.current = viewport as HTMLElement | null;
-    }
-  }, []);
-
   const activeTracks =
     selectedPlaylistId === null
       ? mockTracks
@@ -48,6 +37,12 @@ export function LibraryView({
     selectedPlaylistId === null
       ? "Curtidas"
       : (mockPlaylists.find((p) => p.playlistId === selectedPlaylistId)?.title ?? "Playlist");
+
+  console.log("[LibraryView] render", {
+    selectedPlaylistId,
+    activeTitle,
+    trackCount: activeTracks.length,
+  });
 
   return (
     <div className="flex h-full">
@@ -119,26 +114,20 @@ export function LibraryView({
         <div className="shrink-0 px-4 pt-4 pb-2">
           <h2 className="text-lg font-semibold text-foreground">{activeTitle}</h2>
         </div>
-        <ScrollArea
-          ref={rightAreaRef}
-          className="flex-1"
-        >
-          <div className="px-4 pb-4">
-            <VirtualTrackList
-              tracks={activeTracks}
-              scrollElementRef={rightScrollRef}
-              scrollMargin={0}
-              onPlay={onPlayTrack}
-              onAddToQueue={onAddToQueue}
-              onGoToArtist={(id) =>
-                onNavigate({ type: "artist", artistId: id })
-              }
-              onGoToAlbum={(id) =>
-                onNavigate({ type: "album", albumId: id })
-              }
-            />
-          </div>
-        </ScrollArea>
+        <div className="flex-1 min-h-0 overflow-hidden">
+          <VirtualTrackList
+            tracks={activeTracks}
+            className="h-full"
+            onPlay={onPlayTrack}
+            onAddToQueue={onAddToQueue}
+            onGoToArtist={(id) =>
+              onNavigate({ type: "artist", artistId: id })
+            }
+            onGoToAlbum={(id) =>
+              onNavigate({ type: "album", albumId: id })
+            }
+          />
+        </div>
       </div>
     </div>
   );
