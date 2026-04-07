@@ -91,13 +91,27 @@ export function PlayerBar({ onOpenQueue, onGoToArtist, onGoToAlbum }: PlayerBarP
         </button>
         <div className="min-w-0">
           <p className="truncate text-sm font-medium text-foreground">{track.title}</p>
-          <button
-            type="button"
-            className="truncate text-xs text-muted-foreground hover:underline"
-            onClick={() => track.artists[0]?.id && onGoToArtist?.(track.artists[0].id)}
-          >
-            {artistName}
-          </button>
+          <p className="truncate text-xs text-muted-foreground">
+            <button
+              type="button"
+              className="hover:underline"
+              onClick={() => track.artists[0]?.id && onGoToArtist?.(track.artists[0].id)}
+            >
+              {artistName}
+            </button>
+            {track.album && (
+              <>
+                {" • "}
+                <button
+                  type="button"
+                  className="hover:underline"
+                  onClick={() => onGoToAlbum?.(track.album!.id)}
+                >
+                  {track.album.name}
+                </button>
+              </>
+            )}
+          </p>
         </div>
         <Toggle
           size="sm"
