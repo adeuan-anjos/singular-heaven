@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -34,6 +35,7 @@ function formatTime(seconds: number): string {
 
 export function PlayerBar({ onOpenQueue, onGoToArtist, onGoToAlbum }: PlayerBarProps) {
   useRenderTracker("PlayerBar", { onOpenQueue, onGoToArtist, onGoToAlbum });
+  const [liked, setLiked] = useState(false);
 
   const track = usePlayerStore((s) => s.currentTrack);
   const isPlaying = usePlayerStore((s) => s.isPlaying);
@@ -99,11 +101,12 @@ export function PlayerBar({ onOpenQueue, onGoToArtist, onGoToAlbum }: PlayerBarP
         </div>
         <Toggle
           size="sm"
-          pressed={track.likeStatus === "LIKE"}
+          pressed={liked}
+          onPressedChange={() => setLiked(!liked)}
           aria-label="Curtir"
           className="shrink-0"
         >
-          <Heart className={`h-4 w-4 ${track.likeStatus === "LIKE" ? "fill-current" : ""}`} />
+          <Heart className={`h-4 w-4 ${liked ? "fill-red-500 text-red-500" : ""}`} />
         </Toggle>
       </div>
 
