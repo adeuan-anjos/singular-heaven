@@ -84,6 +84,7 @@ export interface SearchResults {
 
 export type StackPage =
   | { type: "artist"; artistId: string }
+  | { type: "artist-songs"; artistId: string }
   | { type: "album"; albumId: string }
   | { type: "playlist"; playlistId: string }
   | { type: "mood"; params: string; title: string }

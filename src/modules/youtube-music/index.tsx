@@ -7,6 +7,7 @@ import { HomeView } from "./components/home/home-view";
 import { ExploreView } from "./components/explore/explore-view";
 import { LibraryView } from "./components/library/library-view";
 import { ArtistPage } from "./components/pages/artist-page";
+import { ArtistSongsPage } from "./components/pages/artist-songs-page";
 import { AlbumPage } from "./components/pages/album-page";
 import { PlaylistPage } from "./components/pages/playlist-page";
 import { QueueSheet } from "./components/queue/queue-sheet";
@@ -85,6 +86,15 @@ export default function YouTubeMusicModule() {
         case "artist":
           return (
             <ArtistPage
+              artistId={nav.currentPage.artistId}
+              onNavigate={nav.push}
+              onPlayTrack={handlePlayTrack}
+              onAddToQueue={handleAddToQueue}
+            />
+          );
+        case "artist-songs":
+          return (
+            <ArtistSongsPage
               artistId={nav.currentPage.artistId}
               onNavigate={nav.push}
               onPlayTrack={handlePlayTrack}

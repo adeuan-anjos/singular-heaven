@@ -102,7 +102,7 @@ export function ArtistPage({ artistId, onNavigate, onPlayTrack, onAddToQueue }: 
             <Button
               variant="outline"
               size="sm"
-              onClick={() => onNavigate({ type: "playlist", playlistId: `artist-songs-${artistId}` })}
+              onClick={() => onNavigate({ type: "artist-songs", artistId })}
             >
               Mostrar tudo
             </Button>
