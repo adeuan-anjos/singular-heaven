@@ -9,18 +9,31 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { X } from "lucide-react";
-import type { Track } from "../../types/music";
+import { useQueueStore } from "../../stores/queue-store";
+import { usePlayerStore } from "../../stores/player-store";
 
 interface QueueSheetProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  queue: Track[];
-  currentIndex: number;
-  onPlayIndex: (index: number) => void;
-  onRemove: (index: number) => void;
 }
 
-export function QueueSheet({ open, onOpenChange, queue, currentIndex, onPlayIndex, onRemove }: QueueSheetProps) {
+export function QueueSheet({ open, onOpenChange }: QueueSheetProps) {
+  const queue = useQueueStore((s) => s.queue);
+  const currentIndex = useQueueStore((s) => s.currentIndex);
+  const removeFromQueue = useQueueStore((s) => s.removeFromQueue);
+  const setTracks = useQueueStore((s) => s.setTracks);
+  const play = usePlayerStore((s) => s.play);
+
+  console.log("[QueueSheet] render", { queueLength: queue.length, currentIndex });
+
+  const handlePlayIndex = (index: number) => {
+    const track = queue[index];
+    if (track) {
+      setTracks(queue, index);
+      play(track);
+    }
+  };
+
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent side="right" className="flex w-96 flex-col p-0">
@@ -49,7 +62,7 @@ export function QueueSheet({ open, onOpenChange, queue, currentIndex, onPlayInde
                   <button
                     type="button"
                     className="flex flex-1 items-center gap-3 min-w-0"
-                    onClick={() => onPlayIndex(i)}
+                    onClick={() => handlePlayIndex(i)}
                   >
                     <Avatar className="h-10 w-10 rounded-sm">
                       <AvatarImage src={imgUrl} alt={track.title} className="object-cover" />
@@ -69,7 +82,7 @@ export function QueueSheet({ open, onOpenChange, queue, currentIndex, onPlayInde
                     variant="ghost"
                     size="icon"
                     className="h-7 w-7 opacity-0 group-hover:opacity-100"
-                    onClick={() => onRemove(i)}
+                    onClick={() => removeFromQueue(i)}
                   >
                     <X className="h-3.5 w-3.5" />
                   </Button>

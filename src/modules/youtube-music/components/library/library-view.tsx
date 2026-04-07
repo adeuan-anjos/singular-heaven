@@ -14,6 +14,7 @@ import {
 } from "../../mock/data";
 import type { Track, StackPage } from "../../types/music";
 import { cn } from "@/lib/utils";
+import { useRenderTracker } from "@/lib/debug";
 
 interface LibraryViewProps {
   onNavigate: (page: StackPage) => void;
@@ -26,6 +27,7 @@ export const LibraryView = React.memo(function LibraryView({
   onPlayTrack,
   onAddToQueue,
 }: LibraryViewProps) {
+  useRenderTracker("LibraryView", { onNavigate, onPlayTrack, onAddToQueue });
   const [selectedPlaylistId, setSelectedPlaylistId] = useState<string | null>(null);
 
   const activeTracks =

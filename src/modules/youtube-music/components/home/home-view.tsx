@@ -3,6 +3,7 @@ import { CarouselSection } from "../shared/carousel-section";
 import { MediaCard } from "../shared/media-card";
 import { mockHomeSections } from "../../mock/data";
 import type { Track, Album, Artist, Playlist, StackPage } from "../../types/music";
+import { useRenderTracker } from "@/lib/debug";
 
 interface HomeViewProps {
   onNavigate: (page: StackPage) => void;
@@ -50,6 +51,7 @@ function getItemAction(item: Track | Album | Artist | Playlist, onNavigate: (pag
 }
 
 export function HomeView({ onNavigate, onPlayTrack }: HomeViewProps) {
+  useRenderTracker("HomeView", { onNavigate, onPlayTrack });
   const sections = mockHomeSections;
 
   return (

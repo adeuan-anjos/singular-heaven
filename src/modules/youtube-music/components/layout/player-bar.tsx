@@ -14,22 +14,11 @@ import {
   Volume2,
   ListMusic,
 } from "lucide-react";
-import type { Track, RepeatMode } from "../../types/music";
+import { usePlayerStore } from "../../stores/player-store";
+import { useQueueStore } from "../../stores/queue-store";
+import { useRenderTracker } from "@/lib/debug";
 
 interface PlayerBarProps {
-  track: Track | null;
-  isPlaying: boolean;
-  progress: number;
-  volume: number;
-  shuffleOn: boolean;
-  repeat: RepeatMode;
-  onTogglePlay: () => void;
-  onNext: () => void;
-  onPrevious: () => void;
-  onSeek: (value: number) => void;
-  onVolumeChange: (value: number) => void;
-  onToggleShuffle: () => void;
-  onCycleRepeat: () => void;
   onOpenQueue: () => void;
   onGoToArtist?: (artistId: string) => void;
   onGoToAlbum?: (albumId: string) => void;
@@ -41,28 +30,45 @@ function formatTime(seconds: number): string {
   return `${m}:${s.toString().padStart(2, "0")}`;
 }
 
-export function PlayerBar({
-  track,
-  isPlaying,
-  progress,
-  volume,
-  shuffleOn,
-  repeat,
-  onTogglePlay,
-  onNext,
-  onPrevious,
-  onSeek,
-  onVolumeChange,
-  onToggleShuffle,
-  onCycleRepeat,
-  onOpenQueue,
-  onGoToArtist,
-  onGoToAlbum,
-}: PlayerBarProps) {
+export function PlayerBar({ onOpenQueue, onGoToArtist, onGoToAlbum }: PlayerBarProps) {
+  useRenderTracker("PlayerBar", { onOpenQueue, onGoToArtist, onGoToAlbum });
+  const track = usePlayerStore((s) => s.currentTrack);
+  const isPlaying = usePlayerStore((s) => s.isPlaying);
+  const progress = usePlayerStore((s) => s.progress);
+  const volume = usePlayerStore((s) => s.volume);
+  const shuffleOn = usePlayerStore((s) => s.shuffle);
+  const repeat = usePlayerStore((s) => s.repeat);
+
+  const togglePlay = usePlayerStore((s) => s.togglePlay);
+  const seek = usePlayerStore((s) => s.seek);
+  const setVolume = usePlayerStore((s) => s.setVolume);
+  const toggleShuffle = usePlayerStore((s) => s.toggleShuffle);
+  const cycleRepeat = usePlayerStore((s) => s.cycleRepeat);
+  const play = usePlayerStore((s) => s.play);
+
+  const queueNext = useQueueStore((s) => s.next);
+  const queuePrevious = useQueueStore((s) => s.previous);
+
+  console.log("[PlayerBar] render", { track: track?.title, progress });
+
   if (!track) return null;
 
   const imgUrl = track.thumbnails[0]?.url ?? "";
   const artistName = track.artists.map((a) => a.name).join(", ");
+
+  const handleNext = () => {
+    const nextTrack = queueNext();
+    if (nextTrack) play(nextTrack);
+  };
+
+  const handlePrevious = () => {
+    if (progress > 3) {
+      seek(0);
+      return;
+    }
+    const prevTrack = queuePrevious();
+    if (prevTrack) play(prevTrack);
+  };
 
   return (
     <div className="flex items-center gap-4 border-t border-border bg-background px-4 py-2">
@@ -90,20 +96,20 @@ export function PlayerBar({
 
       <div className="flex flex-1 flex-col items-center gap-1">
         <div className="flex items-center gap-2">
-          <Toggle size="sm" pressed={shuffleOn} onPressedChange={() => onToggleShuffle()} aria-label="Shuffle">
+          <Toggle size="sm" pressed={shuffleOn} onPressedChange={() => toggleShuffle()} aria-label="Shuffle">
             <Shuffle className="h-4 w-4" />
           </Toggle>
           <Tooltip>
-            <TooltipTrigger render={<Button variant="ghost" size="icon" className="h-8 w-8" onClick={onPrevious} />}>
+            <TooltipTrigger render={<Button variant="ghost" size="icon" className="h-8 w-8" onClick={handlePrevious} />}>
               <SkipBack className="h-4 w-4" />
             </TooltipTrigger>
             <TooltipContent>Anterior</TooltipContent>
           </Tooltip>
-          <Button size="icon" className="h-9 w-9" onClick={onTogglePlay}>
+          <Button size="icon" className="h-9 w-9" onClick={togglePlay}>
             {isPlaying ? <Pause className="h-5 w-5" /> : <PlayIcon className="h-5 w-5" />}
           </Button>
           <Tooltip>
-            <TooltipTrigger render={<Button variant="ghost" size="icon" className="h-8 w-8" onClick={onNext} />}>
+            <TooltipTrigger render={<Button variant="ghost" size="icon" className="h-8 w-8" onClick={handleNext} />}>
               <SkipForward className="h-4 w-4" />
             </TooltipTrigger>
             <TooltipContent>Próxima</TooltipContent>
@@ -111,7 +117,7 @@ export function PlayerBar({
           <Toggle
             size="sm"
             pressed={repeat !== "off"}
-            onPressedChange={() => onCycleRepeat()}
+            onPressedChange={() => cycleRepeat()}
             aria-label="Repetir"
           >
             {repeat === "one" ? <Repeat1 className="h-4 w-4" /> : <Repeat className="h-4 w-4" />}
@@ -123,7 +129,7 @@ export function PlayerBar({
             value={[progress]}
             max={track.durationSeconds}
             step={1}
-            onValueChange={(v) => onSeek(Array.isArray(v) ? v[0] : v)}
+            onValueChange={(v) => seek(Array.isArray(v) ? v[0] : v)}
             className="flex-1"
           />
           <span className="w-10 text-xs text-muted-foreground">{track.duration}</span>
@@ -136,7 +142,7 @@ export function PlayerBar({
           value={[volume]}
           max={100}
           step={1}
-          onValueChange={(v) => onVolumeChange(Array.isArray(v) ? v[0] : v)}
+          onValueChange={(v) => setVolume(Array.isArray(v) ? v[0] : v)}
           className="w-24"
         />
         <Tooltip>

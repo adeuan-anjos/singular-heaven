@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { MusicTabs } from "./components/layout/music-tabs";
 import { MusicHeader } from "./components/layout/music-header";
@@ -12,9 +12,10 @@ import { AlbumPage } from "./components/pages/album-page";
 import { PlaylistPage } from "./components/pages/playlist-page";
 import { QueueSheet } from "./components/queue/queue-sheet";
 import { useNavigation } from "./hooks/use-navigation";
-import { usePlayer } from "./hooks/use-player";
-import { useQueue } from "./hooks/use-queue";
+import { usePlayerStore } from "./stores/player-store";
+import { useQueueStore } from "./stores/queue-store";
 import type { Track } from "./types/music";
+import { useRenderTracker, useLeakDetector } from "@/lib/debug";
 
 function getPageTitle(page: { type: string; title?: string } | null): string {
   if (!page) return "";
@@ -29,48 +30,46 @@ function getPageTitle(page: { type: string; title?: string } | null): string {
 }
 
 export default function YouTubeMusicModule() {
+  useRenderTracker("YouTubeMusicModule", {});
+  useLeakDetector("YouTubeMusicModule");
   const [activeTab, setActiveTab] = useState("home");
   const [queueOpen, setQueueOpen] = useState(false);
   const nav = useNavigation();
-  const player = usePlayer();
-  const queue = useQueue();
+
+  const playerPlay = usePlayerStore((s) => s.play);
+  const playerCleanup = usePlayerStore((s) => s.cleanup);
+  const queueSetTracks = useQueueStore((s) => s.setTracks);
+  const queueAddNext = useQueueStore((s) => s.addNext);
+  const queueCleanup = useQueueStore((s) => s.cleanup);
+
+  console.log("[YouTubeMusicModule] render", { activeTab, page: nav.currentPage?.type });
+
+  useEffect(() => {
+    console.log("[YouTubeMusicModule] mounted");
+    return () => {
+      console.log("[YouTubeMusicModule] unmounting — cleaning up stores");
+      playerCleanup();
+      queueCleanup();
+    };
+  }, [playerCleanup, queueCleanup]);
 
   const handlePlayTrack = useCallback((track: Track) => {
-    player.play(track);
-    queue.setTracks([track], 0);
-  }, [player.play, queue.setTracks]);
+    console.log("[YouTubeMusicModule] handlePlayTrack", { title: track.title });
+    playerPlay(track);
+    queueSetTracks([track], 0);
+  }, [playerPlay, queueSetTracks]);
 
   const handlePlayAll = useCallback((tracks: Track[]) => {
     if (tracks.length === 0) return;
-    player.play(tracks[0]);
-    queue.setTracks(tracks, 0);
-  }, [player.play, queue.setTracks]);
+    console.log("[YouTubeMusicModule] handlePlayAll", { count: tracks.length });
+    playerPlay(tracks[0]);
+    queueSetTracks(tracks, 0);
+  }, [playerPlay, queueSetTracks]);
 
   const handleAddToQueue = useCallback((track: Track) => {
-    queue.addNext(track);
-  }, [queue.addNext]);
-
-  const handleNext = () => {
-    const nextTrack = queue.next();
-    if (nextTrack) player.play(nextTrack);
-  };
-
-  const handlePrevious = () => {
-    if (player.progress > 3) {
-      player.seek(0);
-      return;
-    }
-    const prevTrack = queue.previous();
-    if (prevTrack) player.play(prevTrack);
-  };
-
-  const handleQueuePlayIndex = (index: number) => {
-    const track = queue.queue[index];
-    if (track) {
-      queue.setTracks(queue.queue, index);
-      player.play(track);
-    }
-  };
+    console.log("[YouTubeMusicModule] handleAddToQueue", { title: track.title });
+    queueAddNext(track);
+  }, [queueAddNext]);
 
   const renderContent = () => {
     if (nav.currentPage) {
@@ -152,19 +151,6 @@ export default function YouTubeMusicModule() {
         <div className="flex-1 overflow-hidden">{renderContent()}</div>
 
         <PlayerBar
-          track={player.currentTrack}
-          isPlaying={player.isPlaying}
-          progress={player.progress}
-          volume={player.volume}
-          shuffleOn={player.shuffle}
-          repeat={player.repeat}
-          onTogglePlay={player.togglePlay}
-          onNext={handleNext}
-          onPrevious={handlePrevious}
-          onSeek={player.seek}
-          onVolumeChange={player.setVolume}
-          onToggleShuffle={player.toggleShuffle}
-          onCycleRepeat={player.cycleRepeat}
           onOpenQueue={() => setQueueOpen(true)}
           onGoToArtist={(id) => nav.push({ type: "artist", artistId: id })}
           onGoToAlbum={(id) => nav.push({ type: "album", albumId: id })}
@@ -173,10 +159,6 @@ export default function YouTubeMusicModule() {
         <QueueSheet
           open={queueOpen}
           onOpenChange={setQueueOpen}
-          queue={queue.queue}
-          currentIndex={queue.currentIndex}
-          onPlayIndex={handleQueuePlayIndex}
-          onRemove={queue.removeFromQueue}
         />
       </div>
     </TooltipProvider>
