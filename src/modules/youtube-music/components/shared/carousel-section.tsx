@@ -121,7 +121,7 @@ export function CarouselSection({ title, onSeeAll, children }: CarouselSectionPr
       <ScrollArea ref={scrollAreaRef} className="w-full cursor-grab">
         <div className="flex gap-4 pb-4">
           {React.Children.map(children, (child, index) => (
-            <div key={index} className="min-w-40 shrink-0" style={{ width: "calc((100% - 5 * 16px) / 6)" }}>
+            <div key={index} className="w-44 shrink-0">
               {child}
             </div>
           ))}
