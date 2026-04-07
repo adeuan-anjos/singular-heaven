@@ -1,4 +1,8 @@
+mod youtube_music;
+
+use std::sync::Arc;
 use tauri::Manager;
+use tokio::sync::Mutex;
 
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 #[tauri::command]
@@ -48,7 +52,23 @@ fn set_webview_memory_level(
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
-        .invoke_handler(tauri::generate_handler![greet])
+        .setup(|app| {
+            let handle = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                println!("[setup] Initializing YtMusicClient...");
+                match youtube_music::client::YtMusicClient::new_unauthenticated().await {
+                    Ok(client) => {
+                        handle.manage(Arc::new(Mutex::new(client)));
+                        println!("[setup] YtMusicClient added to managed state.");
+                    }
+                    Err(e) => {
+                        eprintln!("[setup] Failed to create YtMusicClient: {e}");
+                    }
+                }
+            });
+            Ok(())
+        })
+        .invoke_handler(tauri::generate_handler![greet, youtube_music::commands::yt_search])
         .on_window_event(|window, event| {
             #[cfg(target_os = "windows")]
             match event {
