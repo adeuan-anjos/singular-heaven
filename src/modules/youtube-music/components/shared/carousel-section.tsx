@@ -89,7 +89,7 @@ export function CarouselSection({ title, onSeeAll, children }: CarouselSectionPr
   };
 
   return (
-    <div className="group/carousel mx-auto max-w-screen-xl space-y-3">
+    <div className="group/carousel space-y-3">
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold text-foreground">{title}</h2>
         <div className="flex items-center gap-1">
