@@ -102,7 +102,7 @@ export function HomeView({ onNavigate, onPlayTrack }: HomeViewProps) {
 
   return (
     <ScrollArea className="group/page h-full">
-      <div className="space-y-6 p-4">
+      <div className="mx-auto max-w-screen-xl space-y-6 p-4">
         {sections.map((section) => (
           <CarouselSection key={section.title} title={section.title}>
             {section.contents.map((item, i) => {

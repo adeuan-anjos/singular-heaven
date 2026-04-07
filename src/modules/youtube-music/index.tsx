@@ -14,7 +14,6 @@ import { QueueSheet } from "./components/queue/queue-sheet";
 import { useNavigation } from "./hooks/use-navigation";
 import { usePlayerStore } from "./stores/player-store";
 import { useQueueStore } from "./stores/queue-store";
-import { mockTracks, getMockPlaylist, mockPlaylists } from "./mock/data";
 import type { Track } from "./types/music";
 import { useRenderTracker, useLeakDetector } from "@/lib/debug";
 
@@ -34,7 +33,6 @@ export default function YouTubeMusicModule() {
   useRenderTracker("YouTubeMusicModule", {});
   useLeakDetector("YouTubeMusicModule");
   const [activeTab, setActiveTab] = useState("home");
-  const [selectedPlaylistId, setSelectedPlaylistId] = useState<string | null>(null);
   const [queueOpen, setQueueOpen] = useState(false);
   const nav = useNavigation();
 
@@ -44,7 +42,7 @@ export default function YouTubeMusicModule() {
   const queueAddNext = useQueueStore((s) => s.addNext);
   const queueCleanup = useQueueStore((s) => s.cleanup);
 
-  console.log("[YouTubeMusicModule] render", { activeTab, selectedPlaylistId, page: nav.currentPage?.type });
+  console.log("[YouTubeMusicModule] render", { activeTab, page: nav.currentPage?.type });
 
   useEffect(() => {
     console.log("[YouTubeMusicModule] mounted");
@@ -79,20 +77,14 @@ export default function YouTubeMusicModule() {
   }, [nav]);
 
   const handleSelectPlaylist = useCallback((id: string | null) => {
-    nav.clear();
-    setSelectedPlaylistId(id);
+    // Side panel playlist click → push playlist page onto navigation stack
+    if (id === null) {
+      // "Curtidas" in sidebar
+      nav.push({ type: "playlist", playlistId: "liked" });
+    } else {
+      nav.push({ type: "playlist", playlistId: id });
+    }
   }, [nav]);
-
-  // Compute library tracks and title from selectedPlaylistId
-  const libraryTracks =
-    selectedPlaylistId === null
-      ? mockTracks
-      : getMockPlaylist(selectedPlaylistId).tracks ?? mockTracks;
-
-  const libraryTitle =
-    selectedPlaylistId === null
-      ? "Curtidas"
-      : (mockPlaylists.find((p) => p.playlistId === selectedPlaylistId)?.title ?? "Playlist");
 
   const renderContent = () => {
     if (nav.currentPage) {
@@ -160,15 +152,7 @@ export default function YouTubeMusicModule() {
       case "explore":
         return <ExploreView onNavigate={nav.push} onPlayTrack={handlePlayTrack} />;
       case "library":
-        return (
-          <LibraryView
-            title={libraryTitle}
-            tracks={libraryTracks}
-            onNavigate={nav.push}
-            onPlayTrack={handlePlayTrack}
-            onAddToQueue={handleAddToQueue}
-          />
-        );
+        return <LibraryView onNavigate={nav.push} />;
       default:
         return null;
     }
@@ -181,7 +165,6 @@ export default function YouTubeMusicModule() {
           <SidePanel
             activeView={activeTab}
             onViewChange={handleViewChange}
-            selectedPlaylistId={selectedPlaylistId}
             onSelectPlaylist={handleSelectPlaylist}
             onBack={nav.pop}
             onForward={nav.forward}

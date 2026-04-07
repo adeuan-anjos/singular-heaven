@@ -23,7 +23,7 @@ export function SearchView({ onNavigate, onPlayTrack }: SearchViewProps) {
 
   return (
     <div className="flex h-full flex-col">
-      <Command className="flex flex-1 flex-col border-b border-border" shouldFilter={false}>
+      <Command className="mx-auto flex w-full max-w-screen-xl flex-1 flex-col border-b border-border" shouldFilter={false}>
         <CommandInput
           placeholder="Buscar músicas, artistas, álbuns..."
           value={query}

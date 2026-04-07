@@ -9,7 +9,6 @@ import { mockTracks, mockPlaylists } from "../../mock/data";
 interface SidePanelProps {
   activeView: string;
   onViewChange: (view: string) => void;
-  selectedPlaylistId: string | null;
   onSelectPlaylist: (id: string | null) => void;
   onBack: () => void;
   onForward: () => void;
@@ -27,7 +26,6 @@ const NAV_ITEMS = [
 export function SidePanel({
   activeView,
   onViewChange,
-  selectedPlaylistId,
   onSelectPlaylist,
   onBack,
   onForward,
@@ -35,21 +33,8 @@ export function SidePanel({
   canGoForward,
   onSearch,
 }: SidePanelProps) {
-  const isLibraryActive = activeView === "library" || selectedPlaylistId !== null;
-
   const handleNavClick = (key: string) => {
-    if (key === "library") {
-      onViewChange("library");
-      onSelectPlaylist(null);
-    } else {
-      onSelectPlaylist(null);
-      onViewChange(key);
-    }
-  };
-
-  const handlePlaylistClick = (id: string | null) => {
-    onViewChange("library");
-    onSelectPlaylist(id);
+    onViewChange(key);
   };
 
   return (
@@ -99,10 +84,7 @@ export function SidePanel({
       {/* Navigation items */}
       <div className="flex flex-col gap-0.5 px-2">
         {NAV_ITEMS.map(({ key, label, icon: Icon }) => {
-          const isActive =
-            key === "library"
-              ? isLibraryActive && selectedPlaylistId === null
-              : activeView === key && !isLibraryActive;
+          const isActive = activeView === key;
 
           return (
             <button
@@ -110,9 +92,7 @@ export function SidePanel({
               onClick={() => handleNavClick(key)}
               className={cn(
                 "flex w-full items-center gap-3 rounded-md px-3 py-2 text-left text-sm font-medium transition-colors hover:bg-accent",
-                (key === "library" ? isLibraryActive : activeView === key && !isLibraryActive) &&
-                  "bg-accent",
-                isActive && "text-foreground",
+                isActive && "bg-accent text-foreground",
                 !isActive && "text-muted-foreground"
               )}
             >
@@ -135,11 +115,8 @@ export function SidePanel({
         <div className="flex flex-col gap-0.5 px-2 pb-4">
           {/* Curtidas */}
           <button
-            onClick={() => handlePlaylistClick(null)}
-            className={cn(
-              "flex w-full items-center gap-3 rounded-md px-2 py-1.5 text-left transition-colors hover:bg-accent",
-              selectedPlaylistId === null && activeView === "library" && "bg-accent"
-            )}
+            onClick={() => onSelectPlaylist(null)}
+            className="flex w-full items-center gap-3 rounded-md px-2 py-1.5 text-left transition-colors hover:bg-accent"
           >
             <div className="flex size-9 shrink-0 items-center justify-center rounded-sm bg-primary/10">
               <Heart className="size-4 text-primary" />
@@ -158,15 +135,11 @@ export function SidePanel({
           {mockPlaylists.map((pl) => {
             const thumbUrl = pl.thumbnails?.[0]?.url;
             const initials = pl.title.slice(0, 2).toUpperCase();
-            const isActive = selectedPlaylistId === pl.playlistId;
             return (
               <button
                 key={pl.playlistId}
-                onClick={() => handlePlaylistClick(pl.playlistId)}
-                className={cn(
-                  "flex w-full items-center gap-3 rounded-md px-2 py-1.5 text-left transition-colors hover:bg-accent",
-                  isActive && "bg-accent"
-                )}
+                onClick={() => onSelectPlaylist(pl.playlistId)}
+                className="flex w-full items-center gap-3 rounded-md px-2 py-1.5 text-left transition-colors hover:bg-accent"
               >
                 <div className="flex size-9 shrink-0 items-center justify-center overflow-hidden rounded-sm bg-muted">
                   {thumbUrl ? (

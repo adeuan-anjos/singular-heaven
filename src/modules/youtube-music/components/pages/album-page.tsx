@@ -22,7 +22,7 @@ export function AlbumPage({ albumId, onNavigate, onPlayTrack, onAddToQueue, onPl
 
   return (
     <ScrollArea className="group/page h-full">
-      <div className="space-y-6 p-4">
+      <div className="mx-auto max-w-screen-xl space-y-6 p-4">
         <div className="flex items-start gap-6">
           <Avatar className="h-48 w-48 rounded-md">
             <AvatarImage src={imgUrl} alt={album.title} className="object-cover" />

@@ -20,7 +20,7 @@ export function ArtistPage({ artistId, onNavigate, onPlayTrack, onAddToQueue }: 
 
   return (
     <ScrollArea className="group/page h-full">
-      <div className="space-y-6 p-4">
+      <div className="mx-auto max-w-screen-xl space-y-6 p-4">
         <div className="flex items-center gap-6">
           <Avatar className="h-32 w-32 rounded-full">
             <AvatarImage src={imgUrl} alt={artist.name} className="object-cover" />
