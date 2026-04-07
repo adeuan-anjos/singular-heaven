@@ -38,21 +38,23 @@ export function MediaCard({
 
   if (artistName) {
     if (subtitleParts.length > 0) {
-      subtitleParts.push(<span key="sep-artist"> &bull; </span>);
+      subtitleParts.push(<span key="sep-artist"> • </span>);
     }
     subtitleParts.push(
       onGoToArtist ? (
-        <button
+        <span
           key="artist"
-          type="button"
-          className="hover:underline"
+          role="button"
+          tabIndex={0}
+          className="cursor-pointer hover:underline"
           onClick={(e) => {
             e.stopPropagation();
             onGoToArtist();
           }}
+          onKeyDown={(e) => { if (e.key === "Enter") onGoToArtist(); }}
         >
           {artistName}
-        </button>
+        </span>
       ) : (
         <span key="artist">{artistName}</span>
       )
@@ -61,21 +63,23 @@ export function MediaCard({
 
   if (albumName) {
     if (subtitleParts.length > 0) {
-      subtitleParts.push(<span key="sep-album"> &bull; </span>);
+      subtitleParts.push(<span key="sep-album"> • </span>);
     }
     subtitleParts.push(
       onGoToAlbum ? (
-        <button
+        <span
           key="album"
-          type="button"
-          className="hover:underline"
+          role="button"
+          tabIndex={0}
+          className="cursor-pointer hover:underline"
           onClick={(e) => {
             e.stopPropagation();
             onGoToAlbum();
           }}
+          onKeyDown={(e) => { if (e.key === "Enter") onGoToAlbum(); }}
         >
           {albumName}
-        </button>
+        </span>
       ) : (
         <span key="album">{albumName}</span>
       )
