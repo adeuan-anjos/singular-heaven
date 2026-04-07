@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
@@ -14,6 +14,7 @@ import {
   Volume2,
   VolumeX,
   List,
+  Heart,
 } from "lucide-react";
 import { usePlayerStore } from "../../stores/player-store";
 import { useQueueStore } from "../../stores/queue-store";
@@ -33,7 +34,6 @@ function formatTime(seconds: number): string {
 
 export function PlayerBar({ onOpenQueue, onGoToArtist, onGoToAlbum }: PlayerBarProps) {
   useRenderTracker("PlayerBar", { onOpenQueue, onGoToArtist, onGoToAlbum });
-  const [showVolume, setShowVolume] = useState(false);
 
   const track = usePlayerStore((s) => s.currentTrack);
   const isPlaying = usePlayerStore((s) => s.isPlaying);
@@ -97,6 +97,14 @@ export function PlayerBar({ onOpenQueue, onGoToArtist, onGoToAlbum }: PlayerBarP
             {artistName}
           </button>
         </div>
+        <Toggle
+          size="sm"
+          pressed={track.likeStatus === "LIKE"}
+          aria-label="Curtir"
+          className="shrink-0"
+        >
+          <Heart className={`h-4 w-4 ${track.likeStatus === "LIKE" ? "fill-current" : ""}`} />
+        </Toggle>
       </div>
 
       {/* Center: Controls + progress */}
@@ -138,31 +146,25 @@ export function PlayerBar({ onOpenQueue, onGoToArtist, onGoToAlbum }: PlayerBarP
 
       {/* Right: Volume + queue */}
       <div className="flex items-center justify-end gap-1">
-        <div
-          className="relative flex items-center"
-          onMouseEnter={() => setShowVolume(true)}
-          onMouseLeave={() => setShowVolume(false)}
-        >
-          {showVolume && (
-            <div className="mr-1 animate-in fade-in slide-in-from-right-2 duration-150">
-              <Slider
-                value={[volume]}
-                max={100}
-                step={1}
-                onValueChange={(v) => setVolume(Array.isArray(v) ? v[0] : v)}
-                className="w-24"
-              />
-            </div>
-          )}
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8"
-            onClick={() => setVolume(volume > 0 ? 0 : 80)}
+        <Popover>
+          <PopoverTrigger
+            className="inline-flex h-8 w-8 items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50"
+            aria-label="Volume"
           >
             {volume === 0 ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
-          </Button>
-        </div>
+          </PopoverTrigger>
+          <PopoverContent side="top" align="center" className="w-10 px-2 py-4">
+            <Slider
+              value={[volume]}
+              max={100}
+              step={1}
+              orientation="vertical"
+              onValueChange={(v) => setVolume(Array.isArray(v) ? v[0] : v)}
+              className="h-24"
+              aria-label="Volume"
+            />
+          </PopoverContent>
+        </Popover>
         <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onOpenQueue}>
           <List className="h-4 w-4" />
         </Button>
