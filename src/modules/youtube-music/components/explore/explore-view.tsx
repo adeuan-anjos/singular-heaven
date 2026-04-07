@@ -36,6 +36,14 @@ export function ExploreView({ onNavigate, onPlayTrack }: ExploreViewProps) {
           })}
         </CarouselSection>
 
+        <ChartList
+          title="Top músicas"
+          tracks={mockChartTracks}
+          onPlayTrack={onPlayTrack}
+          onGoToArtist={(artistId) => onNavigate({ type: "artist", artistId })}
+          onGoToAlbum={(albumId) => onNavigate({ type: "album", albumId })}
+        />
+
         <CarouselSection title="Em alta">
           {data.trending.map((track) => {
             const firstArtistId = track.artists[0]?.id;
@@ -57,6 +65,11 @@ export function ExploreView({ onNavigate, onPlayTrack }: ExploreViewProps) {
           })}
         </CarouselSection>
 
+        <div className="mx-auto max-w-screen-xl space-y-3">
+          <SectionHeader title="Momentos e gêneros" />
+          <MoodGrid categories={data.moodsAndGenres} onSelect={onNavigate} />
+        </div>
+
         <CarouselSection title="Novos vídeos">
           {data.newVideos.map((track) => {
             const firstArtistId = track.artists[0]?.id;
@@ -77,19 +90,6 @@ export function ExploreView({ onNavigate, onPlayTrack }: ExploreViewProps) {
             );
           })}
         </CarouselSection>
-
-        <ChartList
-          title="Top músicas"
-          tracks={mockChartTracks}
-          onPlayTrack={onPlayTrack}
-          onGoToArtist={(artistId) => onNavigate({ type: "artist", artistId })}
-          onGoToAlbum={(albumId) => onNavigate({ type: "album", albumId })}
-        />
-
-        <div className="space-y-3">
-          <SectionHeader title="Momentos e gêneros" />
-          <MoodGrid categories={data.moodsAndGenres} onSelect={onNavigate} />
-        </div>
       </div>
     </ScrollArea>
   );
