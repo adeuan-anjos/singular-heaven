@@ -42,38 +42,7 @@ export function LibraryView({
 
   return (
     <ResizablePanelGroup orientation="horizontal" className="h-full">
-      {/* Left column: Curtidas */}
-      <ResizablePanel defaultSize={70} minSize={40}>
-        <div className="flex h-full flex-col">
-          <div className="shrink-0 px-4 pt-4 pb-2">
-            <SectionHeader title="Curtidas" />
-          </div>
-          <ScrollArea
-            ref={curtidasAreaRef}
-            className="flex-1 overflow-hidden"
-          >
-            <div className="px-4 pb-4">
-              <VirtualTrackList
-                tracks={mockTracks}
-                scrollElementRef={curtidasScrollRef}
-                scrollMargin={0}
-                onPlay={onPlayTrack}
-                onAddToQueue={onAddToQueue}
-                onGoToArtist={(id) =>
-                  onNavigate({ type: "artist", artistId: id })
-                }
-                onGoToAlbum={(id) =>
-                  onNavigate({ type: "album", albumId: id })
-                }
-              />
-            </div>
-          </ScrollArea>
-        </div>
-      </ResizablePanel>
-
-      <ResizableHandle />
-
-      {/* Right column: Playlists */}
+      {/* Left column: Playlists */}
       <ResizablePanel defaultSize={30} minSize={15}>
         <div className="flex h-full flex-col">
           <div className="shrink-0 px-4 pt-4 pb-2">
@@ -112,6 +81,37 @@ export function LibraryView({
                   </button>
                 );
               })}
+            </div>
+          </ScrollArea>
+        </div>
+      </ResizablePanel>
+
+      <ResizableHandle />
+
+      {/* Right column: Curtidas */}
+      <ResizablePanel defaultSize={70} minSize={40}>
+        <div className="flex h-full flex-col">
+          <div className="shrink-0 px-4 pt-4 pb-2">
+            <SectionHeader title="Curtidas" />
+          </div>
+          <ScrollArea
+            ref={curtidasAreaRef}
+            className="flex-1 overflow-hidden"
+          >
+            <div className="px-4 pb-4">
+              <VirtualTrackList
+                tracks={mockTracks}
+                scrollElementRef={curtidasScrollRef}
+                scrollMargin={0}
+                onPlay={onPlayTrack}
+                onAddToQueue={onAddToQueue}
+                onGoToArtist={(id) =>
+                  onNavigate({ type: "artist", artistId: id })
+                }
+                onGoToAlbum={(id) =>
+                  onNavigate({ type: "album", albumId: id })
+                }
+              />
             </div>
           </ScrollArea>
         </div>
