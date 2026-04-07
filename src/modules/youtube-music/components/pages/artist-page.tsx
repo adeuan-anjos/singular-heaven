@@ -93,6 +93,7 @@ export function ArtistPage({ artistId, onNavigate, onPlayTrack, onAddToQueue }: 
             <h2 className="text-lg font-semibold text-foreground">Músicas</h2>
             <TrackTable
               tracks={artist.topSongs.slice(0, 5)}
+              showViews
               onPlay={onPlayTrack}
               onAddToQueue={onAddToQueue}
               onGoToArtist={(id) => onNavigate({ type: "artist", artistId: id })}

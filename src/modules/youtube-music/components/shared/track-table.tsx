@@ -25,6 +25,7 @@ interface TrackTableProps {
   tracks: Track[];
   currentTrackId?: string;
   isPlaying?: boolean;
+  showViews?: boolean;
   onPlay?: (track: Track) => void;
   onAddToQueue?: (track: Track) => void;
   onGoToArtist?: (artistId: string) => void;
@@ -32,15 +33,17 @@ interface TrackTableProps {
 }
 
 // Col 1: # (2.5rem) | Col 2: thumb (2.5rem) | Col 3: title+actions (1fr)
-// Col 4: artist (1fr) | Col 5: album (1fr) | Col 6: duration (3.5rem)
-const GRID_COLUMNS = "2.5rem 2.5rem 1fr 1fr 1fr 3.5rem";
+// Col 4: artist (1fr) | Col 5: album (1fr) | [Col 6: views (1fr)] | Col 7: duration (3.5rem)
+const GRID_COLUMNS_BASE = "2.5rem 2.5rem 1fr 1fr 1fr 3.5rem";
+const GRID_COLUMNS_WITH_VIEWS = "2.5rem 2.5rem 1fr 1fr 1fr 1fr 3.5rem";
 
-function TrackTableHeader() {
+function TrackTableHeader({ showViews }: { showViews: boolean }) {
+  const gridTemplateColumns = showViews ? GRID_COLUMNS_WITH_VIEWS : GRID_COLUMNS_BASE;
   return (
     <>
       <div
         className="items-center gap-x-3 px-2 pb-2"
-        style={{ display: "grid", gridTemplateColumns: GRID_COLUMNS }}
+        style={{ display: "grid", gridTemplateColumns }}
       >
         <span className="text-center text-xs uppercase tracking-wider text-muted-foreground">
           #
@@ -56,6 +59,11 @@ function TrackTableHeader() {
         <span className="text-xs uppercase tracking-wider text-muted-foreground">
           Álbum
         </span>
+        {showViews && (
+          <span className="text-xs uppercase tracking-wider text-muted-foreground">
+            Reproduções
+          </span>
+        )}
         <span className="text-right text-xs uppercase tracking-wider text-muted-foreground">
           Dur.
         </span>
@@ -70,6 +78,7 @@ interface TrackTableRowProps {
   index: number;
   isCurrent: boolean;
   isPlaying: boolean;
+  showViews: boolean;
   onPlay?: (track: Track) => void;
   onAddToQueue?: (track: Track) => void;
   onGoToArtist?: (artistId: string) => void;
@@ -81,6 +90,7 @@ function TrackTableRow({
   index,
   isCurrent,
   isPlaying,
+  showViews,
   onPlay,
   onAddToQueue,
   onGoToArtist,
@@ -89,6 +99,8 @@ function TrackTableRow({
   const [liked, setLiked] = useState(track.likeStatus === "LIKE");
   const imgUrl = track.thumbnails[0]?.url ?? "";
   const artistName = track.artists.map((a) => a.name).join(", ");
+
+  const gridTemplateColumns = showViews ? GRID_COLUMNS_WITH_VIEWS : GRID_COLUMNS_BASE;
 
   return (
     <TrackContextMenu
@@ -100,7 +112,7 @@ function TrackTableRow({
     >
       <div
         className={`group items-center gap-x-3 rounded-md px-2 py-1.5 hover:bg-accent/50 ${isCurrent ? "bg-accent/50" : ""}`}
-        style={{ display: "grid", gridTemplateColumns: GRID_COLUMNS }}
+        style={{ display: "grid", gridTemplateColumns }}
         onDoubleClick={() => onPlay?.(track)}
       >
         {/* Col 1: # / equalizer / play-pause */}
@@ -244,7 +256,14 @@ function TrackTableRow({
           )}
         </p>
 
-        {/* Col 6: Duration */}
+        {/* Col 6 (optional): Views */}
+        {showViews && (
+          <span className="truncate text-sm text-muted-foreground">
+            {track.views ?? "—"}
+          </span>
+        )}
+
+        {/* Col 6/7: Duration */}
         <span className="text-right text-xs text-muted-foreground">
           {track.duration}
         </span>
@@ -257,6 +276,7 @@ export function TrackTable({
   tracks,
   currentTrackId,
   isPlaying = false,
+  showViews = false,
   onPlay,
   onAddToQueue,
   onGoToArtist,
@@ -266,7 +286,7 @@ export function TrackTable({
 
   return (
     <div>
-      <TrackTableHeader />
+      <TrackTableHeader showViews={showViews} />
       <div className="mt-1 space-y-0.5">
         {tracks.map((track, i) => (
           <TrackTableRow
@@ -275,6 +295,7 @@ export function TrackTable({
             index={i}
             isCurrent={currentTrackId === track.videoId}
             isPlaying={currentTrackId === track.videoId && isPlaying}
+            showViews={showViews}
             onPlay={onPlay}
             onAddToQueue={onAddToQueue}
             onGoToArtist={onGoToArtist}

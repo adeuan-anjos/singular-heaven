@@ -18,16 +18,16 @@ function thumb(url = PLACEHOLDER_IMG): { url: string; width: number; height: num
 }
 
 const BASE_TRACKS: Track[] = [
-  { videoId: "t1", title: "Blinding Lights", artists: [{ id: "a1", name: "The Weeknd" }], album: { id: "al1", name: "After Hours" }, duration: "3:20", durationSeconds: 200, thumbnails: thumb() },
-  { videoId: "t2", title: "Levitating", artists: [{ id: "a2", name: "Dua Lipa" }], album: { id: "al2", name: "Future Nostalgia" }, duration: "3:23", durationSeconds: 203, thumbnails: thumb() },
-  { videoId: "t3", title: "Watermelon Sugar", artists: [{ id: "a3", name: "Harry Styles" }], album: { id: "al3", name: "Fine Line" }, duration: "2:54", durationSeconds: 174, thumbnails: thumb() },
-  { videoId: "t4", title: "Stay", artists: [{ id: "a4", name: "The Kid LAROI" }, { id: "a5", name: "Justin Bieber" }], album: null, duration: "2:21", durationSeconds: 141, thumbnails: thumb() },
-  { videoId: "t5", title: "Peaches", artists: [{ id: "a5", name: "Justin Bieber" }], album: { id: "al4", name: "Justice" }, duration: "3:18", durationSeconds: 198, thumbnails: thumb() },
-  { videoId: "t6", title: "Montero", artists: [{ id: "a6", name: "Lil Nas X" }], album: { id: "al5", name: "Montero" }, duration: "2:17", durationSeconds: 137, thumbnails: thumb() },
-  { videoId: "t7", title: "Kiss Me More", artists: [{ id: "a7", name: "Doja Cat" }], album: { id: "al6", name: "Planet Her" }, duration: "3:28", durationSeconds: 208, thumbnails: thumb() },
-  { videoId: "t8", title: "Save Your Tears", artists: [{ id: "a1", name: "The Weeknd" }], album: { id: "al1", name: "After Hours" }, duration: "3:35", durationSeconds: 215, thumbnails: thumb() },
-  { videoId: "t9", title: "Good 4 U", artists: [{ id: "a8", name: "Olivia Rodrigo" }], album: { id: "al7", name: "SOUR" }, duration: "2:58", durationSeconds: 178, thumbnails: thumb() },
-  { videoId: "t10", title: "Happier Than Ever", artists: [{ id: "a9", name: "Billie Eilish" }], album: { id: "al8", name: "Happier Than Ever" }, duration: "4:58", durationSeconds: 298, thumbnails: thumb() },
+  { videoId: "t1", title: "Blinding Lights", artists: [{ id: "a1", name: "The Weeknd" }], album: { id: "al1", name: "After Hours" }, duration: "3:20", durationSeconds: 200, thumbnails: thumb(), views: "Tocou 4,5 bi vezes" },
+  { videoId: "t2", title: "Levitating", artists: [{ id: "a2", name: "Dua Lipa" }], album: { id: "al2", name: "Future Nostalgia" }, duration: "3:23", durationSeconds: 203, thumbnails: thumb(), views: "Tocou 2,1 bi vezes" },
+  { videoId: "t3", title: "Watermelon Sugar", artists: [{ id: "a3", name: "Harry Styles" }], album: { id: "al3", name: "Fine Line" }, duration: "2:54", durationSeconds: 174, thumbnails: thumb(), views: "Tocou 1,8 bi vezes" },
+  { videoId: "t4", title: "Stay", artists: [{ id: "a4", name: "The Kid LAROI" }, { id: "a5", name: "Justin Bieber" }], album: null, duration: "2:21", durationSeconds: 141, thumbnails: thumb(), views: "Tocou 1,2 bi vezes" },
+  { videoId: "t5", title: "Peaches", artists: [{ id: "a5", name: "Justin Bieber" }], album: { id: "al4", name: "Justice" }, duration: "3:18", durationSeconds: 198, thumbnails: thumb(), views: "Tocou 890 mi vezes" },
+  { videoId: "t6", title: "Montero", artists: [{ id: "a6", name: "Lil Nas X" }], album: { id: "al5", name: "Montero" }, duration: "2:17", durationSeconds: 137, thumbnails: thumb(), views: "Tocou 760 mi vezes" },
+  { videoId: "t7", title: "Kiss Me More", artists: [{ id: "a7", name: "Doja Cat" }], album: { id: "al6", name: "Planet Her" }, duration: "3:28", durationSeconds: 208, thumbnails: thumb(), views: "Tocou 620 mi vezes" },
+  { videoId: "t8", title: "Save Your Tears", artists: [{ id: "a1", name: "The Weeknd" }], album: { id: "al1", name: "After Hours" }, duration: "3:35", durationSeconds: 215, thumbnails: thumb(), views: "Tocou 500 mi vezes" },
+  { videoId: "t9", title: "Good 4 U", artists: [{ id: "a8", name: "Olivia Rodrigo" }], album: { id: "al7", name: "SOUR" }, duration: "2:58", durationSeconds: 178, thumbnails: thumb(), views: "Tocou 380 mi vezes" },
+  { videoId: "t10", title: "Happier Than Ever", artists: [{ id: "a9", name: "Billie Eilish" }], album: { id: "al8", name: "Happier Than Ever" }, duration: "4:58", durationSeconds: 298, thumbnails: thumb(), views: "Tocou 119 mi vezes" },
 ];
 
 // Generate 50 liked tracks from the 10 base tracks for virtual scroll testing
