@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { MusicTabs } from "./components/layout/music-tabs";
 import { MusicHeader } from "./components/layout/music-header";
@@ -35,20 +35,20 @@ export default function YouTubeMusicModule() {
   const player = usePlayer();
   const queue = useQueue();
 
-  const handlePlayTrack = (track: Track) => {
+  const handlePlayTrack = useCallback((track: Track) => {
     player.play(track);
     queue.setTracks([track], 0);
-  };
+  }, [player.play, queue.setTracks]);
 
-  const handlePlayAll = (tracks: Track[]) => {
+  const handlePlayAll = useCallback((tracks: Track[]) => {
     if (tracks.length === 0) return;
     player.play(tracks[0]);
     queue.setTracks(tracks, 0);
-  };
+  }, [player.play, queue.setTracks]);
 
-  const handleAddToQueue = (track: Track) => {
+  const handleAddToQueue = useCallback((track: Track) => {
     queue.addNext(track);
-  };
+  }, [queue.addNext]);
 
   const handleNext = () => {
     const nextTrack = queue.next();

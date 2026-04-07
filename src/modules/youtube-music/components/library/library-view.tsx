@@ -1,4 +1,4 @@
-import { useState } from "react";
+import React, { useState } from "react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Avatar,
@@ -21,7 +21,7 @@ interface LibraryViewProps {
   onAddToQueue: (track: Track) => void;
 }
 
-export function LibraryView({
+export const LibraryView = React.memo(function LibraryView({
   onNavigate,
   onPlayTrack,
   onAddToQueue,
@@ -131,4 +131,4 @@ export function LibraryView({
       </div>
     </div>
   );
-}
+});
