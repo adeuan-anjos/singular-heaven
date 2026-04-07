@@ -1,5 +1,6 @@
 import React from "react";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { CarouselSection } from "../shared/carousel-section";
 import { MediaCard } from "../shared/media-card";
 import { mockTracks, mockPlaylists } from "../../mock/data";
 import type { StackPage, Thumbnail } from "../../types/music";
@@ -21,8 +22,7 @@ export const LibraryView = React.memo(function LibraryView({
   return (
     <ScrollArea className="group/page h-full">
       <div className="mx-auto max-w-screen-xl space-y-6 p-4">
-        <h2 className="text-lg font-semibold text-foreground">Biblioteca</h2>
-        <div className="grid gap-4" style={{ gridTemplateColumns: "repeat(6, 1fr)", width: "max(100%, 1020px)" }}>
+        <CarouselSection title="Biblioteca">
           <MediaCard
             title="Curtidas"
             typeLabel="Playlist"
@@ -43,7 +43,7 @@ export const LibraryView = React.memo(function LibraryView({
               onPlay={() => onNavigate({ type: "playlist", playlistId: pl.playlistId })}
             />
           ))}
-        </div>
+        </CarouselSection>
       </div>
     </ScrollArea>
   );
