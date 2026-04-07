@@ -60,9 +60,10 @@ export function ArtistPage({ artistId, onNavigate, onPlayTrack, onAddToQueue }: 
               <MediaCard
                 key={album.browseId}
                 title={album.title}
-                subtitle={album.year}
+                subtitle={`Álbum • ${album.year ?? ""}`}
                 thumbnails={album.thumbnails}
                 onClick={() => onNavigate({ type: "album", albumId: album.browseId })}
+                onPlay={() => onNavigate({ type: "album", albumId: album.browseId })}
               />
             ))}
           </CarouselSection>
@@ -74,9 +75,10 @@ export function ArtistPage({ artistId, onNavigate, onPlayTrack, onAddToQueue }: 
               <MediaCard
                 key={single.browseId}
                 title={single.title}
-                subtitle={single.year}
+                subtitle={`Single • ${single.year ?? ""}`}
                 thumbnails={single.thumbnails}
                 onClick={() => onNavigate({ type: "album", albumId: single.browseId })}
+                onPlay={() => onNavigate({ type: "album", albumId: single.browseId })}
               />
             ))}
           </CarouselSection>
@@ -88,9 +90,8 @@ export function ArtistPage({ artistId, onNavigate, onPlayTrack, onAddToQueue }: 
               <MediaCard
                 key={a.browseId}
                 title={a.name}
-                subtitle={a.subscribers}
+                subtitle="Artista"
                 thumbnails={a.thumbnails}
-                rounded="full"
                 onClick={() => onNavigate({ type: "artist", artistId: a.browseId })}
               />
             ))}

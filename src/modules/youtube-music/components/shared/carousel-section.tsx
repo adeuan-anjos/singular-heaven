@@ -84,7 +84,7 @@ export function CarouselSection({ title, onSeeAll, children }: CarouselSectionPr
         </div>
       </div>
       <ScrollArea ref={scrollAreaRef} className="w-full">
-        <div className="flex gap-2 pb-4">
+        <div className="flex gap-1 pb-4">
           {children}
         </div>
         <ScrollBar orientation="horizontal" className="opacity-0 transition-opacity group-hover/carousel:opacity-100" />

@@ -22,9 +22,10 @@ export function ExploreView({ onNavigate, onPlayTrack }: ExploreViewProps) {
             <MediaCard
               key={album.browseId}
               title={album.title}
-              subtitle={album.artists.map((a) => a.name).join(", ")}
+              subtitle={`Álbum • ${album.artists.map((a) => a.name).join(", ")}`}
               thumbnails={album.thumbnails}
               onClick={() => onNavigate({ type: "album", albumId: album.browseId })}
+              onPlay={() => onNavigate({ type: "album", albumId: album.browseId })}
             />
           ))}
         </CarouselSection>
@@ -34,9 +35,10 @@ export function ExploreView({ onNavigate, onPlayTrack }: ExploreViewProps) {
             <MediaCard
               key={track.videoId}
               title={track.title}
-              subtitle={track.artists.map((a) => a.name).join(", ")}
+              subtitle={`Música • ${track.artists.map((a) => a.name).join(", ")}`}
               thumbnails={track.thumbnails}
               onClick={() => onPlayTrack(track)}
+              onPlay={() => onPlayTrack(track)}
             />
           ))}
         </CarouselSection>
@@ -46,9 +48,10 @@ export function ExploreView({ onNavigate, onPlayTrack }: ExploreViewProps) {
             <MediaCard
               key={track.videoId}
               title={track.title}
-              subtitle={track.artists.map((a) => a.name).join(", ")}
+              subtitle={`Música • ${track.artists.map((a) => a.name).join(", ")}`}
               thumbnails={track.thumbnails}
               onClick={() => onPlayTrack(track)}
+              onPlay={() => onPlayTrack(track)}
             />
           ))}
         </CarouselSection>
