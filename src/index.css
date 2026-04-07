@@ -175,6 +175,7 @@
   border-radius: 2px;
   background: var(--primary);
   transform-origin: bottom;
+  will-change: height;
   animation: equalizer-bounce ease-in-out infinite;
 }
 
