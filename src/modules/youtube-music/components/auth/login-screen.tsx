@@ -1,7 +1,17 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { openUrl } from "@tauri-apps/plugin-opener";
-import { Music, Link, Check, Copy, AlertCircle, ArrowRight, Loader2 } from "lucide-react";
+import {
+  Music,
+  Link,
+  Check,
+  Copy,
+  AlertCircle,
+  ArrowRight,
+  Loader2,
+  Globe,
+  MonitorSmartphone,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -21,10 +31,78 @@ interface LoginScreenProps {
   onSkip: () => void;
 }
 
+interface BrowserInfo {
+  name: string;
+  hasCookies: boolean;
+  cookieCount: number;
+}
+
+interface AuthStatusResponse {
+  authenticated: boolean;
+  method: string;
+}
+
+const BROWSER_LABELS: Record<string, string> = {
+  edge: "Microsoft Edge",
+  chrome: "Google Chrome",
+  firefox: "Mozilla Firefox",
+  brave: "Brave",
+  chromium: "Chromium",
+  opera: "Opera",
+  vivaldi: "Vivaldi",
+};
+
 export function LoginScreen({ onAuthenticated, onSkip }: LoginScreenProps) {
   const [state, setState] = useState<LoginState>({ step: "initial" });
   const [loading, setLoading] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [browsers, setBrowsers] = useState<BrowserInfo[]>([]);
+  const [detectingBrowsers, setDetectingBrowsers] = useState(true);
+  const [browserAuthLoading, setBrowserAuthLoading] = useState<string | null>(null);
+
+  // Detect browsers with YouTube cookies on mount
+  useEffect(() => {
+    let cancelled = false;
+
+    async function detect() {
+      console.log("[LoginScreen] Detecting browsers with YouTube cookies...");
+      try {
+        const result = await invoke<BrowserInfo[]>("yt_detect_browsers");
+        if (!cancelled) {
+          console.log("[LoginScreen] Detected browsers:", result);
+          setBrowsers(result);
+        }
+      } catch (err) {
+        console.error("[LoginScreen] Failed to detect browsers:", err);
+      } finally {
+        if (!cancelled) {
+          setDetectingBrowsers(false);
+        }
+      }
+    }
+
+    detect();
+    return () => { cancelled = true; };
+  }, []);
+
+  const handleBrowserAuth = useCallback(async (browser: string) => {
+    console.log("[LoginScreen] Starting browser cookie auth:", browser);
+    setBrowserAuthLoading(browser);
+    try {
+      const result = await invoke<AuthStatusResponse>("yt_auth_from_browser", { browser });
+      console.log("[LoginScreen] yt_auth_from_browser result:", result);
+      if (result.authenticated) {
+        onAuthenticated();
+      } else {
+        setState({ step: "error", message: "Falha ao autenticar com cookies do navegador." });
+      }
+    } catch (err) {
+      console.error("[LoginScreen] yt_auth_from_browser failed:", err);
+      setState({ step: "error", message: String(err) });
+    } finally {
+      setBrowserAuthLoading(null);
+    }
+  }, [onAuthenticated]);
 
   const handleConnect = useCallback(async () => {
     console.log("[LoginScreen] starting OAuth flow");
@@ -86,10 +164,9 @@ export function LoginScreen({ onAuthenticated, onSkip }: LoginScreenProps) {
   }, []);
 
   const handleRetry = useCallback(() => {
-    console.log("[LoginScreen] retrying OAuth flow");
+    console.log("[LoginScreen] retrying");
     setState({ step: "initial" });
-    handleConnect();
-  }, [handleConnect]);
+  }, []);
 
   return (
     <div className="flex h-full items-center justify-center p-6">
@@ -106,12 +183,66 @@ export function LoginScreen({ onAuthenticated, onSkip }: LoginScreenProps) {
         </CardHeader>
 
         <CardContent className="flex flex-col gap-4">
-          {/* Initial state */}
+          {/* Browser cookie import section */}
+          {state.step === "initial" && (
+            <div className="flex flex-col gap-3">
+              <div className="flex items-center gap-2 text-sm font-medium text-foreground">
+                <Globe className="size-4" />
+                <span>Importar do navegador</span>
+              </div>
+
+              {detectingBrowsers ? (
+                <div className="flex items-center justify-center gap-2 rounded-lg bg-muted px-4 py-3 text-sm text-muted-foreground">
+                  <Loader2 className="size-4 animate-spin" />
+                  <span>Detectando navegadores...</span>
+                </div>
+              ) : browsers.length > 0 ? (
+                <div className="flex flex-col gap-2">
+                  {browsers.map((browser) => (
+                    <Button
+                      key={browser.name}
+                      variant="outline"
+                      onClick={() => handleBrowserAuth(browser.name)}
+                      disabled={browserAuthLoading !== null}
+                      className="w-full justify-start"
+                    >
+                      {browserAuthLoading === browser.name ? (
+                        <Loader2 className="size-4 animate-spin" data-icon="inline-start" />
+                      ) : (
+                        <MonitorSmartphone className="size-4" data-icon="inline-start" />
+                      )}
+                      {BROWSER_LABELS[browser.name] ?? browser.name}
+                      <span className="ml-auto text-xs text-muted-foreground">
+                        {browser.cookieCount} cookies
+                      </span>
+                    </Button>
+                  ))}
+                </div>
+              ) : (
+                <p className="rounded-lg bg-muted px-4 py-3 text-sm text-muted-foreground">
+                  Nenhum navegador com cookies do YouTube detectado. Faça login no YouTube Music
+                  em algum navegador e tente novamente.
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* Divider between browser import and OAuth */}
+          {state.step === "initial" && (
+            <div className="flex items-center gap-3">
+              <div className="h-px flex-1 bg-border" />
+              <span className="text-xs text-muted-foreground">ou</span>
+              <div className="h-px flex-1 bg-border" />
+            </div>
+          )}
+
+          {/* OAuth flow — initial state */}
           {state.step === "initial" && (
             <Button
               onClick={handleConnect}
-              disabled={loading}
+              disabled={loading || browserAuthLoading !== null}
               size="lg"
+              variant="secondary"
               className="w-full"
             >
               {loading ? (
@@ -119,7 +250,7 @@ export function LoginScreen({ onAuthenticated, onSkip }: LoginScreenProps) {
               ) : (
                 <Link className="size-4" data-icon="inline-start" />
               )}
-              Conectar com Google
+              Conectar com Google (OAuth)
             </Button>
           )}
 

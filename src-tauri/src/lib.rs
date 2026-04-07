@@ -63,30 +63,56 @@ pub fn run() {
             tauri::async_runtime::spawn(async move {
                 println!("[setup] Initializing YtMusicClient...");
 
-                // Try to load a saved OAuth token from disk
                 let app_data_dir = handle.path().app_data_dir().ok();
-                let saved_token = app_data_dir
-                    .as_ref()
-                    .and_then(|dir| {
-                        println!("[setup] Checking for saved OAuth token...");
-                        match YtMusicClient::load_token(dir) {
-                            Ok(token) => token,
-                            Err(e) => {
-                                eprintln!("[setup] Error loading saved token: {e}");
-                                None
-                            }
+
+                // Priority 1: Try loading saved cookies from disk
+                let saved_cookies = app_data_dir.as_ref().and_then(|dir| {
+                    println!("[setup] Checking for saved cookies...");
+                    match YtMusicClient::load_cookies(dir) {
+                        Ok(cookies) => cookies,
+                        Err(e) => {
+                            eprintln!("[setup] Error loading saved cookies: {e}");
+                            None
                         }
-                    });
+                    }
+                });
+
+                if let Some(cookie_string) = saved_cookies {
+                    println!("[setup] Found saved cookies, creating cookie-auth client...");
+                    match YtMusicClient::new_from_cookies(&cookie_string).await {
+                        Ok(client) => {
+                            println!("[setup] Cookie-auth client created from saved cookies.");
+                            handle.manage(Arc::new(Mutex::new(client)));
+                            println!("[setup] YtMusicClient added to managed state.");
+                            return;
+                        }
+                        Err(e) => {
+                            eprintln!("[setup] Failed to create cookie-auth client: {e}");
+                            println!("[setup] Falling back to OAuth token...");
+                        }
+                    }
+                }
+
+                // Priority 2: Try loading saved OAuth token from disk
+                let saved_token = app_data_dir.as_ref().and_then(|dir| {
+                    println!("[setup] Checking for saved OAuth token...");
+                    match YtMusicClient::load_token(dir) {
+                        Ok(token) => token,
+                        Err(e) => {
+                            eprintln!("[setup] Error loading saved token: {e}");
+                            None
+                        }
+                    }
+                });
 
                 let client = if let Some(token) = saved_token {
                     println!("[setup] Found saved token, creating authenticated client...");
-                    {
-                        let c = YtMusicClient::new_authenticated(token);
-                        println!("[setup] Authenticated client created from saved token.");
-                        c
-                    }
+                    let c = YtMusicClient::new_authenticated(token);
+                    println!("[setup] Authenticated client created from saved token.");
+                    c
                 } else {
-                    println!("[setup] No saved token, creating unauthenticated client...");
+                    // Priority 3: Unauthenticated
+                    println!("[setup] No saved credentials, creating unauthenticated client...");
                     match YtMusicClient::new_unauthenticated().await {
                         Ok(c) => c,
                         Err(e) => {
@@ -108,6 +134,8 @@ pub fn run() {
             youtube_music::commands::yt_auth_complete,
             youtube_music::commands::yt_auth_status,
             youtube_music::commands::yt_auth_logout,
+            youtube_music::commands::yt_detect_browsers,
+            youtube_music::commands::yt_auth_from_browser,
         ])
         .on_window_event(|window, event| {
             #[cfg(target_os = "windows")]
