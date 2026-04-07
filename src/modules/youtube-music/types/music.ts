@@ -18,6 +18,7 @@ export interface Track {
   durationSeconds: number;
   thumbnails: Thumbnail[];
   likeStatus?: "LIKE" | "DISLIKE" | "INDIFFERENT";
+  views?: string;
 }
 
 export interface Album {
