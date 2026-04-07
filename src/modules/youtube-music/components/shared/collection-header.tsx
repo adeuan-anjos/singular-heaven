@@ -66,7 +66,7 @@ export function CollectionHeader({
           )}
           {(statParts.length > 0 || metaParts.length > 0) && (
             <p className="text-sm text-muted-foreground">
-              {[...statParts, ...metaParts].join(" | ")}
+              {[...statParts, ...metaParts].join(" • ")}
             </p>
           )}
           {description && (
