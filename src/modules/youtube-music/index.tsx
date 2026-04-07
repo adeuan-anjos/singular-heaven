@@ -10,6 +10,7 @@ import { ArtistPage } from "./components/pages/artist-page";
 import { AlbumPage } from "./components/pages/album-page";
 import { PlaylistPage } from "./components/pages/playlist-page";
 import { QueueSheet } from "./components/queue/queue-sheet";
+import { SearchResultsPage } from "./components/search/search-results-page";
 import { useNavigation } from "./hooks/use-navigation";
 import { usePlayerStore } from "./stores/player-store";
 import { useQueueStore } from "./stores/queue-store";
@@ -58,6 +59,11 @@ export default function YouTubeMusicModule() {
     queueAddNext(track);
   }, [queueAddNext]);
 
+  const handleSearchSubmit = useCallback((query: string) => {
+    console.log("[YouTubeMusicModule] handleSearchSubmit", { query });
+    nav.push({ type: "search", query });
+  }, [nav]);
+
   const handleViewChange = useCallback((view: string) => {
     nav.clear();
     setActiveTab(view);
@@ -105,6 +111,15 @@ export default function YouTubeMusicModule() {
               onPlayAll={handlePlayAll}
             />
           );
+        case "search":
+          return (
+            <SearchResultsPage
+              query={nav.currentPage.query}
+              onNavigate={nav.push}
+              onPlayTrack={handlePlayTrack}
+              onAddToQueue={handleAddToQueue}
+            />
+          );
         case "mood":
           return <ExploreView onNavigate={nav.push} onPlayTrack={handlePlayTrack} />;
         default:
@@ -135,6 +150,7 @@ export default function YouTubeMusicModule() {
           canGoForward={nav.canGoForward}
           onNavigate={nav.push}
           onPlayTrack={handlePlayTrack}
+          onSearchSubmit={handleSearchSubmit}
         />
 
         {/* Main area */}

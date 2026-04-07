@@ -20,6 +20,7 @@ interface TopBarProps {
   canGoForward: boolean;
   onNavigate: (page: StackPage) => void;
   onPlayTrack: (track: Track) => void;
+  onSearchSubmit: (query: string) => void;
 }
 
 export function TopBar({
@@ -29,6 +30,7 @@ export function TopBar({
   canGoForward,
   onNavigate,
   onPlayTrack,
+  onSearchSubmit,
 }: TopBarProps) {
   const [query, setQuery] = useState("");
   const [dropdownOpen, setDropdownOpen] = useState(false);
@@ -66,8 +68,11 @@ export function TopBar({
       setQuery("");
       setDropdownOpen(false);
       inputRef.current?.blur();
+    } else if (e.key === "Enter" && query.trim().length > 0) {
+      setDropdownOpen(false);
+      onSearchSubmit(query.trim());
     }
-  }, []);
+  }, [query, onSearchSubmit]);
 
   // Close dropdown when clicking outside
   useEffect(() => {
