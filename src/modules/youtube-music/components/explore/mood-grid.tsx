@@ -1,3 +1,4 @@
+import { cn } from "@/lib/utils";
 import type { MoodCategory, StackPage } from "../../types/music";
 
 interface MoodGridProps {
@@ -7,15 +8,19 @@ interface MoodGridProps {
 
 export function MoodGrid({ categories, onSelect }: MoodGridProps) {
   return (
-    <div className="flex flex-wrap gap-2 px-2">
+    <div className="grid grid-cols-6 gap-3">
       {categories.map((cat) => (
         <button
           key={cat.params}
           type="button"
-          className="inline-flex h-8 items-center rounded-full border border-border px-3 text-sm text-foreground hover:bg-accent"
+          className="group flex h-10 items-center overflow-hidden rounded-md bg-card text-left text-sm font-medium text-foreground shadow-sm transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           onClick={() => onSelect({ type: "mood", params: cat.params, title: cat.title })}
         >
-          {cat.title}
+          <span
+            aria-hidden="true"
+            className={cn("h-full w-1 shrink-0", cat.color ?? "bg-muted-foreground")}
+          />
+          <span className="truncate px-3">{cat.title}</span>
         </button>
       ))}
     </div>

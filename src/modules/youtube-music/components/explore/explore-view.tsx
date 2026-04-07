@@ -3,7 +3,8 @@ import { CarouselSection } from "../shared/carousel-section";
 import { MediaCard } from "../shared/media-card";
 import { MoodGrid } from "./mood-grid";
 import { SectionHeader } from "../shared/section-header";
-import { mockExploreData } from "../../mock/data";
+import { ChartList } from "../shared/chart-list";
+import { mockExploreData, mockChartTracks } from "../../mock/data";
 import type { Track, StackPage } from "../../types/music";
 
 interface ExploreViewProps {
@@ -77,8 +78,16 @@ export function ExploreView({ onNavigate, onPlayTrack }: ExploreViewProps) {
           })}
         </CarouselSection>
 
+        <ChartList
+          title="Top músicas"
+          tracks={mockChartTracks}
+          onPlayTrack={onPlayTrack}
+          onGoToArtist={(artistId) => onNavigate({ type: "artist", artistId })}
+          onGoToAlbum={(albumId) => onNavigate({ type: "album", albumId })}
+        />
+
         <div className="space-y-3">
-          <SectionHeader title="Moods e gêneros" />
+          <SectionHeader title="Momentos e gêneros" />
           <MoodGrid categories={data.moodsAndGenres} onSelect={onNavigate} />
         </div>
       </div>

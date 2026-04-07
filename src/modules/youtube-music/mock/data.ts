@@ -7,6 +7,7 @@ import type {
   ExploreData,
   SearchResults,
   MoodCategory,
+  ChartTrack,
 } from "../types/music";
 
 const PLACEHOLDER_IMG = "https://placehold.co/160x160/1a1a2e/ffffff?text=♪";
@@ -77,16 +78,46 @@ export const mockHomeSections: HomeSection[] = [
 ];
 
 export const mockMoodCategories: MoodCategory[] = [
-  { title: "Pop", params: "pop" },
-  { title: "Rock", params: "rock" },
-  { title: "Hip-Hop", params: "hiphop" },
-  { title: "R&B", params: "rnb" },
-  { title: "Eletrônica", params: "electronic" },
-  { title: "Jazz", params: "jazz" },
-  { title: "Clássica", params: "classical" },
-  { title: "Sertanejo", params: "sertanejo" },
-  { title: "Funk", params: "funk" },
-  { title: "MPB", params: "mpb" },
+  { title: "Hip-Hop", params: "hiphop", color: "bg-orange-500" },
+  { title: "Festa", params: "party", color: "bg-pink-500" },
+  { title: "Games", params: "games", color: "bg-indigo-500" },
+  { title: "Rock", params: "rock", color: "bg-red-500" },
+  { title: "Reggae", params: "reggae", color: "bg-green-500" },
+  { title: "Pop BR", params: "pop-br", color: "bg-yellow-500" },
+  { title: "Treino", params: "workout", color: "bg-emerald-500" },
+  { title: "Forró", params: "forro", color: "bg-teal-500" },
+  { title: "Jazz", params: "jazz", color: "bg-blue-500" },
+  { title: "Especial", params: "special", color: "bg-purple-500" },
+  { title: "Eletrônica", params: "electronic", color: "bg-cyan-500" },
+  { title: "MPB", params: "mpb", color: "bg-lime-500" },
+  { title: "Sertanejo", params: "sertanejo", color: "bg-amber-500" },
+  { title: "Funk", params: "funk", color: "bg-rose-500" },
+  { title: "R&B", params: "rnb", color: "bg-violet-500" },
+  { title: "Clássica", params: "classical", color: "bg-sky-500" },
+  { title: "Pop", params: "pop", color: "bg-fuchsia-500" },
+  { title: "K-Pop", params: "kpop", color: "bg-pink-400" },
+  { title: "Relax", params: "relax", color: "bg-teal-400" },
+  { title: "Romântico", params: "romantic", color: "bg-red-400" },
+  { title: "Pagode", params: "pagode", color: "bg-orange-400" },
+  { title: "Axé", params: "axe", color: "bg-yellow-400" },
+  { title: "Gospel", params: "gospel", color: "bg-blue-400" },
+  { title: "Metal", params: "metal", color: "bg-zinc-500" },
+];
+
+export const mockChartTracks: ChartTrack[] = [
+  { ...BASE_TRACKS[0], rank: 1, trend: "up" },
+  { ...BASE_TRACKS[1], rank: 2, trend: "up" },
+  { ...BASE_TRACKS[2], rank: 3, trend: "down" },
+  { ...BASE_TRACKS[3], rank: 4, trend: "neutral" },
+  { ...BASE_TRACKS[4], rank: 5, trend: "up" },
+  { ...BASE_TRACKS[5], rank: 6, trend: "neutral" },
+  { ...BASE_TRACKS[6], rank: 7, trend: "up" },
+  { ...BASE_TRACKS[7], rank: 8, trend: "down" },
+  { ...BASE_TRACKS[8], rank: 9, trend: "up" },
+  { ...BASE_TRACKS[9], rank: 10, trend: "down" },
+  { videoId: "t11", title: "Drivers License", artists: [{ id: "a8", name: "Olivia Rodrigo" }], album: { id: "al7", name: "SOUR" }, duration: "4:02", durationSeconds: 242, thumbnails: thumb(), rank: 11, trend: "up" },
+  { videoId: "t12", title: "Therefore I Am", artists: [{ id: "a9", name: "Billie Eilish" }], album: { id: "al8", name: "Happier Than Ever" }, duration: "2:54", durationSeconds: 174, thumbnails: thumb(), rank: 12, trend: "neutral" },
+  { videoId: "t13", title: "Don't Start Now", artists: [{ id: "a2", name: "Dua Lipa" }], album: { id: "al2", name: "Future Nostalgia" }, duration: "3:03", durationSeconds: 183, thumbnails: thumb(), rank: 13, trend: "down" },
 ];
 
 export const mockExploreData: ExploreData = {

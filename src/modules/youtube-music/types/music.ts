@@ -64,6 +64,7 @@ export interface ExploreData {
 export interface MoodCategory {
   title: string;
   params: string;
+  color?: string;
 }
 
 export interface SearchResults {
@@ -79,5 +80,10 @@ export type StackPage =
   | { type: "playlist"; playlistId: string }
   | { type: "search" }
   | { type: "mood"; params: string; title: string };
+
+export interface ChartTrack extends Track {
+  rank: number;
+  trend: "up" | "down" | "neutral";
+}
 
 export type RepeatMode = "off" | "all" | "one";
