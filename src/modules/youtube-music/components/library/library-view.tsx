@@ -5,6 +5,11 @@ import {
   ResizablePanel,
   ResizableHandle,
 } from "@/components/ui/resizable";
+import {
+  Avatar,
+  AvatarImage,
+  AvatarFallback,
+} from "@/components/ui/avatar";
 import { CarouselSection } from "../shared/carousel-section";
 import { MediaCard } from "../shared/media-card";
 import { SectionHeader } from "../shared/section-header";
@@ -130,21 +135,38 @@ export function LibraryView({
             <SectionHeader title="Playlists" />
           </div>
           <ScrollArea className="flex-1 overflow-hidden">
-            <div className="flex flex-col gap-2 px-4 pb-4">
-              {mockPlaylists.map((pl) => (
-                <MediaCard
-                  key={pl.playlistId}
-                  title={pl.title}
-                  subtitle={`${pl.trackCount} músicas`}
-                  thumbnails={pl.thumbnails}
-                  onClick={() =>
-                    onNavigate({
-                      type: "playlist",
-                      playlistId: pl.playlistId,
-                    })
-                  }
-                />
-              ))}
+            <div className="flex flex-col px-2 pb-4">
+              {mockPlaylists.map((pl) => {
+                const thumbUrl = pl.thumbnails?.[0]?.url;
+                const initials = pl.title.slice(0, 2).toUpperCase();
+                return (
+                  <button
+                    key={pl.playlistId}
+                    onClick={() =>
+                      onNavigate({
+                        type: "playlist",
+                        playlistId: pl.playlistId,
+                      })
+                    }
+                    className="flex w-full items-center gap-3 rounded-md px-2 py-1.5 text-left transition-colors hover:bg-accent"
+                  >
+                    <Avatar className="size-9 shrink-0 rounded-sm">
+                      <AvatarImage src={thumbUrl} alt={pl.title} className="rounded-sm object-cover" />
+                      <AvatarFallback className="rounded-sm text-xs">
+                        {initials}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-medium leading-tight">
+                        {pl.title}
+                      </p>
+                      <p className="truncate text-xs text-muted-foreground leading-tight mt-0.5">
+                        {pl.author?.name} • {pl.trackCount} músicas
+                      </p>
+                    </div>
+                  </button>
+                );
+              })}
             </div>
           </ScrollArea>
         </div>
