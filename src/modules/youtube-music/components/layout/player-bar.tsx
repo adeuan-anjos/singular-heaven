@@ -134,14 +134,16 @@ export function PlayerBar({ onOpenQueue, onGoToArtist, onGoToAlbum }: PlayerBarP
 
       {/* Right: Volume + queue */}
       <div className="group/volume flex items-center justify-end gap-1">
-        <div className="flex items-center gap-1">
-          <Slider
-            value={[volume]}
-            max={100}
-            step={1}
-            onValueChange={(v) => setVolume(Array.isArray(v) ? v[0] : v)}
-            className="w-24 opacity-0 transition-opacity group-hover/volume:opacity-100"
-          />
+        <div className="flex items-center">
+          <div className="w-0 overflow-hidden transition-all duration-200 group-hover/volume:w-24 group-hover/volume:mr-1">
+            <Slider
+              value={[volume]}
+              max={100}
+              step={1}
+              onValueChange={(v) => setVolume(Array.isArray(v) ? v[0] : v)}
+              className="w-24"
+            />
+          </div>
           <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setVolume(volume > 0 ? 0 : 80)}>
             <Volume2 className="h-4 w-4" />
           </Button>
