@@ -11,7 +11,7 @@ export function MediaGrid({ title, children }: MediaGridProps) {
       {title && (
         <h2 className="text-lg font-semibold text-foreground">{title}</h2>
       )}
-      <div className="grid gap-4" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))" }}>
+      <div className="grid gap-4" style={{ gridTemplateColumns: "repeat(6, 1fr)" }}>
         {React.Children.map(children, (child, index) => (
           <div key={index} className="min-w-0">
             {child}
