@@ -128,3 +128,25 @@
     @apply font-sans;
     }
 }
+
+/* Styled scrollbar for virtualized lists */
+.styled-scrollbar::-webkit-scrollbar {
+  width: 10px;
+}
+
+.styled-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.styled-scrollbar::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 9999px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+
+.styled-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: var(--muted-foreground);
+  border: 2px solid transparent;
+  background-clip: content-box;
+}

@@ -47,7 +47,7 @@ export function VirtualTrackList({
   });
 
   return (
-    <div ref={parentRef} className={className} style={{ overflowY: "auto" }}>
+    <div ref={parentRef} className={`styled-scrollbar ${className ?? ""}`} style={{ overflowY: "auto" }}>
       <div
         style={{
           height: totalSize,
