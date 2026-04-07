@@ -1,11 +1,7 @@
 import { useState, useCallback, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { openUrl } from "@tauri-apps/plugin-opener";
 import {
   Music,
-  Link,
-  Check,
-  Copy,
   AlertCircle,
   ArrowRight,
   Loader2,
@@ -20,11 +16,6 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-
-type LoginState =
-  | { step: "initial" }
-  | { step: "pending"; url: string; userCode: string }
-  | { step: "error"; message: string };
 
 interface LoginScreenProps {
   onAuthenticated: () => void;
@@ -53,14 +44,11 @@ const BROWSER_LABELS: Record<string, string> = {
 };
 
 export function LoginScreen({ onAuthenticated, onSkip }: LoginScreenProps) {
-  const [state, setState] = useState<LoginState>({ step: "initial" });
-  const [loading, setLoading] = useState(false);
-  const [copied, setCopied] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [browsers, setBrowsers] = useState<BrowserInfo[]>([]);
   const [detectingBrowsers, setDetectingBrowsers] = useState(true);
   const [browserAuthLoading, setBrowserAuthLoading] = useState<string | null>(null);
 
-  // Detect browsers with YouTube cookies on mount
   useEffect(() => {
     let cancelled = false;
 
@@ -88,85 +76,22 @@ export function LoginScreen({ onAuthenticated, onSkip }: LoginScreenProps) {
   const handleBrowserAuth = useCallback(async (browser: string) => {
     console.log("[LoginScreen] Starting browser cookie auth:", browser);
     setBrowserAuthLoading(browser);
+    setError(null);
     try {
       const result = await invoke<AuthStatusResponse>("yt_auth_from_browser", { browser });
       console.log("[LoginScreen] yt_auth_from_browser result:", result);
       if (result.authenticated) {
         onAuthenticated();
       } else {
-        setState({ step: "error", message: "Falha ao autenticar com cookies do navegador." });
+        setError("Falha ao autenticar com cookies do navegador.");
       }
     } catch (err) {
       console.error("[LoginScreen] yt_auth_from_browser failed:", err);
-      setState({ step: "error", message: String(err) });
+      setError(String(err));
     } finally {
       setBrowserAuthLoading(null);
     }
   }, [onAuthenticated]);
-
-  const handleConnect = useCallback(async () => {
-    console.log("[LoginScreen] starting OAuth flow");
-    setLoading(true);
-    try {
-      const result = await invoke<{ url: string; user_code: string }>("yt_auth_start");
-      console.log("[LoginScreen] yt_auth_start success", { url: result.url, user_code: result.user_code });
-      setState({ step: "pending", url: result.url, userCode: result.user_code });
-    } catch (err) {
-      console.error("[LoginScreen] yt_auth_start failed", err);
-      setState({ step: "error", message: String(err) });
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  const handleComplete = useCallback(async () => {
-    console.log("[LoginScreen] confirming authorization");
-    setLoading(true);
-    try {
-      const result = await invoke<{ success: boolean }>("yt_auth_complete");
-      console.log("[LoginScreen] yt_auth_complete result", result);
-      if (result.success) {
-        onAuthenticated();
-      } else {
-        setState({ step: "error", message: "A autorização não foi concluída. Tente novamente." });
-      }
-    } catch (err) {
-      console.error("[LoginScreen] yt_auth_complete failed", err);
-      setState({ step: "error", message: String(err) });
-    } finally {
-      setLoading(false);
-    }
-  }, [onAuthenticated]);
-
-  const handleOpenUrl = useCallback(async (url: string) => {
-    console.log("[LoginScreen] opening URL in browser", { url });
-    try {
-      await openUrl(url);
-    } catch (err) {
-      console.error("[LoginScreen] failed to open URL", err);
-    }
-  }, []);
-
-  const handleCopyCode = useCallback(async (code: string) => {
-    console.log("[LoginScreen] copying code to clipboard");
-    try {
-      await navigator.clipboard.writeText(code);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch (err) {
-      console.error("[LoginScreen] clipboard write failed", err);
-    }
-  }, []);
-
-  const handleCancel = useCallback(() => {
-    console.log("[LoginScreen] cancelling OAuth flow");
-    setState({ step: "initial" });
-  }, []);
-
-  const handleRetry = useCallback(() => {
-    console.log("[LoginScreen] retrying");
-    setState({ step: "initial" });
-  }, []);
 
   return (
     <div className="flex h-full items-center justify-center p-6">
@@ -178,177 +103,57 @@ export function LoginScreen({ onAuthenticated, onSkip }: LoginScreenProps) {
           <CardTitle className="text-xl">YouTube Music</CardTitle>
           <CardDescription>
             Conecte sua conta do Google para acessar sua biblioteca, playlists e
-            recomendações.
+            recomendações. Basta estar logado no YouTube Music em algum navegador.
           </CardDescription>
         </CardHeader>
 
         <CardContent className="flex flex-col gap-4">
-          {/* Browser cookie import section */}
-          {state.step === "initial" && (
-            <div className="flex flex-col gap-3">
-              <div className="flex items-center gap-2 text-sm font-medium text-foreground">
-                <Globe className="size-4" />
-                <span>Importar do navegador</span>
-              </div>
+          <div className="flex items-center gap-2 text-sm font-medium text-foreground">
+            <Globe className="size-4" />
+            <span>Importar do navegador</span>
+          </div>
 
-              {detectingBrowsers ? (
-                <div className="flex items-center justify-center gap-2 rounded-lg bg-muted px-4 py-3 text-sm text-muted-foreground">
-                  <Loader2 className="size-4 animate-spin" />
-                  <span>Detectando navegadores...</span>
-                </div>
-              ) : browsers.length > 0 ? (
-                <div className="flex flex-col gap-2">
-                  {browsers.map((browser) => (
-                    <Button
-                      key={browser.name}
-                      variant="outline"
-                      onClick={() => handleBrowserAuth(browser.name)}
-                      disabled={browserAuthLoading !== null}
-                      className="w-full justify-start"
-                    >
-                      {browserAuthLoading === browser.name ? (
-                        <Loader2 className="size-4 animate-spin" data-icon="inline-start" />
-                      ) : (
-                        <MonitorSmartphone className="size-4" data-icon="inline-start" />
-                      )}
-                      {BROWSER_LABELS[browser.name] ?? browser.name}
-                      <span className="ml-auto text-xs text-muted-foreground">
-                        {browser.cookieCount} cookies
-                      </span>
-                    </Button>
-                  ))}
-                </div>
-              ) : (
-                <p className="rounded-lg bg-muted px-4 py-3 text-sm text-muted-foreground">
-                  Nenhum navegador com cookies do YouTube detectado. Faça login no YouTube Music
-                  em algum navegador e tente novamente.
-                </p>
-              )}
+          {detectingBrowsers ? (
+            <div className="flex items-center justify-center gap-2 rounded-lg bg-muted px-4 py-3 text-sm text-muted-foreground">
+              <Loader2 className="size-4 animate-spin" />
+              <span>Detectando navegadores...</span>
             </div>
-          )}
-
-          {/* Divider between browser import and OAuth */}
-          {state.step === "initial" && (
-            <div className="flex items-center gap-3">
-              <div className="h-px flex-1 bg-border" />
-              <span className="text-xs text-muted-foreground">ou</span>
-              <div className="h-px flex-1 bg-border" />
-            </div>
-          )}
-
-          {/* OAuth flow — initial state */}
-          {state.step === "initial" && (
-            <Button
-              onClick={handleConnect}
-              disabled={loading || browserAuthLoading !== null}
-              size="lg"
-              variant="secondary"
-              className="w-full"
-            >
-              {loading ? (
-                <Loader2 className="animate-spin" data-icon="inline-start" />
-              ) : (
-                <Link className="size-4" data-icon="inline-start" />
-              )}
-              Conectar com Google (OAuth)
-            </Button>
-          )}
-
-          {/* Pending state — device code flow */}
-          {state.step === "pending" && (
-            <div className="flex flex-col gap-4">
-              <ol className="flex flex-col gap-3 text-sm text-muted-foreground">
-                <li className="flex items-start gap-2">
-                  <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-medium text-foreground">
-                    1
-                  </span>
-                  <span>
-                    Acesse:{" "}
-                    <button
-                      onClick={() => handleOpenUrl(state.url)}
-                      className="font-medium text-primary underline underline-offset-2 hover:text-primary/80"
-                    >
-                      {state.url}
-                    </button>
-                  </span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-medium text-foreground">
-                    2
-                  </span>
-                  <span>Digite o código:</span>
-                </li>
-              </ol>
-
-              <div className="flex items-center justify-center gap-2 rounded-lg bg-muted px-4 py-3">
-                <span className="font-mono text-2xl font-bold tracking-widest text-foreground">
-                  {state.userCode}
-                </span>
+          ) : browsers.length > 0 ? (
+            <div className="flex flex-col gap-2">
+              {browsers.map((browser) => (
                 <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  onClick={() => handleCopyCode(state.userCode)}
-                  aria-label="Copiar código"
-                >
-                  {copied ? (
-                    <Check className="size-4 text-green-500" />
-                  ) : (
-                    <Copy className="size-4" />
-                  )}
-                </Button>
-              </div>
-
-              <ol start={3} className="flex flex-col gap-3 text-sm text-muted-foreground">
-                <li className="flex items-start gap-2">
-                  <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-medium text-foreground">
-                    3
-                  </span>
-                  <span>Faça login com sua conta Google</span>
-                </li>
-              </ol>
-
-              <div className="flex gap-2">
-                <Button
+                  key={browser.name}
                   variant="outline"
-                  onClick={handleCancel}
-                  className="flex-1"
-                  disabled={loading}
+                  onClick={() => handleBrowserAuth(browser.name)}
+                  disabled={browserAuthLoading !== null}
+                  className="w-full justify-start"
                 >
-                  Cancelar
-                </Button>
-                <Button
-                  onClick={handleComplete}
-                  disabled={loading}
-                  className="flex-1"
-                >
-                  {loading ? (
-                    <Loader2 className="animate-spin" data-icon="inline-start" />
+                  {browserAuthLoading === browser.name ? (
+                    <Loader2 className="mr-2 size-4 animate-spin" />
                   ) : (
-                    <Check className="size-4" data-icon="inline-start" />
+                    <MonitorSmartphone className="mr-2 size-4" />
                   )}
-                  Já autorizei
+                  {BROWSER_LABELS[browser.name] ?? browser.name}
+                  <span className="ml-auto text-xs text-muted-foreground">
+                    {browser.cookieCount} cookies
+                  </span>
                 </Button>
-              </div>
+              ))}
+            </div>
+          ) : (
+            <p className="rounded-lg bg-muted px-4 py-3 text-sm text-muted-foreground">
+              Nenhum navegador com cookies do YouTube detectado. Faça login no YouTube Music
+              em algum navegador e tente novamente.
+            </p>
+          )}
+
+          {error && (
+            <div className="flex items-center gap-2 rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">
+              <AlertCircle className="size-4 shrink-0" />
+              <span>{error}</span>
             </div>
           )}
 
-          {/* Error state */}
-          {state.step === "error" && (
-            <div className="flex flex-col gap-3">
-              <div className="flex items-center gap-2 rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">
-                <AlertCircle className="size-4 shrink-0" />
-                <span>{state.message}</span>
-              </div>
-              <Button onClick={handleRetry} disabled={loading} className="w-full">
-                {loading ? (
-                  <Loader2 className="animate-spin" data-icon="inline-start" />
-                ) : null}
-                Tentar novamente
-              </Button>
-            </div>
-          )}
-
-          {/* Skip option — always visible */}
           <div className="border-t pt-3 text-center">
             <button
               onClick={onSkip}
