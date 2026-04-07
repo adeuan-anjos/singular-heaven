@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
@@ -11,6 +12,7 @@ import {
   Repeat,
   Repeat1,
   Volume2,
+  VolumeX,
   List,
 } from "lucide-react";
 import { usePlayerStore } from "../../stores/player-store";
@@ -31,6 +33,8 @@ function formatTime(seconds: number): string {
 
 export function PlayerBar({ onOpenQueue, onGoToArtist, onGoToAlbum }: PlayerBarProps) {
   useRenderTracker("PlayerBar", { onOpenQueue, onGoToArtist, onGoToAlbum });
+  const [showVolume, setShowVolume] = useState(false);
+
   const track = usePlayerStore((s) => s.currentTrack);
   const isPlaying = usePlayerStore((s) => s.isPlaying);
   const progress = usePlayerStore((s) => s.progress);
@@ -133,19 +137,30 @@ export function PlayerBar({ onOpenQueue, onGoToArtist, onGoToAlbum }: PlayerBarP
       </div>
 
       {/* Right: Volume + queue */}
-      <div className="group/volume flex items-center justify-end gap-1">
-        <div className="flex items-center">
-          <div className="w-0 overflow-hidden transition-all duration-200 group-hover/volume:w-24 group-hover/volume:mr-1">
-            <Slider
-              value={[volume]}
-              max={100}
-              step={1}
-              onValueChange={(v) => setVolume(Array.isArray(v) ? v[0] : v)}
-              className="w-24"
-            />
-          </div>
-          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setVolume(volume > 0 ? 0 : 80)}>
-            <Volume2 className="h-4 w-4" />
+      <div className="flex items-center justify-end gap-1">
+        <div
+          className="relative flex items-center"
+          onMouseEnter={() => setShowVolume(true)}
+          onMouseLeave={() => setShowVolume(false)}
+        >
+          {showVolume && (
+            <div className="mr-1 animate-in fade-in slide-in-from-right-2 duration-150">
+              <Slider
+                value={[volume]}
+                max={100}
+                step={1}
+                onValueChange={(v) => setVolume(Array.isArray(v) ? v[0] : v)}
+                className="w-24"
+              />
+            </div>
+          )}
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8"
+            onClick={() => setVolume(volume > 0 ? 0 : 80)}
+          >
+            {volume === 0 ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
           </Button>
         </div>
         <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onOpenQueue}>
