@@ -135,7 +135,6 @@ export function SearchResultsPage({
           onGoToAlbum={handleGoToAlbum}
         />
       )}
-      {results.songs.length > 0 && renderSongsSection("Músicas")}
       {results.albums.length > 0 && (
         <CarouselSection title="Álbuns">
           {results.albums.map((album) => {
