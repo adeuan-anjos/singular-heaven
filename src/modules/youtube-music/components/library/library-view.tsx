@@ -23,7 +23,7 @@ export const LibraryView = React.memo(function LibraryView({
       <div className="p-4">
         <div className="mx-auto max-w-screen-xl space-y-4">
           <h2 className="text-lg font-semibold text-foreground">Biblioteca</h2>
-          <div className="grid grid-cols-[repeat(auto-fill,minmax(12.5rem,1fr))] gap-4">
+          <div className="grid gap-4" style={{ gridTemplateColumns: "repeat(6, 1fr)", width: "max(100%, 1020px)" }}>
             <MediaCard
               title="Curtidas"
               typeLabel="Playlist"
