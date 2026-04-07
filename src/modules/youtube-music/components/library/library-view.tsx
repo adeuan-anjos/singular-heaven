@@ -15,6 +15,7 @@ import {
 import type { Track, StackPage } from "../../types/music";
 import { cn } from "@/lib/utils";
 import { useRenderTracker } from "@/lib/debug";
+import { usePlayerStore } from "../../stores/player-store";
 
 interface LibraryViewProps {
   onNavigate: (page: StackPage) => void;
@@ -28,6 +29,7 @@ export const LibraryView = React.memo(function LibraryView({
   onAddToQueue,
 }: LibraryViewProps) {
   useRenderTracker("LibraryView", { onNavigate, onPlayTrack, onAddToQueue });
+  const currentTrack = usePlayerStore((s) => s.currentTrack);
   const [selectedPlaylistId, setSelectedPlaylistId] = useState<string | null>(null);
 
   const activeTracks =
@@ -120,6 +122,7 @@ export const LibraryView = React.memo(function LibraryView({
           <VirtualTrackList
             tracks={activeTracks}
             className="h-full"
+            currentTrackId={currentTrack?.videoId}
             onPlay={onPlayTrack}
             onAddToQueue={onAddToQueue}
             onGoToArtist={(id) =>

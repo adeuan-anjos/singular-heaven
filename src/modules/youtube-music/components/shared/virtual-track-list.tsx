@@ -9,6 +9,7 @@ const OVERSCAN = 5;
 interface VirtualTrackListProps {
   tracks: Track[];
   className?: string;
+  currentTrackId?: string;
   onPlay?: (track: Track) => void;
   onAddToQueue?: (track: Track) => void;
   onGoToArtist?: (artistId: string) => void;
@@ -18,6 +19,7 @@ interface VirtualTrackListProps {
 export function VirtualTrackList({
   tracks,
   className,
+  currentTrackId,
   onPlay,
   onAddToQueue,
   onGoToArtist,
@@ -72,6 +74,7 @@ export function VirtualTrackList({
               <TrackRow
                 track={track}
                 index={virtualItem.index}
+                isPlaying={currentTrackId === track.videoId}
                 onPlay={onPlay}
                 onAddToQueue={onAddToQueue}
                 onGoToArtist={onGoToArtist}

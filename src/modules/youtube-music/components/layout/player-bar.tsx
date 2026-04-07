@@ -113,15 +113,15 @@ export function PlayerBar({ onOpenQueue, onGoToArtist, onGoToAlbum }: PlayerBarP
             )}
           </p>
         </div>
-        <Toggle
-          size="sm"
-          pressed={liked}
-          onPressedChange={() => setLiked(!liked)}
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={() => setLiked(!liked)}
           aria-label="Curtir"
-          className="shrink-0"
+          className="h-8 w-8 shrink-0"
         >
           <Heart className={`h-4 w-4 ${liked ? "fill-red-500 text-red-500" : ""}`} />
-        </Toggle>
+        </Button>
       </div>
 
       {/* Center: Controls + progress */}
