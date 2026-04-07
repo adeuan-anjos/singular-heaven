@@ -88,15 +88,20 @@ export function ArtistPage({ artistId, onNavigate, onPlayTrack, onAddToQueue }: 
 
         {artist.similarArtists && artist.similarArtists.length > 0 && (
           <CarouselSection title="Artistas similares">
-            {artist.similarArtists.map((a) => (
-              <MediaCard
-                key={a.browseId}
-                title={a.name}
-                typeLabel="Artista"
-                thumbnails={a.thumbnails}
-                onClick={() => onNavigate({ type: "artist", artistId: a.browseId })}
-              />
-            ))}
+            {artist.similarArtists.map((a) => {
+              const similarData = getMockArtist(a.browseId);
+              const firstTrack = similarData.topSongs?.[0];
+              return (
+                <MediaCard
+                  key={a.browseId}
+                  title={a.name}
+                  typeLabel="Artista"
+                  thumbnails={a.thumbnails}
+                  onClick={() => onNavigate({ type: "artist", artistId: a.browseId })}
+                  onPlay={firstTrack ? () => onPlayTrack(firstTrack) : undefined}
+                />
+              );
+            })}
           </CarouselSection>
         )}
       </div>

@@ -1,7 +1,7 @@
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { CarouselSection } from "../shared/carousel-section";
 import { MediaCard } from "../shared/media-card";
-import { mockHomeSections } from "../../mock/data";
+import { mockHomeSections, getMockArtist } from "../../mock/data";
 import type { Track, Album, Artist, Playlist, StackPage } from "../../types/music";
 import { useRenderTracker } from "@/lib/debug";
 
@@ -70,7 +70,12 @@ function getItemActions(item: Track | Album | Artist | Playlist, onNavigate: (pa
     };
   }
   if (isArtist(item)) {
-    return { onClick: () => onNavigate({ type: "artist", artistId: item.browseId }) };
+    const artistData = getMockArtist(item.browseId);
+    const firstTrack = artistData.topSongs?.[0];
+    return {
+      onClick: () => onNavigate({ type: "artist", artistId: item.browseId }),
+      onPlay: firstTrack ? () => onPlayTrack(firstTrack) : undefined,
+    };
   }
   if (isPlaylist(item)) {
     const authorId = item.author.id;
