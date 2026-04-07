@@ -2,13 +2,11 @@ import { useState } from "react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Separator } from "@/components/ui/separator";
-import { TrackContextMenu } from "../shared/track-context-menu";
+import { TrackTable } from "../shared/track-table";
 import { getMockPlaylist } from "../../mock/data";
 import { usePlayerStore } from "../../stores/player-store";
 import {
   Play,
-  Pause,
   Shuffle,
   Heart,
   Ellipsis,
@@ -148,156 +146,19 @@ export function PlaylistPage({
         </div>
 
         {/* Track table */}
-        {filteredTracks.length > 0 && (
-          <div>
-            {/* Column headers */}
-            <div className="grid grid-cols-[2rem_2.5rem_1fr_1fr_1fr_3rem] items-center gap-x-3 px-2 pb-2">
-              <span className="text-center text-xs uppercase tracking-wider text-muted-foreground">
-                #
-              </span>
-              <span />
-              <span className="text-xs uppercase tracking-wider text-muted-foreground">
-                Título
-              </span>
-              <span className="text-xs uppercase tracking-wider text-muted-foreground">
-                Artista
-              </span>
-              <span className="text-xs uppercase tracking-wider text-muted-foreground">
-                Álbum
-              </span>
-              <span className="text-right text-xs uppercase tracking-wider text-muted-foreground">
-                Dur.
-              </span>
-            </div>
-            <Separator />
-
-            {/* Rows */}
-            <div className="mt-1 space-y-0.5">
-              {filteredTracks.map((track, i) => {
-                const isCurrent =
-                  currentTrack?.videoId === track.videoId;
-                const trackImgUrl = track.thumbnails[0]?.url ?? "";
-                const artistName = track.artists
-                  .map((a) => a.name)
-                  .join(", ");
-
-                return (
-                  <TrackContextMenu
-                    key={track.videoId}
-                    track={track}
-                    onPlay={onPlayTrack}
-                    onAddToQueue={onAddToQueue}
-                    onGoToArtist={(id) =>
-                      onNavigate({ type: "artist", artistId: id })
-                    }
-                    onGoToAlbum={(id) =>
-                      onNavigate({ type: "album", albumId: id })
-                    }
-                  >
-                    <div
-                      className={`group grid grid-cols-[2rem_2.5rem_1fr_1fr_1fr_3rem] items-center gap-x-3 rounded-md px-2 py-1.5 hover:bg-accent ${isCurrent ? "bg-accent/50" : ""}`}
-                      onDoubleClick={() => onPlayTrack(track)}
-                    >
-                      {/* # / play indicator */}
-                      <div className="flex items-center justify-center">
-                        <div className="group-hover:hidden">
-                          {isCurrent && isPlaying ? (
-                            <div className="equalizer">
-                              <span />
-                              <span />
-                              <span />
-                            </div>
-                          ) : (
-                            <span className="text-sm text-muted-foreground">
-                              {i + 1}
-                            </span>
-                          )}
-                        </div>
-                        <button
-                          type="button"
-                          className="hidden items-center justify-center group-hover:flex"
-                          onClick={() => onPlayTrack(track)}
-                        >
-                          {isCurrent && isPlaying ? (
-                            <Pause className="h-4 w-4 text-foreground" />
-                          ) : (
-                            <Play className="h-4 w-4 text-foreground" />
-                          )}
-                        </button>
-                      </div>
-
-                      {/* Thumbnail */}
-                      <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-sm bg-muted">
-                        {trackImgUrl ? (
-                          <img
-                            src={trackImgUrl}
-                            alt={track.title}
-                            className="h-full w-full object-cover"
-                          />
-                        ) : (
-                          <span className="text-sm text-muted-foreground">
-                            {track.title.charAt(0)}
-                          </span>
-                        )}
-                      </div>
-
-                      {/* Title */}
-                      <p
-                        className={`truncate text-sm font-medium ${isCurrent ? "text-primary" : "text-foreground"}`}
-                      >
-                        {track.title}
-                      </p>
-
-                      {/* Artist */}
-                      <p className="truncate text-sm text-muted-foreground">
-                        <button
-                          type="button"
-                          className="hover:underline"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            track.artists[0]?.id &&
-                              onNavigate({
-                                type: "artist",
-                                artistId: track.artists[0].id,
-                              });
-                          }}
-                        >
-                          {artistName}
-                        </button>
-                      </p>
-
-                      {/* Album */}
-                      <p className="truncate text-sm text-muted-foreground">
-                        {track.album ? (
-                          <button
-                            type="button"
-                            className="hover:underline"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              onNavigate({
-                                type: "album",
-                                albumId: track.album!.id,
-                              });
-                            }}
-                          >
-                            {track.album.name}
-                          </button>
-                        ) : (
-                          <span>&mdash;</span>
-                        )}
-                      </p>
-
-                      {/* Duration */}
-                      <span className="text-right text-xs text-muted-foreground">
-                        {track.duration}
-                      </span>
-                    </div>
-                  </TrackContextMenu>
-                );
-              })}
-            </div>
-          </div>
-        )}
+        <TrackTable
+          tracks={filteredTracks}
+          currentTrackId={currentTrack?.videoId}
+          isPlaying={isPlaying}
+          onPlay={onPlayTrack}
+          onAddToQueue={onAddToQueue}
+          onGoToArtist={(id) =>
+            onNavigate({ type: "artist", artistId: id })
+          }
+          onGoToAlbum={(id) =>
+            onNavigate({ type: "album", albumId: id })
+          }
+        />
 
         {filteredTracks.length === 0 && filter && (
           <p className="py-8 text-center text-sm text-muted-foreground">
