@@ -129,14 +129,13 @@
     }
 }
 
-/* Auto-hide scrollbars — appear on hover/scroll, fade after inactivity */
-[data-slot="scroll-area-scrollbar"] {
+/* Auto-hide vertical page scrollbars — appear on mouse move, fade on inactivity */
+.group\/page > [data-slot="scroll-area-scrollbar"][data-orientation="vertical"] {
   opacity: 0;
   transition: opacity 0.3s ease;
 }
 
-[data-slot="scroll-area"]:hover [data-slot="scroll-area-scrollbar"],
-[data-slot="scroll-area-scrollbar"]:hover {
+.group\/page:hover > [data-slot="scroll-area-scrollbar"][data-orientation="vertical"] {
   opacity: 1;
 }
 

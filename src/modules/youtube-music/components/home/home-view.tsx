@@ -101,7 +101,7 @@ export function HomeView({ onNavigate, onPlayTrack }: HomeViewProps) {
   const sections = mockHomeSections;
 
   return (
-    <ScrollArea className="h-full">
+    <ScrollArea className="group/page h-full">
       <div className="space-y-6 p-4">
         {sections.map((section) => (
           <CarouselSection key={section.title} title={section.title}>

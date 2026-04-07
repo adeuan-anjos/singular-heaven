@@ -20,7 +20,7 @@ export function PlaylistPage({ playlistId, onNavigate, onPlayTrack, onAddToQueue
   const imgUrl = playlist.thumbnails[0]?.url ?? "";
 
   return (
-    <ScrollArea className="h-full">
+    <ScrollArea className="group/page h-full">
       <div className="space-y-6 p-4">
         <div className="flex items-start gap-6">
           <Avatar className="h-48 w-48 rounded-md">

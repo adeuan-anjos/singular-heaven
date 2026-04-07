@@ -21,7 +21,7 @@ export function AlbumPage({ albumId, onNavigate, onPlayTrack, onAddToQueue, onPl
   const artistName = album.artists.map((a) => a.name).join(", ");
 
   return (
-    <ScrollArea className="h-full">
+    <ScrollArea className="group/page h-full">
       <div className="space-y-6 p-4">
         <div className="flex items-start gap-6">
           <Avatar className="h-48 w-48 rounded-md">

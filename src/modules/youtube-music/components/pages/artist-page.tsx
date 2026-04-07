@@ -19,7 +19,7 @@ export function ArtistPage({ artistId, onNavigate, onPlayTrack, onAddToQueue }: 
   const imgUrl = artist.thumbnails[0]?.url ?? "";
 
   return (
-    <ScrollArea className="h-full">
+    <ScrollArea className="group/page h-full">
       <div className="space-y-6 p-4">
         <div className="flex items-center gap-6">
           <Avatar className="h-32 w-32 rounded-full">

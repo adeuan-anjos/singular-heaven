@@ -15,7 +15,7 @@ export function ExploreView({ onNavigate, onPlayTrack }: ExploreViewProps) {
   const data = mockExploreData;
 
   return (
-    <ScrollArea className="h-full">
+    <ScrollArea className="group/page h-full">
       <div className="space-y-6 p-4">
         <CarouselSection title="Novos lançamentos">
           {data.newReleases.map((album) => {
