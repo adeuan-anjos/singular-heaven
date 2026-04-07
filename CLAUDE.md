@@ -76,11 +76,43 @@
 
 
 
-**### 4. Debug**
+**### 4. Debug e Observabilidade**
 
 **- Após implementar qualquer feature, adicionar logs de debug completos em cada etapa**
 
 **- Validação end-to-end obrigatória antes de considerar pronto para produção**
+
+**- Todo componente que gerencia estado deve ter log de render com dados relevantes**
+
+**- Detectar memory leaks: usar `FinalizationRegistry` e `WeakRef` para validar que objetos são coletados após unmount**
+
+**- Detectar event listeners órfãos: logar criação e remoção de listeners em useEffect, alertar se cleanup não foi chamado**
+
+**- Detectar re-renders desnecessários: usar `useRef` para contar renders e logar quando um componente re-renderiza sem mudança de props/state**
+
+**- Debug overlay visual obrigatório durante desenvolvimento: mostrar stats de virtualização, render counts, memória**
+
+**- Nunca remover debug logs sem autorização explícita do usuário**
+
+
+
+**### 4.1 Performance e Memória (REGRA CRÍTICA)**
+
+**- Este app é FOCADO em otimização de memória RAM — toda decisão arquitetural deve priorizar baixo consumo**
+
+**- NUNCA usar `useState` para estado que atualiza frequentemente (timers, progress, animações) em componentes raiz — isso causa re-render cascata em toda a árvore**
+
+**- Estado de alta frequência (player progress, download progress, timers) DEVE usar Zustand com seletores granulares ou `useRef` + DOM direto**
+
+**- Antes de implementar qualquer state management: perguntar "esse state causa re-render em componentes que não precisam dele?"**
+
+**- Consultar `docs/memory-optimization.md` antes de implementar qualquer feature que envolve: streaming, listas longas, sidecars, WebSocket, Web Audio, timers**
+
+**- Virtual scrolling obrigatório para qualquer lista com possibilidade de 100+ items**
+
+**- `React.memo` em todo componente que recebe callbacks de componentes pai com state de alta frequência**
+
+**- Zustand para state compartilhado entre componentes — nunca prop drilling de state que muda frequentemente**
 
 
 
