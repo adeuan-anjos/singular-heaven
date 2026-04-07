@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
+import { CollectionHeader } from "../shared/collection-header";
+import type { CollectionHeaderAction } from "../shared/collection-header";
 import { CarouselSection } from "../shared/carousel-section";
 import { MediaCard } from "../shared/media-card";
 import { TrackTable } from "../shared/track-table";
@@ -9,8 +11,6 @@ import type { Track, StackPage } from "../../types/music";
 import {
   Shuffle,
   Radio,
-  Heart,
-  Ellipsis,
   ChevronDown,
   ChevronUp,
 } from "lucide-react";
@@ -29,63 +29,34 @@ export function ArtistPage({ artistId, onNavigate, onPlayTrack, onAddToQueue }: 
   const [liked, setLiked] = useState(false);
   const [bioExpanded, setBioExpanded] = useState(false);
 
+  const infoLines: string[] = [];
+  if (artist.monthlyListeners) infoLines.push(artist.monthlyListeners);
+  if (artist.subscribers) infoLines.push(`${artist.subscribers} inscritos`);
+
+  const actions: CollectionHeaderAction[] = [];
+  if (artist.shuffleId) {
+    actions.push({ label: "Aleatório", icon: Shuffle, onClick: () => {} });
+  }
+  if (artist.radioId) {
+    actions.push({ label: "Rádio", icon: Radio, onClick: () => {} });
+  }
+  actions.push({
+    label: subscribed ? "Inscrito" : "Inscrever-se",
+    onClick: () => setSubscribed(!subscribed),
+    variant: subscribed ? "default" : "outline",
+  });
+
   return (
     <ScrollArea className="group/page h-full">
       <div className="mx-auto max-w-screen-xl space-y-6 p-4">
-        {/* Header */}
-        <div className="flex items-center gap-6">
-          <div className="flex h-48 w-48 shrink-0 items-center justify-center overflow-hidden rounded-sm bg-muted">
-            {imgUrl ? (
-              <img src={imgUrl} alt={artist.name} className="h-full w-full object-cover" />
-            ) : (
-              <span className="text-4xl text-muted-foreground">{artist.name.charAt(0)}</span>
-            )}
-          </div>
-          <div className="space-y-1">
-            <h1 className="text-4xl font-bold text-foreground">{artist.name}</h1>
-            {artist.monthlyListeners && (
-              <p className="text-sm text-muted-foreground">{artist.monthlyListeners}</p>
-            )}
-            {artist.subscribers && (
-              <p className="text-sm text-muted-foreground">{artist.subscribers} inscritos</p>
-            )}
-          </div>
-        </div>
-
-        {/* Action buttons */}
-        <div className="flex items-center gap-2">
-          {artist.shuffleId && (
-            <Button variant="outline" size="sm">
-              <Shuffle className="mr-2 h-4 w-4" />
-              Aleatório
-            </Button>
-          )}
-          {artist.radioId && (
-            <Button variant="outline" size="sm">
-              <Radio className="mr-2 h-4 w-4" />
-              Rádio
-            </Button>
-          )}
-          <Button
-            variant={subscribed ? "default" : "outline"}
-            size="sm"
-            onClick={() => setSubscribed(!subscribed)}
-          >
-            {subscribed ? "Inscrito" : "Inscrever-se"}
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8"
-            onClick={() => setLiked(!liked)}
-            aria-label="Curtir"
-          >
-            <Heart className={`h-4 w-4 ${liked ? "fill-red-500 text-red-500" : ""}`} />
-          </Button>
-          <Button variant="ghost" size="icon" className="h-8 w-8" aria-label="Mais opções">
-            <Ellipsis className="h-4 w-4" />
-          </Button>
-        </div>
+        <CollectionHeader
+          title={artist.name}
+          thumbnailUrl={imgUrl || undefined}
+          infoLines={infoLines}
+          actions={actions}
+          liked={liked}
+          onLikeToggle={() => setLiked(!liked)}
+        />
 
         {/* Top songs */}
         {artist.topSongs && artist.topSongs.length > 0 && (

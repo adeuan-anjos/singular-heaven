@@ -5,7 +5,7 @@ import { CollectionHeader } from "../shared/collection-header";
 import { TrackTable } from "../shared/track-table";
 import { getMockPlaylist } from "../../mock/data";
 import { usePlayerStore } from "../../stores/player-store";
-import { Search } from "lucide-react";
+import { Play, Shuffle, Search } from "lucide-react";
 import type { Track, StackPage } from "../../types/music";
 
 interface PlaylistPageProps {
@@ -47,13 +47,21 @@ export function PlaylistPage({
           title={playlist.title}
           subtitle={playlist.author.name}
           description="As músicas que você marcou com 'Gostei' em todos os apps do YouTube aparecerão aqui."
-          year="2026"
-          trackCount={playlist.trackCount}
-          duration="Mais de 1 hora"
-          privacy="Playlist automática"
+          infoLines={[
+            [
+              playlist.trackCount !== undefined ? `${playlist.trackCount} músicas` : "",
+              "Mais de 1 hora",
+              "Playlist automática",
+              "2026",
+            ]
+              .filter(Boolean)
+              .join(" • "),
+          ]}
           thumbnailUrl={playlist.thumbnails[0]?.url}
-          onPlay={() => onPlayAll(tracks)}
-          onShuffle={() => onPlayAll([...tracks].sort(() => Math.random() - 0.5))}
+          actions={[
+            { label: "Reproduzir", icon: Play, onClick: () => onPlayAll(tracks) },
+            { label: "Aleatório", icon: Shuffle, onClick: () => onPlayAll([...tracks].sort(() => Math.random() - 0.5)) },
+          ]}
           onGoToAuthor={playlist.author.id ? () => onNavigate({ type: "artist", artistId: playlist.author.id! }) : undefined}
         />
 

@@ -1,44 +1,44 @@
-import { useState } from "react";
+import { useState, type ComponentType } from "react";
 import { Button } from "@/components/ui/button";
-import { Play, Shuffle, Heart, Ellipsis } from "lucide-react";
+import { Heart, Ellipsis } from "lucide-react";
 
-interface CollectionHeaderProps {
+export interface CollectionHeaderAction {
+  label: string;
+  icon?: ComponentType<{ className?: string }>;
+  onClick: () => void;
+  variant?: "outline" | "default";
+}
+
+export interface CollectionHeaderProps {
   title: string;
-  subtitle?: string;
-  description?: string;
-  year?: string;
-  trackCount?: number;
-  duration?: string;
-  privacy?: string;
   thumbnailUrl?: string;
-  onPlay: () => void;
-  onShuffle: () => void;
+  /** Clickable subtitle (e.g. artist name) */
+  subtitle?: string;
   onGoToAuthor?: () => void;
+  /** Flexible info lines — each page passes what it needs */
+  infoLines?: string[];
+  description?: string;
+  /** Action buttons — each page configures its own set */
+  actions: CollectionHeaderAction[];
+  /** Heart toggle */
+  onLikeToggle?: () => void;
+  liked?: boolean;
 }
 
 export function CollectionHeader({
   title,
-  subtitle,
-  description,
-  year,
-  trackCount,
-  duration,
-  privacy,
   thumbnailUrl,
-  onPlay,
-  onShuffle,
+  subtitle,
   onGoToAuthor,
+  infoLines,
+  description,
+  actions,
+  onLikeToggle,
+  liked,
 }: CollectionHeaderProps) {
-  const [liked, setLiked] = useState(false);
-
-  // Build meta line: "Playlist automática • 2026" or "990 músicas • Mais de 7 horas"
-  const metaParts: string[] = [];
-  if (privacy) metaParts.push(privacy);
-  if (year) metaParts.push(year);
-
-  const statParts: string[] = [];
-  if (trackCount !== undefined) statParts.push(`${trackCount} músicas`);
-  if (duration) statParts.push(duration);
+  const [internalLiked, setInternalLiked] = useState(false);
+  const isLiked = liked ?? internalLiked;
+  const toggleLike = onLikeToggle ?? (() => setInternalLiked((v) => !v));
 
   return (
     <div className="space-y-4">
@@ -64,11 +64,11 @@ export function CollectionHeader({
               )}
             </p>
           )}
-          {(statParts.length > 0 || metaParts.length > 0) && (
-            <p className="text-sm text-muted-foreground">
-              {[...statParts, ...metaParts].join(" • ")}
+          {infoLines?.map((line) => (
+            <p key={line} className="text-sm text-muted-foreground">
+              {line}
             </p>
-          )}
+          ))}
           {description && (
             <p className="line-clamp-2 text-sm text-muted-foreground/70">{description}</p>
           )}
@@ -77,16 +77,18 @@ export function CollectionHeader({
 
       {/* Actions */}
       <div className="flex items-center gap-3">
-        <Button variant="outline" onClick={onPlay}>
-          <Play className="mr-2 h-4 w-4" />
-          Reproduzir
-        </Button>
-        <Button variant="outline" onClick={onShuffle}>
-          <Shuffle className="mr-2 h-4 w-4" />
-          Aleatório
-        </Button>
-        <Button variant="ghost" size="icon" onClick={() => setLiked(!liked)}>
-          <Heart className={`h-5 w-5 ${liked ? "fill-red-500 text-red-500" : ""}`} />
+        {actions.map((action) => (
+          <Button
+            key={action.label}
+            variant={action.variant ?? "outline"}
+            onClick={action.onClick}
+          >
+            {action.icon && <action.icon className="mr-2 h-4 w-4" />}
+            {action.label}
+          </Button>
+        ))}
+        <Button variant="ghost" size="icon" onClick={toggleLike}>
+          <Heart className={`h-5 w-5 ${isLiked ? "fill-red-500 text-red-500" : ""}`} />
         </Button>
         <Button variant="ghost" size="icon">
           <Ellipsis className="h-5 w-5" />

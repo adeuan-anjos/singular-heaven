@@ -5,7 +5,7 @@ import { CollectionHeader } from "../shared/collection-header";
 import { TrackTable } from "../shared/track-table";
 import { getMockAlbum } from "../../mock/data";
 import { usePlayerStore } from "../../stores/player-store";
-import { Search } from "lucide-react";
+import { Play, Shuffle, Search } from "lucide-react";
 import type { Track, StackPage } from "../../types/music";
 
 interface AlbumPageProps {
@@ -45,11 +45,15 @@ export function AlbumPage({
       <div className="mx-auto max-w-screen-xl space-y-6 p-4">
         <CollectionHeader
           title={album.title}
-          subtitle={`${artistName}${album.year ? ` • ${album.year}` : ""}`}
-          trackCount={tracks.length}
+          subtitle={artistName}
+          infoLines={[
+            [album.year, `${tracks.length} músicas`].filter(Boolean).join(" • "),
+          ]}
           thumbnailUrl={album.thumbnails[0]?.url}
-          onPlay={() => onPlayAll(tracks)}
-          onShuffle={() => onPlayAll([...tracks].sort(() => Math.random() - 0.5))}
+          actions={[
+            { label: "Reproduzir", icon: Play, onClick: () => onPlayAll(tracks) },
+            { label: "Aleatório", icon: Shuffle, onClick: () => onPlayAll([...tracks].sort(() => Math.random() - 0.5)) },
+          ]}
           onGoToAuthor={album.artists[0]?.id ? () => onNavigate({ type: "artist", artistId: album.artists[0].id! }) : undefined}
         />
 
