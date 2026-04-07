@@ -4,6 +4,9 @@ use std::sync::Arc;
 use tauri::Manager;
 use tokio::sync::Mutex;
 
+use youtube_music::client::YtMusicClient;
+use youtube_music::commands::PendingOAuthCode;
+
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 #[tauri::command]
 fn greet(name: &str) -> String {
@@ -53,22 +56,59 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .setup(|app| {
+            // Register the pending OAuth code state (empty initially)
+            app.manage(PendingOAuthCode(Mutex::new(None)));
+
             let handle = app.handle().clone();
             tauri::async_runtime::spawn(async move {
                 println!("[setup] Initializing YtMusicClient...");
-                match youtube_music::client::YtMusicClient::new_unauthenticated().await {
-                    Ok(client) => {
-                        handle.manage(Arc::new(Mutex::new(client)));
-                        println!("[setup] YtMusicClient added to managed state.");
+
+                // Try to load a saved OAuth token from disk
+                let app_data_dir = handle.path().app_data_dir().ok();
+                let saved_token = app_data_dir
+                    .as_ref()
+                    .and_then(|dir| {
+                        println!("[setup] Checking for saved OAuth token...");
+                        match YtMusicClient::load_token(dir) {
+                            Ok(token) => token,
+                            Err(e) => {
+                                eprintln!("[setup] Error loading saved token: {e}");
+                                None
+                            }
+                        }
+                    });
+
+                let client = if let Some(token) = saved_token {
+                    println!("[setup] Found saved token, creating authenticated client...");
+                    {
+                        let c = YtMusicClient::new_authenticated(token);
+                        println!("[setup] Authenticated client created from saved token.");
+                        c
                     }
-                    Err(e) => {
-                        eprintln!("[setup] Failed to create YtMusicClient: {e}");
+                } else {
+                    println!("[setup] No saved token, creating unauthenticated client...");
+                    match YtMusicClient::new_unauthenticated().await {
+                        Ok(c) => c,
+                        Err(e) => {
+                            eprintln!("[setup] Failed to create YtMusicClient: {e}");
+                            return;
+                        }
                     }
-                }
+                };
+
+                handle.manage(Arc::new(Mutex::new(client)));
+                println!("[setup] YtMusicClient added to managed state.");
             });
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![greet, youtube_music::commands::yt_search])
+        .invoke_handler(tauri::generate_handler![
+            greet,
+            youtube_music::commands::yt_search,
+            youtube_music::commands::yt_auth_start,
+            youtube_music::commands::yt_auth_complete,
+            youtube_music::commands::yt_auth_status,
+            youtube_music::commands::yt_auth_logout,
+        ])
         .on_window_event(|window, event| {
             #[cfg(target_os = "windows")]
             match event {
