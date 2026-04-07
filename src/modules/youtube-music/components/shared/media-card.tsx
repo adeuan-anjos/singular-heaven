@@ -83,7 +83,7 @@ export function MediaCard({
   }
 
   return (
-    <div className="group/card flex min-w-0 flex-col gap-2 rounded-md p-2 text-left hover:bg-accent">
+    <div className="group/card flex min-w-0 flex-col gap-2 rounded-md text-left hover:bg-accent">
       <button
         type="button"
         className="relative aspect-square w-full overflow-hidden rounded-md bg-muted"
