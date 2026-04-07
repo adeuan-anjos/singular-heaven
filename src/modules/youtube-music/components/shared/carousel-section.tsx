@@ -90,7 +90,7 @@ export function CarouselSection({ title, onSeeAll, children }: CarouselSectionPr
 
   return (
     <div className="group/carousel space-y-3">
-      <div className="flex items-center justify-between px-4">
+      <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold text-foreground">{title}</h2>
         <div className="flex items-center gap-1">
           {onSeeAll && (
@@ -119,9 +119,9 @@ export function CarouselSection({ title, onSeeAll, children }: CarouselSectionPr
         </div>
       </div>
       <ScrollArea ref={scrollAreaRef} className="w-full cursor-grab">
-        <div className="inline-flex gap-4 px-4 pb-4">
+        <div className="flex gap-4 pb-4">
           {React.Children.map(children, (child, index) => (
-            <div key={index} className="w-50 shrink-0">
+            <div key={index} className="min-w-40 shrink-0 flex-1">
               {child}
             </div>
           ))}
