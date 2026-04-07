@@ -2,7 +2,6 @@ import { useState, useCallback, useEffect } from "react";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { SidePanel } from "./components/layout/side-panel";
 import { TopBar } from "./components/layout/top-bar";
-import { MusicHeader } from "./components/layout/music-header";
 import { PlayerBar } from "./components/layout/player-bar";
 import { HomeView } from "./components/home/home-view";
 import { ExploreView } from "./components/explore/explore-view";
@@ -17,18 +16,6 @@ import { usePlayerStore } from "./stores/player-store";
 import { useQueueStore } from "./stores/queue-store";
 import type { Track } from "./types/music";
 import { useRenderTracker, useLeakDetector } from "@/lib/debug";
-
-function getPageTitle(page: { type: string; title?: string } | null): string {
-  if (!page) return "";
-  switch (page.type) {
-    case "artist": return "Artista";
-    case "album": return "Álbum";
-    case "playlist": return "Playlist";
-    case "search": return "Buscar";
-    case "mood": return (page as { title: string }).title;
-    default: return "";
-  }
-}
 
 export default function YouTubeMusicModule() {
   useRenderTracker("YouTubeMusicModule", {});
@@ -92,56 +79,37 @@ export default function YouTubeMusicModule() {
       switch (nav.currentPage.type) {
         case "artist":
           return (
-            <>
-              <MusicHeader title={getPageTitle(nav.currentPage)} onBack={nav.pop} />
-              <ArtistPage
-                artistId={nav.currentPage.artistId}
-                onNavigate={nav.push}
-                onPlayTrack={handlePlayTrack}
-                onAddToQueue={handleAddToQueue}
-              />
-            </>
+            <ArtistPage
+              artistId={nav.currentPage.artistId}
+              onNavigate={nav.push}
+              onPlayTrack={handlePlayTrack}
+              onAddToQueue={handleAddToQueue}
+            />
           );
         case "album":
           return (
-            <>
-              <MusicHeader title={getPageTitle(nav.currentPage)} onBack={nav.pop} />
-              <AlbumPage
-                albumId={nav.currentPage.albumId}
-                onNavigate={nav.push}
-                onPlayTrack={handlePlayTrack}
-                onAddToQueue={handleAddToQueue}
-                onPlayAll={handlePlayAll}
-              />
-            </>
+            <AlbumPage
+              albumId={nav.currentPage.albumId}
+              onNavigate={nav.push}
+              onPlayTrack={handlePlayTrack}
+              onAddToQueue={handleAddToQueue}
+              onPlayAll={handlePlayAll}
+            />
           );
         case "playlist":
           return (
-            <>
-              <MusicHeader title={getPageTitle(nav.currentPage)} onBack={nav.pop} />
-              <PlaylistPage
-                playlistId={nav.currentPage.playlistId}
-                onNavigate={nav.push}
-                onPlayTrack={handlePlayTrack}
-                onAddToQueue={handleAddToQueue}
-                onPlayAll={handlePlayAll}
-              />
-            </>
+            <PlaylistPage
+              playlistId={nav.currentPage.playlistId}
+              onNavigate={nav.push}
+              onPlayTrack={handlePlayTrack}
+              onAddToQueue={handleAddToQueue}
+              onPlayAll={handlePlayAll}
+            />
           );
         case "search":
-          return (
-            <>
-              <MusicHeader title={getPageTitle(nav.currentPage)} onBack={nav.pop} />
-              <SearchView onNavigate={nav.push} onPlayTrack={handlePlayTrack} />
-            </>
-          );
+          return <SearchView onNavigate={nav.push} onPlayTrack={handlePlayTrack} />;
         case "mood":
-          return (
-            <>
-              <MusicHeader title={getPageTitle(nav.currentPage)} onBack={nav.pop} />
-              <ExploreView onNavigate={nav.push} onPlayTrack={handlePlayTrack} />
-            </>
-          );
+          return <ExploreView onNavigate={nav.push} onPlayTrack={handlePlayTrack} />;
         default:
           return null;
       }

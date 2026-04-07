@@ -1,5 +1,4 @@
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { TrackRow } from "../shared/track-row";
 import { TrackContextMenu } from "../shared/track-context-menu";
@@ -24,10 +23,13 @@ export function AlbumPage({ albumId, onNavigate, onPlayTrack, onAddToQueue, onPl
     <ScrollArea className="group/page h-full">
       <div className="mx-auto max-w-screen-xl space-y-6 p-4">
         <div className="flex items-start gap-6">
-          <Avatar className="h-48 w-48 rounded-md">
-            <AvatarImage src={imgUrl} alt={album.title} className="object-cover" />
-            <AvatarFallback className="rounded-md text-4xl">{album.title.charAt(0)}</AvatarFallback>
-          </Avatar>
+          <div className="flex h-48 w-48 shrink-0 items-center justify-center overflow-hidden rounded-sm bg-muted">
+            {imgUrl ? (
+              <img src={imgUrl} alt={album.title} className="h-full w-full object-cover" />
+            ) : (
+              <span className="text-4xl text-muted-foreground">{album.title.charAt(0)}</span>
+            )}
+          </div>
           <div className="space-y-2">
             <h1 className="text-2xl font-bold text-foreground">{album.title}</h1>
             <button

@@ -1,5 +1,4 @@
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { CarouselSection } from "../shared/carousel-section";
 import { MediaCard } from "../shared/media-card";
@@ -22,10 +21,13 @@ export function ArtistPage({ artistId, onNavigate, onPlayTrack, onAddToQueue }: 
     <ScrollArea className="group/page h-full">
       <div className="mx-auto max-w-screen-xl space-y-6 p-4">
         <div className="flex items-center gap-6">
-          <Avatar className="h-32 w-32 rounded-full">
-            <AvatarImage src={imgUrl} alt={artist.name} className="object-cover" />
-            <AvatarFallback className="text-3xl">{artist.name.charAt(0)}</AvatarFallback>
-          </Avatar>
+          <div className="flex h-32 w-32 shrink-0 items-center justify-center overflow-hidden rounded-sm bg-muted">
+            {imgUrl ? (
+              <img src={imgUrl} alt={artist.name} className="h-full w-full object-cover" />
+            ) : (
+              <span className="text-3xl text-muted-foreground">{artist.name.charAt(0)}</span>
+            )}
+          </div>
           <div>
             <h1 className="text-3xl font-bold text-foreground">{artist.name}</h1>
             {artist.subscribers && (
