@@ -51,7 +51,7 @@ export function CollectionHeader({
             <span className="text-4xl text-muted-foreground">{title.charAt(0)}</span>
           )}
         </div>
-        <div className="flex flex-1 flex-col gap-1">
+        <div className="flex flex-1 flex-col gap-2">
           <h1 className="text-4xl font-bold text-foreground">{title}</h1>
           {subtitle && (
             <p className="text-sm text-muted-foreground">
@@ -64,18 +64,13 @@ export function CollectionHeader({
               )}
             </p>
           )}
+          {(statParts.length > 0 || metaParts.length > 0) && (
+            <p className="text-sm text-muted-foreground">
+              {[...statParts, ...metaParts].join(" | ")}
+            </p>
+          )}
           {description && (
-            <p className="line-clamp-2 text-sm text-muted-foreground">{description}</p>
-          )}
-          {metaParts.length > 0 && (
-            <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-              {metaParts.join(" • ")}
-            </p>
-          )}
-          {statParts.length > 0 && (
-            <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-              {statParts.join(" • ")}
-            </p>
+            <p className="line-clamp-2 text-sm text-muted-foreground/70">{description}</p>
           )}
         </div>
       </div>
