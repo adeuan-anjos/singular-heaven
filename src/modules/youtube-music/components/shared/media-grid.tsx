@@ -9,7 +9,9 @@ export function MediaGrid({ title, children }: MediaGridProps) {
   return (
     <div className="space-y-3">
       {title && (
-        <h2 className="text-lg font-semibold text-foreground">{title}</h2>
+        <div className="flex min-h-8 items-center">
+          <h2 className="text-lg font-semibold text-foreground">{title}</h2>
+        </div>
       )}
       <div className="grid gap-4 pb-4" style={{ gridTemplateColumns: "repeat(6, 1fr)", width: "max(100%, 1020px)" }}>
         {React.Children.map(children, (child, index) => (
