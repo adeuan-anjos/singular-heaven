@@ -210,7 +210,13 @@ impl PlaylistCache {
         )?;
         let ids: Vec<String> = stmt
             .query_map(params![playlist_id], |row| row.get(0))?
-            .filter_map(|r| r.ok())
+            .filter_map(|r| match r {
+                Ok(v) => Some(v),
+                Err(e) => {
+                    eprintln!("[PlaylistCache] row parse error: {e}");
+                    None
+                }
+            })
             .collect();
         println!(
             "[PlaylistCache] get_track_ids playlist_id={} count={}",
@@ -263,7 +269,13 @@ impl PlaylistCache {
                         .unwrap_or_default(),
                 })
             })?
-            .filter_map(|r| r.ok())
+            .filter_map(|r| match r {
+                Ok(v) => Some(v),
+                Err(e) => {
+                    eprintln!("[PlaylistCache] row parse error: {e}");
+                    None
+                }
+            })
             .collect();
 
         println!(

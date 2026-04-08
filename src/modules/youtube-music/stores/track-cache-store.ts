@@ -47,9 +47,17 @@ export const useTrackCacheStore = create<TrackCacheStore>()((set, get) => ({
 
   putTrack: (track) => {
     if (!track.videoId) return;
-    set((state) => ({
-      tracks: { ...state.tracks, [track.videoId]: track },
-    }));
+    set((state) => {
+      const next = { ...state.tracks, [track.videoId]: track };
+      const keys = Object.keys(next);
+      if (keys.length > MAX_CACHE_SIZE) {
+        const toRemove = keys.slice(0, keys.length - MAX_CACHE_SIZE);
+        for (const key of toRemove) {
+          delete next[key];
+        }
+      }
+      return { tracks: next };
+    });
   },
 
   getTrack: (videoId) => get().tracks[videoId],

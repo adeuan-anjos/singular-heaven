@@ -369,26 +369,6 @@ export async function ytGetLibrarySongs(): Promise<ApiLibrarySong[]> {
   return parseJson(json);
 }
 
-export interface ApiPlaylistResponse {
-  playlist: ApiPlaylistPage;
-  continuation: string | null;
-}
-
-export interface ApiPlaylistContinuationResponse {
-  tracks: ApiPlaylistTrack[];
-  continuation: string | null;
-}
-
-export async function ytGetPlaylist(playlistId: string): Promise<ApiPlaylistResponse> {
-  const json = await invoke<string>("yt_get_playlist", { playlistId });
-  return parseJson(json);
-}
-
-export async function ytGetPlaylistContinuation(continuationToken: string): Promise<ApiPlaylistContinuationResponse> {
-  const json = await invoke<string>("yt_get_playlist_continuation", { continuationToken });
-  return parseJson(json);
-}
-
 export async function ytGetWatchPlaylist(videoId: string): Promise<ApiWatchPlaylist> {
   const json = await invoke<string>("yt_get_watch_playlist", { videoId });
   return parseJson(json);

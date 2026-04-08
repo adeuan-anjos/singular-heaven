@@ -75,6 +75,7 @@ export default function YouTubeMusicModule() {
   }, [playerCleanup, queueCleanup, trackCacheClear]);
 
   useEffect(() => {
+    let cancelled = false;
     let unlisten: UnlistenFn | null = null;
 
     listen<{
@@ -98,10 +99,15 @@ export default function YouTubeMusicModule() {
         }
       }
     }).then((fn) => {
-      unlisten = fn;
+      if (cancelled) {
+        fn(); // immediately unlisten if already unmounted
+      } else {
+        unlisten = fn;
+      }
     });
 
     return () => {
+      cancelled = true;
       unlisten?.();
     };
   }, []);
