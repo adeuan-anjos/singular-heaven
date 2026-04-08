@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { LoginScreen } from "./components/auth/login-screen";
 import { AccountPicker } from "./components/auth/account-picker";
@@ -73,6 +74,38 @@ export default function YouTubeMusicModule() {
     };
   }, [playerCleanup, queueCleanup, trackCacheClear]);
 
+  useEffect(() => {
+    let unlisten: UnlistenFn | null = null;
+
+    listen<{
+      playlistId: string;
+      newTrackIds: string[];
+      totalTracks: number;
+      isComplete: boolean;
+    }>("playlist-tracks-updated", (event) => {
+      const { playlistId, newTrackIds, totalTracks, isComplete } = event.payload;
+      const queueState = useQueueStore.getState();
+      if (queueState.playlistId === playlistId) {
+        console.log("[YouTubeMusicModule] playlist-tracks-updated", {
+          playlistId,
+          newTracks: newTrackIds.length,
+          totalTracks,
+          isComplete,
+        });
+        queueState.appendTrackIds(newTrackIds);
+        if (isComplete) {
+          queueState.markComplete();
+        }
+      }
+    }).then((fn) => {
+      unlisten = fn;
+    });
+
+    return () => {
+      unlisten?.();
+    };
+  }, []);
+
   const handleAuthenticated = useCallback(() => {
     console.log("[YouTubeMusicModule] user authenticated, proceeding to account selection");
     setAuthState("account-select");
@@ -95,15 +128,23 @@ export default function YouTubeMusicModule() {
     queueSetQueue([track.videoId], 0);
   }, [playerPlay, queueSetQueue, trackCachePut]);
 
-  const handlePlayAll = useCallback((tracks: Track[], startIndex?: number, continuation?: string | null) => {
-    if (tracks.length === 0) return;
-    const idx = startIndex ?? 0;
-    console.log("[YouTubeMusicModule] handlePlayAll", { count: tracks.length, startIndex: idx });
-    trackCachePut(tracks);
-    const ids = tracks.map(t => t.videoId).filter(Boolean);
-    playerPlay(ids[idx]);
-    queueSetQueue(ids, idx, continuation ?? null);
-  }, [playerPlay, queueSetQueue, trackCachePut]);
+  const handlePlayAll = useCallback(
+    (tracks: Track[], startIndex?: number, playlistId?: string, isComplete?: boolean) => {
+      if (tracks.length === 0) return;
+      const idx = startIndex ?? 0;
+      console.log("[YouTubeMusicModule] handlePlayAll", {
+        count: tracks.length,
+        startIndex: idx,
+        playlistId,
+        isComplete,
+      });
+      trackCachePut(tracks);
+      const ids = tracks.map((t) => t.videoId).filter(Boolean);
+      playerPlay(ids[idx]);
+      queueSetQueue(ids, idx, playlistId ?? null, isComplete ?? true);
+    },
+    [playerPlay, queueSetQueue, trackCachePut]
+  );
 
   const handleAddToQueue = useCallback((track: Track) => {
     console.log("[YouTubeMusicModule] handleAddToQueue", { title: track.title });

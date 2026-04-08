@@ -14,7 +14,7 @@ interface AlbumPageProps {
   onNavigate: (page: StackPage) => void;
   onPlayTrack: (track: Track) => void;
   onAddToQueue: (track: Track) => void;
-  onPlayAll: (tracks: Track[], startIndex?: number, continuation?: string | null) => void;
+  onPlayAll: (tracks: Track[], startIndex?: number, playlistId?: string, isComplete?: boolean) => void;
 }
 
 export function AlbumPage({

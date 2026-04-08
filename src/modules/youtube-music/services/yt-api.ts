@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import type { Track } from "../types/music";
 
 // ---------------------------------------------------------------------------
 // API response types — match the Rust ytmusic-api crate (camelCase via serde)
@@ -426,5 +427,38 @@ export async function ytGetAccounts(): Promise<ApiAccountInfo[]> {
 
 export async function ytSwitchAccount(pageId: string | null): Promise<ApiAccountInfo[]> {
   const json = await invoke<string>("yt_switch_account", { pageId });
+  return parseJson(json);
+}
+
+// ── Cached playlist commands ──
+
+export interface LoadPlaylistResponse {
+  playlistId: string;
+  title: string;
+  author: { name: string; id: string | null } | null;
+  trackCount: string | null;
+  thumbnails: { url: string; width: number; height: number }[];
+  tracks: Track[];
+  trackIds: string[];
+  isComplete: boolean;
+}
+
+export async function ytLoadPlaylist(playlistId: string): Promise<LoadPlaylistResponse> {
+  const json = await invoke<string>("yt_load_playlist", { playlistId });
+  return parseJson(json);
+}
+
+export interface PlaylistTrackIdsResponse {
+  trackIds: string[];
+  isComplete: boolean;
+}
+
+export async function ytGetPlaylistTrackIds(playlistId: string): Promise<PlaylistTrackIdsResponse> {
+  const json = await invoke<string>("yt_get_playlist_track_ids", { playlistId });
+  return parseJson(json);
+}
+
+export async function ytGetCachedTracks(videoIds: string[]): Promise<Track[]> {
+  const json = await invoke<string>("yt_get_cached_tracks", { videoIds });
   return parseJson(json);
 }

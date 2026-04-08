@@ -1,9 +1,8 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { Input } from "@/components/ui/input";
 import { CollectionHeader } from "../shared/collection-header";
 import { TrackTable } from "../shared/track-table";
-import { ytGetPlaylist, ytGetPlaylistContinuation } from "../../services/yt-api";
-import { mapPlaylistPage, mapPlaylistTrack } from "../../services/mappers";
+import { ytLoadPlaylist, ytGetPlaylistTrackIds, ytGetCachedTracks } from "../../services/yt-api";
 import { usePlayerStore } from "../../stores/player-store";
 import { Play, Shuffle, Search, Loader2 } from "lucide-react";
 import type { Playlist, Track, StackPage } from "../../types/music";
@@ -13,7 +12,7 @@ interface PlaylistPageProps {
   onNavigate: (page: StackPage) => void;
   onPlayTrack: (track: Track) => void;
   onAddToQueue: (track: Track) => void;
-  onPlayAll: (tracks: Track[], startIndex?: number, continuation?: string | null) => void;
+  onPlayAll: (tracks: Track[], startIndex?: number, playlistId?: string, isComplete?: boolean) => void;
 }
 
 export function PlaylistPage({
@@ -26,7 +25,8 @@ export function PlaylistPage({
   const [playlist, setPlaylist] = useState<Playlist | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const continuationRef = useRef<string | null>(null);
+  const trackIdsRef = useRef<string[]>([]);
+  const isCompleteRef = useRef(false);
   const loadingMoreRef = useRef(false);
   const currentTrackId = usePlayerStore((s) => s.currentTrackId);
   const isPlaying = usePlayerStore((s) => s.isPlaying);
@@ -36,63 +36,59 @@ export function PlaylistPage({
     let cancelled = false;
     setLoading(true);
     setError(null);
-    continuationRef.current = null;
-    loadingMoreRef.current = false;
-    console.log("[PlaylistPage] Fetching playlist:", playlistId);
 
-    ytGetPlaylist(playlistId)
-      .then((response) => {
-        if (cancelled) return;
-        const mapped = mapPlaylistPage(response.playlist);
-        console.log("[PlaylistPage] Playlist loaded:", mapped.title, "tracks:", mapped.tracks?.length, "hasMore:", !!response.continuation);
-        setPlaylist(mapped);
-        continuationRef.current = response.continuation;
-      })
-      .catch((err) => {
-        if (cancelled) return;
-        const msg = err instanceof Error ? err.message : String(err);
-        console.error("[PlaylistPage] Failed to fetch playlist:", msg);
-        setError(msg);
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
+    ytLoadPlaylist(playlistId).then((data) => {
+      if (cancelled) return;
+      console.log("[PlaylistPage] loaded from cache", {
+        title: data.title,
+        tracks: data.tracks.length,
+        totalIds: data.trackIds.length,
+        isComplete: data.isComplete,
       });
+      setPlaylist({
+        playlistId: data.playlistId,
+        title: data.title,
+        author: data.author ?? { id: null, name: "" },
+        trackCount: data.trackCount ? parseInt(data.trackCount) : undefined,
+        thumbnails: data.thumbnails,
+        tracks: data.tracks,
+      });
+      trackIdsRef.current = data.trackIds;
+      isCompleteRef.current = data.isComplete;
+      setLoading(false);
+    }).catch((err) => {
+      if (cancelled) return;
+      console.error("[PlaylistPage] load error", err);
+      setError(String(err));
+      setLoading(false);
+    });
 
     return () => { cancelled = true; };
   }, [playlistId]);
 
-  const loadMore = () => {
-    const token = continuationRef.current;
-    if (!token || loadingMoreRef.current) {
-      console.log("[PlaylistPage] loadMore skipped — token:", !!token, "loading:", loadingMoreRef.current);
-      return;
-    }
-
+  const loadMore = useCallback(async () => {
+    if (loadingMoreRef.current || !playlist) return;
     loadingMoreRef.current = true;
-    console.log("[PlaylistPage] Loading more tracks...");
-
-    ytGetPlaylistContinuation(token)
-      .then((response) => {
-        const moreTracks = response.tracks.map(mapPlaylistTrack);
-        console.log("[PlaylistPage] Loaded", moreTracks.length, "more tracks, hasMore:", !!response.continuation);
-        continuationRef.current = response.continuation;
-        setPlaylist((prev) => {
-          if (!prev) return prev;
-          const existingIds = new Set((prev.tracks ?? []).map(t => t.videoId));
-          const uniqueNew = moreTracks.filter(t => !existingIds.has(t.videoId));
-          return {
-            ...prev,
-            tracks: [...(prev.tracks ?? []), ...uniqueNew],
-          };
-        });
-      })
-      .catch((err) => {
-        console.error("[PlaylistPage] Failed to load more:", err);
-      })
-      .finally(() => {
+    try {
+      const { trackIds: allIds } = await ytGetPlaylistTrackIds(playlistId);
+      const existingIds = new Set((playlist.tracks ?? []).map((t) => t.videoId));
+      const newIds = allIds.filter((id) => !existingIds.has(id)).slice(0, 100);
+      if (newIds.length === 0) {
         loadingMoreRef.current = false;
-      });
-  };
+        return;
+      }
+      const newTracks = await ytGetCachedTracks(newIds);
+      console.log("[PlaylistPage] loadMore from cache", { new: newTracks.length });
+      setPlaylist((prev) =>
+        prev ? { ...prev, tracks: [...(prev.tracks ?? []), ...newTracks] } : prev
+      );
+      trackIdsRef.current = allIds;
+    } catch (err) {
+      console.error("[PlaylistPage] loadMore error", err);
+    } finally {
+      loadingMoreRef.current = false;
+    }
+  }, [playlist, playlistId]);
 
   if (loading) {
     return (
@@ -138,8 +134,11 @@ export function PlaylistPage({
         ]}
         thumbnailUrl={playlist.thumbnails[playlist.thumbnails.length - 1]?.url ?? playlist.thumbnails[0]?.url}
         actions={[
-          { label: "Reproduzir", icon: Play, onClick: () => onPlayAll(tracks, 0, continuationRef.current) },
-          { label: "Aleatório", icon: Shuffle, onClick: () => onPlayAll([...tracks].sort(() => Math.random() - 0.5), 0, continuationRef.current) },
+          { label: "Reproduzir", icon: Play, onClick: () => onPlayAll(tracks, 0, playlistId, isCompleteRef.current) },
+          { label: "Aleatório", icon: Shuffle, onClick: () => {
+            const shuffled = [...tracks].sort(() => Math.random() - 0.5);
+            onPlayAll(shuffled, 0, playlistId, isCompleteRef.current);
+          }},
         ]}
         onGoToAuthor={playlist.author.id ? () => onNavigate({ type: "artist", artistId: playlist.author.id! }) : undefined}
       />
@@ -169,9 +168,9 @@ export function PlaylistPage({
         onEndReached={loadMore}
         onPlay={(track) => {
           const tracks = playlist?.tracks ?? [];
-          const index = tracks.findIndex(t => t.videoId === track.videoId);
+          const index = tracks.findIndex((t) => t.videoId === track.videoId);
           if (index >= 0) {
-            onPlayAll(tracks, index, continuationRef.current);
+            onPlayAll(tracks, index, playlistId, isCompleteRef.current);
           } else {
             onPlayTrack(track);
           }
