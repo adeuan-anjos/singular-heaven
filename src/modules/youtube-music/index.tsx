@@ -97,6 +97,15 @@ export default function YouTubeMusicModule() {
         if (isComplete) {
           queueState.markComplete();
         }
+        // Pre-populate L1 cache from SQLite so QueueSheet has zero cache misses
+        invoke<string>("yt_get_cached_tracks", { videoIds: newTrackIds })
+          .then((json) => {
+            const tracks: Track[] = JSON.parse(json);
+            if (tracks.length > 0) {
+              trackCachePut(tracks);
+            }
+          })
+          .catch((err) => console.error("[YouTubeMusicModule] pre-populate L1 error", err));
       }
     }).then((fn) => {
       if (cancelled) {

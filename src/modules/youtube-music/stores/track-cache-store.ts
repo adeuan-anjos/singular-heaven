@@ -1,9 +1,9 @@
 import { create } from "zustand";
 import { invoke } from "@tauri-apps/api/core";
-import { useEffect } from "react";
+import { useEffect, startTransition } from "react";
 import type { Track } from "../types/music";
 
-const MAX_CACHE_SIZE = 500;
+const MAX_CACHE_SIZE = 2000;
 
 interface TrackCacheState {
   tracks: Record<string, Track>;
@@ -91,7 +91,11 @@ function scheduleBatchFetch() {
         const tracks: Track[] = JSON.parse(json);
         console.log("[TrackCache] L2 batch resolved", { requested: ids.length, found: tracks.length });
         if (tracks.length > 0) {
-          useTrackCacheStore.getState().putTracks(tracks);
+          // startTransition prevents virtualizer's flushSync from creating
+          // a synchronous render cascade when cache updates trigger re-renders
+          startTransition(() => {
+            useTrackCacheStore.getState().putTracks(tracks);
+          });
         }
       })
       .catch((err) => console.error("[TrackCache] L2 batch fetch error", err));
