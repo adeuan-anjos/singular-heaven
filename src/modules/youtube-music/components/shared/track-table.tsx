@@ -22,7 +22,7 @@ import {
 } from "lucide-react";
 import type { Track } from "../../types/music";
 import { thumbUrl } from "../../utils/thumb-url";
-import { useImageCleanup } from "../../hooks/use-image-cleanup";
+
 
 interface TrackTableProps {
   tracks: Track[];
@@ -111,7 +111,6 @@ const TrackTableRow = React.memo(function TrackTableRow({
   onGoToArtist,
   onGoToAlbum,
 }: TrackTableRowProps) {
-  const imgRef = useImageCleanup();
   const [liked, setLiked] = useState(track.likeStatus === "LIKE");
   // Use the SMALLEST thumbnail (60x60) for track rows — displayed at 40x40px.
   // Using the 544x544 version wastes ~1.18MB per image in Chromium's decode cache.
@@ -165,7 +164,6 @@ const TrackTableRow = React.memo(function TrackTableRow({
         <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-sm bg-muted">
           {imgUrl ? (
             <img
-              ref={imgRef}
               src={thumbUrl(imgUrl, 80)}
               alt={track.title}
               className="h-full w-full object-cover"
