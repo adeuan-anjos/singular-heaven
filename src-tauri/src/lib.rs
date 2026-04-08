@@ -50,11 +50,51 @@ fn set_webview_memory_level(
     });
 }
 
+/// Set WebView2 Tracking Prevention to Basic level.
+/// Default (Balanced) blocks storage for CDN domains like yt3.ggpht.com, which
+/// pollutes the console with warnings. Basic still protects against malicious
+/// trackers (fingerprinters, cryptominers) without false-flagging content CDNs.
+#[cfg(target_os = "windows")]
+fn set_tracking_prevention_basic(
+    webview_window: &tauri::WebviewWindow<impl tauri::Runtime>,
+) {
+    use webview2_com::Microsoft::Web::WebView2::Win32::{
+        ICoreWebView2_13, ICoreWebView2Profile3,
+        COREWEBVIEW2_TRACKING_PREVENTION_LEVEL_BASIC,
+    };
+
+    let _ = webview_window.with_webview(|platform_webview| unsafe {
+        let controller = platform_webview.controller();
+        let core_webview = controller
+            .CoreWebView2()
+            .expect("Failed to get CoreWebView2");
+
+        let wv13: ICoreWebView2_13 = windows_core::Interface::cast(&core_webview)
+            .expect("Failed to cast to ICoreWebView2_13 — requires WebView2 Runtime v104+");
+
+        let profile = wv13.Profile().expect("Failed to get Profile");
+
+        let profile3: ICoreWebView2Profile3 = windows_core::Interface::cast(&profile)
+            .expect("Failed to cast to ICoreWebView2Profile3");
+
+        profile3
+            .SetPreferredTrackingPreventionLevel(COREWEBVIEW2_TRACKING_PREVENTION_LEVEL_BASIC)
+            .expect("Failed to set tracking prevention level");
+
+        println!("[Rust] WebView2 tracking prevention set to Basic");
+    });
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .setup(|app| {
+            #[cfg(target_os = "windows")]
+            if let Some(ww) = app.get_webview_window("main") {
+                set_tracking_prevention_basic(&ww);
+            }
+
             println!("[setup] Initializing YtMusicState...");
 
             let app_data_dir = app.handle().path().app_data_dir().ok();
