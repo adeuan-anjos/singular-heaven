@@ -89,10 +89,12 @@ export function MediaCard({
 
   return (
     <div className="group/card flex min-w-0 flex-col gap-2 text-left">
-      <button
-        type="button"
-        className="relative aspect-square w-full overflow-hidden rounded-md bg-muted"
+      <div
+        role="button"
+        tabIndex={0}
+        className="relative aspect-square w-full cursor-pointer overflow-hidden rounded-md bg-muted"
         onClick={onClick}
+        onKeyDown={(e) => { if (e.key === "Enter" && onClick) onClick(); }}
       >
         {imgUrl ? (
           <img referrerPolicy="no-referrer"
@@ -120,7 +122,7 @@ export function MediaCard({
             </Button>
           </div>
         )}
-      </button>
+      </div>
       <div className="min-w-0">
         <button
           type="button"
