@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useMemo } from "react";
 import type { StackPage } from "../types/music";
 
 export function useNavigation() {
@@ -37,5 +37,8 @@ export function useNavigation() {
   const canGoBack = stack.length > 0;
   const canGoForward = forwardStack.length > 0;
 
-  return { stack, currentPage, push, pop, forward, clear, canGoBack, canGoForward } as const;
+  return useMemo(
+    () => ({ stack, currentPage, push, pop, forward, clear, canGoBack, canGoForward }) as const,
+    [stack, currentPage, push, pop, forward, clear, canGoBack, canGoForward]
+  );
 }

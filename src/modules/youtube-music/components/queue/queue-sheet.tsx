@@ -99,7 +99,7 @@ const QueueItem = React.memo(function QueueItem({
   );
 });
 
-export function QueueSheet({ open, onOpenChange }: QueueSheetProps) {
+export const QueueSheet = React.memo(function QueueSheet({ open, onOpenChange }: QueueSheetProps) {
   const trackIds = useQueueStore((s) => s.trackIds);
   const currentIndex = useQueueStore((s) => s.currentIndex);
   const removeFromQueue = useQueueStore((s) => s.removeFromQueue);
@@ -209,4 +209,4 @@ export function QueueSheet({ open, onOpenChange }: QueueSheetProps) {
       </SheetContent>
     </Sheet>
   );
-}
+}); // closes React.memo

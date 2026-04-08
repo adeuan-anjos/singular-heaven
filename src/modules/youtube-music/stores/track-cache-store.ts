@@ -3,7 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { useEffect } from "react";
 import type { Track } from "../types/music";
 
-const MAX_CACHE_SIZE = 200;
+const MAX_CACHE_SIZE = 500;
 
 interface TrackCacheState {
   tracks: Record<string, Track>;
@@ -24,11 +24,14 @@ export const useTrackCacheStore = create<TrackCacheStore>()((set, get) => ({
   putTracks: (tracks) => {
     set((state) => {
       const next = { ...state.tracks };
+      let added = 0;
       for (const track of tracks) {
-        if (track.videoId) {
+        if (track.videoId && !next[track.videoId]) {
           next[track.videoId] = track;
+          added++;
         }
       }
+      if (added === 0) return state; // no change, prevent re-render
       // LRU eviction
       const keys = Object.keys(next);
       if (keys.length > MAX_CACHE_SIZE) {
@@ -40,7 +43,7 @@ export const useTrackCacheStore = create<TrackCacheStore>()((set, get) => ({
       return { tracks: next };
     });
     console.log("[TrackCache] putTracks", {
-      added: tracks.length,
+      offered: tracks.length,
       total: Object.keys(get().tracks).length,
     });
   },
@@ -48,6 +51,7 @@ export const useTrackCacheStore = create<TrackCacheStore>()((set, get) => ({
   putTrack: (track) => {
     if (!track.videoId) return;
     set((state) => {
+      if (state.tracks[track.videoId]) return state; // already cached, prevent re-render
       const next = { ...state.tracks, [track.videoId]: track };
       const keys = Object.keys(next);
       if (keys.length > MAX_CACHE_SIZE) {

@@ -158,6 +158,8 @@ export default function YouTubeMusicModule() {
     queueAddNext(track.videoId);
   }, [queueAddNext, trackCachePut]);
 
+  const handleOpenQueue = useCallback(() => setQueueOpen(true), []);
+
   const handleSearchSubmit = useCallback((query: string) => {
     console.log("[YouTubeMusicModule] handleSearchSubmit", { query });
     nav.push({ type: "search", query });
@@ -302,7 +304,7 @@ export default function YouTubeMusicModule() {
         </div>
 
         <PlayerBar
-          onOpenQueue={() => setQueueOpen(true)}
+          onOpenQueue={handleOpenQueue}
           onGoToArtist={(id) => nav.push({ type: "artist", artistId: id })}
           onGoToAlbum={(id) => nav.push({ type: "album", albumId: id })}
         />
