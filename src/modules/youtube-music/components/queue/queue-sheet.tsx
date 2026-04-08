@@ -1,4 +1,5 @@
-import React, { useCallback } from "react";
+import React, { useCallback, useEffect, useState } from "react";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import {
   Sheet,
   SheetContent,
@@ -105,10 +106,36 @@ export function QueueSheet({ open, onOpenChange }: QueueSheetProps) {
   const queuePlayIndex = useQueueStore((s) => s.playIndex);
   const playerPlay = usePlayerStore((s) => s.play);
 
+  // Callback ref handles Radix portal mount timing
+  const [scrollElement, setScrollElement] = useState<HTMLDivElement | null>(null);
+  const scrollRef = useCallback((node: HTMLDivElement | null) => {
+    setScrollElement(node);
+  }, []);
+
+  const virtualizer = useVirtualizer({
+    count: trackIds.length,
+    getScrollElement: () => scrollElement,
+    estimateSize: () => 52,
+    overscan: 10,
+    enabled: !!scrollElement,
+  });
+
+  // Auto-scroll to current track when sheet opens
+  useEffect(() => {
+    if (!open || !scrollElement) return;
+    const idx = useQueueStore.getState().currentIndex;
+    if (idx >= 0) {
+      requestAnimationFrame(() => {
+        virtualizer.scrollToIndex(idx, { align: "center" });
+      });
+    }
+  }, [open, scrollElement, virtualizer]);
+
   console.log("[QueueSheet] render", {
     open,
     queueLength: trackIds.length,
     currentIndex,
+    hasScrollElement: !!scrollElement,
   });
 
   const handlePlayFromQueue = useCallback(
@@ -135,22 +162,47 @@ export function QueueSheet({ open, onOpenChange }: QueueSheetProps) {
         <SheetHeader className="border-b border-border px-4 py-3">
           <SheetTitle>Fila de reprodução</SheetTitle>
         </SheetHeader>
-        <div className="styled-scrollbar min-h-0 flex-1 overflow-y-auto p-2">
+        <div
+          ref={scrollRef}
+          className="styled-scrollbar min-h-0 flex-1 overflow-y-auto p-2"
+        >
           {trackIds.length === 0 ? (
             <p className="px-2 py-8 text-center text-sm text-muted-foreground">
               A fila está vazia
             </p>
           ) : (
-            trackIds.map((videoId, index) => (
-              <QueueItem
-                key={`${videoId}-${index}`}
-                videoId={videoId}
-                index={index}
-                isCurrent={index === currentIndex}
-                onPlay={handlePlayFromQueue}
-                onRemove={handleRemove}
-              />
-            ))
+            <div
+              style={{
+                height: `${virtualizer.getTotalSize()}px`,
+                position: "relative",
+                width: "100%",
+              }}
+            >
+              {virtualizer.getVirtualItems().map((virtualRow) => {
+                const videoId = trackIds[virtualRow.index];
+                return (
+                  <div
+                    key={`${videoId}-${virtualRow.index}`}
+                    style={{
+                      position: "absolute",
+                      top: 0,
+                      left: 0,
+                      width: "100%",
+                      height: `${virtualRow.size}px`,
+                      transform: `translateY(${virtualRow.start}px)`,
+                    }}
+                  >
+                    <QueueItem
+                      videoId={videoId}
+                      index={virtualRow.index}
+                      isCurrent={virtualRow.index === currentIndex}
+                      onPlay={handlePlayFromQueue}
+                      onRemove={handleRemove}
+                    />
+                  </div>
+                );
+              })}
+            </div>
           )}
         </div>
       </SheetContent>
