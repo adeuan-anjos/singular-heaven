@@ -300,6 +300,24 @@ pub async fn yt_get_lyrics(
 }
 
 // ---------------------------------------------------------------------------
+// Streaming
+// ---------------------------------------------------------------------------
+
+#[tauri::command]
+pub async fn yt_get_stream_url(
+    video_id: String,
+    state: State<'_, Arc<Mutex<YtMusicState>>>,
+) -> Result<String, String> {
+    println!("[yt_get_stream_url] Fetching stream URL for {video_id}");
+    let state = state.lock().await;
+    let stream_data = state.client.get_stream_url(&video_id).await
+        .map_err(|e| format!("[yt_get_stream_url] {e}"))?;
+    println!("[yt_get_stream_url] Got URL, mime: {}, bitrate: {}", stream_data.mime_type, stream_data.bitrate);
+    serde_json::to_string(&stream_data)
+        .map_err(|e| format!("[yt_get_stream_url] serialization: {e}"))
+}
+
+// ---------------------------------------------------------------------------
 // Account switching (brand accounts)
 // ---------------------------------------------------------------------------
 

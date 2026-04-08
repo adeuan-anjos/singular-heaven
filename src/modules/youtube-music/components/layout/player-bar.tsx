@@ -21,6 +21,7 @@ import { usePlayerStore } from "../../stores/player-store";
 import { useQueueStore } from "../../stores/queue-store";
 import { useRenderTracker } from "@/lib/debug";
 import { ProgressBar } from "./progress-bar";
+import { thumbUrl } from "../../utils/thumb-url";
 
 interface PlayerBarProps {
   onOpenQueue: () => void;
@@ -80,7 +81,7 @@ export function PlayerBar({ onOpenQueue, onGoToArtist, onGoToAlbum }: PlayerBarP
           onClick={() => track.album && onGoToAlbum?.(track.album.id)}
         >
           <Avatar className="h-12 w-12 rounded-md">
-            <AvatarImage src={imgUrl} alt={track.title} className="object-cover" />
+            <AvatarImage src={thumbUrl(imgUrl, 96)} alt={track.title} className="object-cover" />
             <AvatarFallback className="rounded-md">{track.title.charAt(0)}</AvatarFallback>
           </Avatar>
         </button>

@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils";
 import { ytGetLibraryPlaylists } from "../../services/yt-api";
 import { mapLibraryPlaylists } from "../../services/mappers";
 import type { Playlist } from "../../types/music";
+import { thumbUrl } from "../../utils/thumb-url";
 
 interface SidePanelProps {
   activeView: string;
@@ -110,7 +111,7 @@ export function SidePanel({
           <div style={{ height: virtualizer.getTotalSize(), position: "relative" }}>
             {virtualizer.getVirtualItems().map((vItem) => {
               const pl = playlists[vItem.index];
-              const thumbUrl = pl.thumbnails[0]?.url;
+              const rawThumbUrl = pl.thumbnails[0]?.url;
               const initials = pl.title.slice(0, 2).toUpperCase();
 
               return (
@@ -130,8 +131,8 @@ export function SidePanel({
                     className="flex h-full w-full items-center gap-3 rounded-md px-2 text-left transition-colors hover:bg-accent"
                   >
                     <div className="flex size-9 shrink-0 items-center justify-center overflow-hidden rounded-sm bg-muted">
-                      {thumbUrl ? (
-                        <img referrerPolicy="no-referrer" src={thumbUrl} alt={pl.title} className="h-full w-full object-cover" />
+                      {rawThumbUrl ? (
+                        <img src={thumbUrl(rawThumbUrl, 72)} alt={pl.title} className="h-full w-full object-cover" loading="lazy" decoding="async" />
                       ) : (
                         <span className="text-xs text-muted-foreground">{initials}</span>
                       )}

@@ -34,34 +34,57 @@ export function ProgressBar() {
       (state) => state.progress,
       (progress) => {
         if (draggingRef.current) return;
-        const track = usePlayerStore.getState().currentTrack;
-        if (!track) return;
-        updateDOM(progress, track.durationSeconds);
+        const duration = usePlayerStore.getState().duration;
+        if (duration <= 0) return;
+        updateDOM(progress, duration);
       },
     );
 
     // Initialize with current values
-    const { progress, currentTrack } = usePlayerStore.getState();
-    if (currentTrack) {
-      updateDOM(progress, currentTrack.durationSeconds);
+    const { progress, duration } = usePlayerStore.getState();
+    if (duration > 0) {
+      updateDOM(progress, duration);
       if (durationTimeRef.current) {
-        durationTimeRef.current.textContent = currentTrack.duration;
+        durationTimeRef.current.textContent = formatTime(duration);
       }
     }
 
     return unsubscribe;
   }, [updateDOM]);
 
-  // Also re-sync when track changes (new track resets progress display)
+  // Re-sync when duration changes (new track loads, audio metadata arrives)
+  useEffect(() => {
+    const unsubscribe = usePlayerStore.subscribe(
+      (state) => state.duration,
+      (duration) => {
+        const { progress } = usePlayerStore.getState();
+        if (duration > 0) {
+          updateDOM(progress, duration);
+          if (durationTimeRef.current) {
+            durationTimeRef.current.textContent = formatTime(duration);
+          }
+        }
+      },
+    );
+    return unsubscribe;
+  }, [updateDOM]);
+
+  // Also re-sync when track changes (reset progress display)
   useEffect(() => {
     const unsubscribe = usePlayerStore.subscribe(
       (state) => state.currentTrack,
       () => {
-        const { progress, currentTrack } = usePlayerStore.getState();
-        if (currentTrack) {
-          updateDOM(progress, currentTrack.durationSeconds);
+        const { progress, duration } = usePlayerStore.getState();
+        if (duration > 0) {
+          updateDOM(progress, duration);
           if (durationTimeRef.current) {
-            durationTimeRef.current.textContent = currentTrack.duration;
+            durationTimeRef.current.textContent = formatTime(duration);
+          }
+        } else {
+          // Reset display when track changes but metadata hasn't loaded yet
+          updateDOM(0, 0);
+          if (durationTimeRef.current) {
+            durationTimeRef.current.textContent = "0:00";
           }
         }
       },
@@ -73,15 +96,15 @@ export function ProgressBar() {
     (clientX: number) => {
       const bar = trackRef.current;
       if (!bar) return;
-      const track = usePlayerStore.getState().currentTrack;
-      if (!track) return;
+      const duration = usePlayerStore.getState().duration;
+      if (duration <= 0) return;
 
       const rect = bar.getBoundingClientRect();
       const ratio = Math.min(1, Math.max(0, (clientX - rect.left) / rect.width));
-      const value = Math.floor(ratio * track.durationSeconds);
+      const value = Math.floor(ratio * duration);
 
       // Update DOM immediately for responsiveness
-      updateDOM(value, track.durationSeconds);
+      updateDOM(value, duration);
       usePlayerStore.getState().seek(value);
     },
     [updateDOM],

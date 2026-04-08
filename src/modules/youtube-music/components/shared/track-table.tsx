@@ -21,6 +21,7 @@ import {
   Heart,
 } from "lucide-react";
 import type { Track } from "../../types/music";
+import { thumbUrl } from "../../utils/thumb-url";
 
 interface TrackTableProps {
   tracks: Track[];
@@ -161,10 +162,12 @@ const TrackTableRow = React.memo(function TrackTableRow({
         {/* Col 2: Thumbnail — 40px square */}
         <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-sm bg-muted">
           {imgUrl ? (
-            <img referrerPolicy="no-referrer"
-              src={imgUrl}
+            <img
+              src={thumbUrl(imgUrl, 80)}
               alt={track.title}
               className="h-full w-full object-cover"
+              loading="lazy"
+              decoding="async"
             />
           ) : (
             <span className="text-sm text-muted-foreground">

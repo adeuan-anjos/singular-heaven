@@ -2,6 +2,7 @@ import { Button } from "@/components/ui/button";
 import { Play } from "lucide-react";
 import React from "react";
 import type { Thumbnail } from "../../types/music";
+import { thumbUrl } from "../../utils/thumb-url";
 
 interface MediaCardProps {
   title: string;
@@ -97,10 +98,12 @@ export function MediaCard({
         onKeyDown={(e) => { if (e.key === "Enter" && onClick) onClick(); }}
       >
         {imgUrl ? (
-          <img referrerPolicy="no-referrer"
-            src={imgUrl}
+          <img
+            src={thumbUrl(imgUrl, 400)}
             alt={title}
             className="h-full w-full object-cover"
+            loading="lazy"
+            decoding="async"
           />
         ) : (
           <div className="flex h-full w-full items-center justify-center text-2xl text-muted-foreground">

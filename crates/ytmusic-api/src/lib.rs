@@ -10,3 +10,4 @@ pub mod types;
 
 pub use client::YtMusicClient;
 pub use error::{Error, Result};
+pub use types::streaming::StreamingData;

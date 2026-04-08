@@ -281,6 +281,18 @@ export interface ApiLyrics {
   source: string | null;
 }
 
+// Streaming
+export interface ApiStreamingData {
+  url: string;
+  mimeType: string;
+  bitrate: number;
+  audioQuality: string | null;
+  approxDurationMs: string | null;
+  audioSampleRate: string | null;
+  audioChannels: number | null;
+  contentLength: string | null;
+}
+
 // Account switching
 export interface ApiAccountInfo {
   name: string;
@@ -400,6 +412,11 @@ export async function ytAuthFromBrowser(browser: string): Promise<ApiAuthStatus>
 
 export async function ytAuthLogout(): Promise<ApiAuthStatus> {
   return invoke<ApiAuthStatus>("yt_auth_logout");
+}
+
+export async function ytGetStreamUrl(videoId: string): Promise<ApiStreamingData> {
+  const json = await invoke<string>("yt_get_stream_url", { videoId });
+  return parseJson(json);
 }
 
 export async function ytGetAccounts(): Promise<ApiAccountInfo[]> {
