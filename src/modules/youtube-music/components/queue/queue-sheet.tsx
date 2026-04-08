@@ -15,7 +15,6 @@ import { usePlayerStore } from "../../stores/player-store";
 import { useTrack } from "../../stores/track-cache-store";
 import { thumbUrl } from "../../utils/thumb-url";
 
-
 interface QueueSheetProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -36,7 +35,6 @@ const QueueItem = React.memo(function QueueItem({
 }) {
   const track = useTrack(videoId);
   if (!track) {
-    console.warn("[QueueItem] Cache miss for videoId:", videoId);
     return (
       <div className="flex h-14 items-center px-2 text-xs text-muted-foreground">
         Carregando...
@@ -60,15 +58,15 @@ const QueueItem = React.memo(function QueueItem({
         onClick={() => onPlay(videoId)}
       >
         <Avatar className="h-10 w-10 shrink-0 rounded-sm">
-            <AvatarImage
-              src={thumbUrl(imgUrl, 80)}
-              alt={track.title}
-              className="object-cover"
-            />
-            <AvatarFallback className="rounded-sm">
-              {track.title.charAt(0)}
-            </AvatarFallback>
-          </Avatar>
+          <AvatarImage
+            src={thumbUrl(imgUrl, 80)}
+            alt={track.title}
+            className="object-cover"
+          />
+          <AvatarFallback className="rounded-sm">
+            {track.title.charAt(0)}
+          </AvatarFallback>
+        </Avatar>
         <div className="min-w-0 flex-1 text-left">
           <p
             className={cn(
@@ -100,15 +98,16 @@ const QueueItem = React.memo(function QueueItem({
   );
 });
 
-export const QueueSheet = React.memo(function QueueSheet({ open, onOpenChange }: QueueSheetProps) {
-  // Subscribe to LENGTH (number) instead of the array — prevents re-render on every appendTrackIds
+// Inner content — only mounted when sheet is open.
+// This prevents store subscriptions from firing when the sheet is closed,
+// eliminating dozens of wasted re-renders during background playlist loading.
+function QueueSheetContent() {
   const queueLength = useQueueStore((s) => s.trackIds.length);
   const currentIndex = useQueueStore((s) => s.currentIndex);
   const removeFromQueue = useQueueStore((s) => s.removeFromQueue);
   const queuePlayIndex = useQueueStore((s) => s.playIndex);
   const playerPlay = usePlayerStore((s) => s.play);
 
-  // Callback ref handles Radix portal mount timing
   const [scrollElement, setScrollElement] = useState<HTMLDivElement | null>(null);
   const scrollRef = useCallback((node: HTMLDivElement | null) => {
     setScrollElement(node);
@@ -120,11 +119,15 @@ export const QueueSheet = React.memo(function QueueSheet({ open, onOpenChange }:
     estimateSize: () => 52,
     overscan: 3,
     enabled: !!scrollElement,
+    // Disable flushSync to prevent synchronous render cascades
+    // when Zustand state updates trigger virtualizer measurements.
+    // Documented fix: TanStack Virtual issues #628, #651, #1094
+    useFlushSync: false,
   });
 
-  // Auto-scroll to current track when sheet opens
+  // Auto-scroll to current track when content mounts
   useEffect(() => {
-    if (!open || !scrollElement) return;
+    if (!scrollElement) return;
     const idx = useQueueStore.getState().currentIndex;
     if (idx >= 0) {
       requestAnimationFrame(() => {
@@ -132,14 +135,9 @@ export const QueueSheet = React.memo(function QueueSheet({ open, onOpenChange }:
       });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, scrollElement]);
+  }, [scrollElement]);
 
-  console.log("[QueueSheet] render", {
-    open,
-    queueLength,
-    currentIndex,
-    hasScrollElement: !!scrollElement,
-  });
+  console.log("[QueueSheet] render", { queueLength, currentIndex, hasScrollElement: !!scrollElement });
 
   const handlePlayFromQueue = useCallback(
     (videoId: string) => {
@@ -161,55 +159,65 @@ export const QueueSheet = React.memo(function QueueSheet({ open, onOpenChange }:
   );
 
   return (
+    <>
+      <SheetHeader className="border-b border-border px-4 py-3">
+        <SheetTitle>Fila de reprodução</SheetTitle>
+      </SheetHeader>
+      <div
+        ref={scrollRef}
+        className="styled-scrollbar min-h-0 flex-1 overflow-y-auto p-2"
+      >
+        {queueLength === 0 ? (
+          <p className="px-2 py-8 text-center text-sm text-muted-foreground">
+            A fila está vazia
+          </p>
+        ) : (
+          <div
+            style={{
+              height: `${virtualizer.getTotalSize()}px`,
+              position: "relative",
+              width: "100%",
+            }}
+          >
+            {virtualizer.getVirtualItems().map((virtualRow) => {
+              const videoId = useQueueStore.getState().trackIds[virtualRow.index];
+              return (
+                <div
+                  key={virtualRow.key}
+                  style={{
+                    position: "absolute",
+                    top: 0,
+                    left: 0,
+                    width: "100%",
+                    height: `${virtualRow.size}px`,
+                    transform: `translateY(${virtualRow.start}px)`,
+                  }}
+                >
+                  <QueueItem
+                    videoId={videoId}
+                    index={virtualRow.index}
+                    isCurrent={virtualRow.index === currentIndex}
+                    onPlay={handlePlayFromQueue}
+                    onRemove={handleRemove}
+                  />
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </>
+  );
+}
+
+// Outer shell — always mounted, but store subscriptions live in QueueSheetContent
+// which only mounts when open=true. Zero re-renders from background events when closed.
+export const QueueSheet = React.memo(function QueueSheet({ open, onOpenChange }: QueueSheetProps) {
+  return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent side="right" className="flex w-96 flex-col p-0">
-        <SheetHeader className="border-b border-border px-4 py-3">
-          <SheetTitle>Fila de reprodução</SheetTitle>
-        </SheetHeader>
-        <div
-          ref={scrollRef}
-          className="styled-scrollbar min-h-0 flex-1 overflow-y-auto p-2"
-        >
-          {queueLength === 0 ? (
-            <p className="px-2 py-8 text-center text-sm text-muted-foreground">
-              A fila está vazia
-            </p>
-          ) : (
-            <div
-              style={{
-                height: `${virtualizer.getTotalSize()}px`,
-                position: "relative",
-                width: "100%",
-              }}
-            >
-              {virtualizer.getVirtualItems().map((virtualRow) => {
-                const videoId = useQueueStore.getState().trackIds[virtualRow.index];
-                return (
-                  <div
-                    key={virtualRow.key}
-                    style={{
-                      position: "absolute",
-                      top: 0,
-                      left: 0,
-                      width: "100%",
-                      height: `${virtualRow.size}px`,
-                      transform: `translateY(${virtualRow.start}px)`,
-                    }}
-                  >
-                    <QueueItem
-                      videoId={videoId}
-                      index={virtualRow.index}
-                      isCurrent={virtualRow.index === currentIndex}
-                      onPlay={handlePlayFromQueue}
-                      onRemove={handleRemove}
-                    />
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
+        {open && <QueueSheetContent />}
       </SheetContent>
     </Sheet>
   );
-}); // closes React.memo
+});

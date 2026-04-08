@@ -78,35 +78,51 @@ export default function YouTubeMusicModule() {
     let cancelled = false;
     let unlisten: UnlistenFn | null = null;
 
+    // Debounce rapid background events into batched updates (500ms window).
+    // Without this, 20-40 events in quick succession cause 20-40 re-renders.
+    let pendingIds: string[] = [];
+    let pendingComplete = false;
+    let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const flushPendingEvents = () => {
+      debounceTimer = null;
+      if (pendingIds.length === 0) return;
+      const ids = pendingIds;
+      const done = pendingComplete;
+      pendingIds = [];
+      pendingComplete = false;
+
+      const queueState = useQueueStore.getState();
+      console.log("[YouTubeMusicModule] flush playlist events", {
+        newTracks: ids.length,
+        isComplete: done,
+      });
+      queueState.appendTrackIds(ids);
+      if (done) queueState.markComplete();
+
+      // Pre-populate L1 cache
+      invoke<string>("yt_get_cached_tracks", { videoIds: ids })
+        .then((json) => {
+          const tracks: Track[] = JSON.parse(json);
+          if (tracks.length > 0) trackCachePut(tracks);
+        })
+        .catch((err) => console.error("[YouTubeMusicModule] pre-populate L1 error", err));
+    };
+
     listen<{
       playlistId: string;
       newTrackIds: string[];
       totalTracks: number;
       isComplete: boolean;
     }>("playlist-tracks-updated", (event) => {
-      const { playlistId, newTrackIds, totalTracks, isComplete } = event.payload;
-      const queueState = useQueueStore.getState();
-      if (queueState.playlistId === playlistId) {
-        console.log("[YouTubeMusicModule] playlist-tracks-updated", {
-          playlistId,
-          newTracks: newTrackIds.length,
-          totalTracks,
-          isComplete,
-        });
-        queueState.appendTrackIds(newTrackIds);
-        if (isComplete) {
-          queueState.markComplete();
-        }
-        // Pre-populate L1 cache from SQLite so QueueSheet has zero cache misses
-        invoke<string>("yt_get_cached_tracks", { videoIds: newTrackIds })
-          .then((json) => {
-            const tracks: Track[] = JSON.parse(json);
-            if (tracks.length > 0) {
-              trackCachePut(tracks);
-            }
-          })
-          .catch((err) => console.error("[YouTubeMusicModule] pre-populate L1 error", err));
-      }
+      const { playlistId, newTrackIds, isComplete } = event.payload;
+      if (useQueueStore.getState().playlistId !== playlistId) return;
+
+      pendingIds.push(...newTrackIds);
+      if (isComplete) pendingComplete = true;
+
+      if (debounceTimer) clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(flushPendingEvents, 500);
     }).then((fn) => {
       if (cancelled) {
         fn(); // immediately unlisten if already unmounted
@@ -118,8 +134,11 @@ export default function YouTubeMusicModule() {
     return () => {
       cancelled = true;
       unlisten?.();
+      if (debounceTimer) clearTimeout(debounceTimer);
+      // Flush any pending events before unmount
+      if (pendingIds.length > 0) flushPendingEvents();
     };
-  }, []);
+  }, [trackCachePut]);
 
   const handleAuthenticated = useCallback(() => {
     console.log("[YouTubeMusicModule] user authenticated, proceeding to account selection");

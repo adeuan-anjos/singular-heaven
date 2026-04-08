@@ -32,6 +32,7 @@ export function VirtualTrackList({
     getScrollElement: () => parentRef.current,
     estimateSize: () => ROW_HEIGHT,
     overscan: OVERSCAN,
+    useFlushSync: false,
   });
 
   const items = virtualizer.getVirtualItems();

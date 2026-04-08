@@ -60,6 +60,7 @@ export function SidePanel({
     getScrollElement: () => scrollRef.current,
     estimateSize: () => PLAYLIST_ROW_HEIGHT,
     overscan: 8,
+    useFlushSync: false,
   });
 
   const handleNavClick = (key: string) => {
