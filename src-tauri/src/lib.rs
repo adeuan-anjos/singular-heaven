@@ -1,3 +1,4 @@
+mod playlist_cache;
 mod thumb_cache;
 mod youtube_music;
 
@@ -263,6 +264,15 @@ pub fn run() {
 
             let app_data_dir = app.handle().path().app_data_dir().ok();
 
+            // Initialize playlist cache (SQLite)
+            if let Some(ref dir) = app_data_dir {
+                println!("[setup] Initializing PlaylistCache...");
+                let cache = playlist_cache::PlaylistCache::open(dir)
+                    .map_err(|e| format!("Failed to open playlist cache: {e}"))?;
+                app.manage(Arc::new(tokio::sync::Mutex::new(cache)));
+                println!("[setup] PlaylistCache added to managed state.");
+            }
+
             // Priority 1: Try loading saved cookies from disk
             let saved_cookies = app_data_dir.as_ref().and_then(|dir| {
                 println!("[setup] Checking for saved cookies...");
@@ -334,6 +344,9 @@ pub fn run() {
             youtube_music::commands::yt_get_accounts,
             youtube_music::commands::yt_switch_account,
             youtube_music::commands::yt_get_stream_url,
+            youtube_music::commands::yt_load_playlist,
+            youtube_music::commands::yt_get_cached_tracks,
+            youtube_music::commands::yt_get_playlist_track_ids,
         ])
         .on_window_event(|window, event| {
             #[cfg(target_os = "windows")]

@@ -1,10 +1,11 @@
 use std::sync::Arc;
 
 use serde::Serialize;
-use tauri::{AppHandle, Manager, State};
+use tauri::{AppHandle, Emitter, Manager, State};
 use tokio::sync::Mutex;
 
 use super::client::YtMusicState;
+use crate::playlist_cache::{self, PlaylistCache};
 
 // ---------------------------------------------------------------------------
 // Auth response DTOs
@@ -503,4 +504,227 @@ pub async fn yt_auth_logout(
         authenticated: false,
         method: "none".to_string(),
     })
+}
+
+// ---------------------------------------------------------------------------
+// Playlist Cache commands
+// ---------------------------------------------------------------------------
+
+/// Event payload emitted when background fetch adds tracks to the cache.
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct PlaylistTracksUpdated {
+    playlist_id: String,
+    new_track_ids: Vec<String>,
+    total_tracks: usize,
+    is_complete: bool,
+}
+
+/// Load a playlist: fetch first page from InnerTube, cache in SQLite,
+/// return compact data to the frontend, and spawn a background task for
+/// any remaining continuation pages.
+#[tauri::command]
+pub async fn yt_load_playlist(
+    playlist_id: String,
+    state: State<'_, Arc<Mutex<YtMusicState>>>,
+    cache: State<'_, Arc<tokio::sync::Mutex<PlaylistCache>>>,
+    app: AppHandle,
+) -> Result<String, String> {
+    println!("[yt_load_playlist] playlist_id={playlist_id}");
+
+    // 1. Fetch first page from InnerTube
+    let (page, continuation) = {
+        let st = state.lock().await;
+        st.client.get_playlist(&playlist_id).await
+            .map_err(|e| format!("[yt_load_playlist] API error: {e}"))?
+    };
+
+    println!(
+        "[yt_load_playlist] Got page: title={} tracks={} continuation={}",
+        page.title,
+        page.tracks.len(),
+        continuation.is_some()
+    );
+
+    // 2. Save to SQLite
+    let track_rows = playlist_cache::playlist_tracks_to_rows(&page.tracks);
+    let initial_track_ids: Vec<String> = page.tracks.iter().map(|t| t.video_id.clone()).collect();
+    {
+        let db = cache.lock().await;
+        db.save_meta(
+            &playlist_id,
+            &page.title,
+            page.author.as_ref().map(|a| a.name.as_str()),
+            page.author.as_ref().and_then(|a| a.id.as_deref()),
+            page.track_count.as_deref(),
+            page.thumbnails.first().map(|t| t.url.as_str()),
+        )
+        .map_err(|e| format!("[yt_load_playlist] save_meta: {e}"))?;
+
+        db.save_tracks(&playlist_id, 0, &track_rows)
+            .map_err(|e| format!("[yt_load_playlist] save_tracks: {e}"))?;
+
+        if continuation.is_none() {
+            db.mark_complete(&playlist_id)
+                .map_err(|e| format!("[yt_load_playlist] mark_complete: {e}"))?;
+        }
+    }
+
+    let is_complete = continuation.is_none();
+
+    // 3. Spawn background fetch for remaining pages
+    if let Some(cont_token) = continuation {
+        let state_arc = state.inner().clone();
+        let cache_arc = cache.inner().clone();
+        let pid = playlist_id.clone();
+        let app_handle = app.clone();
+        let mut offset = page.tracks.len();
+
+        tokio::spawn(async move {
+            println!("[yt_load_playlist:bg] Starting background fetch for {pid}");
+            let mut token = cont_token;
+
+            loop {
+                // Throttle between API calls
+                tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+
+                println!("[yt_load_playlist:bg] Fetching continuation for {pid} offset={offset}");
+                let fetch_result = {
+                    let st = state_arc.lock().await;
+                    st.client.get_playlist_continuation(&token).await
+                };
+
+                match fetch_result {
+                    Ok((tracks, next_token)) => {
+                        let rows = playlist_cache::playlist_tracks_to_rows(&tracks);
+                        let new_ids: Vec<String> =
+                            tracks.iter().map(|t| t.video_id.clone()).collect();
+                        let track_count = tracks.len();
+
+                        let complete = next_token.is_none();
+
+                        // Save to SQLite
+                        {
+                            let db = cache_arc.lock().await;
+                            if let Err(e) = db.save_tracks(&pid, offset, &rows) {
+                                eprintln!("[yt_load_playlist:bg] save_tracks error: {e}");
+                                break;
+                            }
+                            if complete {
+                                if let Err(e) = db.mark_complete(&pid) {
+                                    eprintln!("[yt_load_playlist:bg] mark_complete error: {e}");
+                                }
+                            }
+                        }
+
+                        offset += track_count;
+
+                        // Emit event to frontend
+                        let payload = PlaylistTracksUpdated {
+                            playlist_id: pid.clone(),
+                            new_track_ids: new_ids,
+                            total_tracks: offset,
+                            is_complete: complete,
+                        };
+                        if let Err(e) = app_handle.emit("playlist-tracks-updated", &payload) {
+                            eprintln!("[yt_load_playlist:bg] emit error: {e}");
+                        }
+
+                        println!(
+                            "[yt_load_playlist:bg] Saved {} tracks, total={offset}, complete={complete}",
+                            track_count
+                        );
+
+                        if complete {
+                            break;
+                        }
+                        token = next_token.unwrap();
+                    }
+                    Err(e) => {
+                        eprintln!("[yt_load_playlist:bg] continuation error: {e}");
+                        break;
+                    }
+                }
+            }
+
+            println!("[yt_load_playlist:bg] Background fetch done for {pid}");
+        });
+    }
+
+    // 4. Build response
+    let cached_tracks = playlist_cache::playlist_tracks_to_cached(&page.tracks);
+    let response = serde_json::json!({
+        "playlistId": playlist_id,
+        "title": page.title,
+        "author": page.author,
+        "trackCount": page.track_count,
+        "thumbnails": page.thumbnails,
+        "tracks": cached_tracks,
+        "trackIds": initial_track_ids,
+        "isComplete": is_complete,
+    });
+
+    println!(
+        "[yt_load_playlist] Returning {} tracks, isComplete={is_complete}",
+        cached_tracks.len()
+    );
+
+    serde_json::to_string(&response)
+        .map_err(|e| format!("[yt_load_playlist] serialization: {e}"))
+}
+
+/// Resolve tracks by video IDs from the SQLite cache.
+#[tauri::command]
+pub async fn yt_get_cached_tracks(
+    video_ids: Vec<String>,
+    cache: State<'_, Arc<tokio::sync::Mutex<PlaylistCache>>>,
+) -> Result<String, String> {
+    println!(
+        "[yt_get_cached_tracks] Resolving {} video IDs",
+        video_ids.len()
+    );
+
+    let db = cache.lock().await;
+    let tracks = db
+        .get_tracks_by_ids(&video_ids)
+        .map_err(|e| format!("[yt_get_cached_tracks] {e}"))?;
+
+    println!(
+        "[yt_get_cached_tracks] Found {} tracks out of {} requested",
+        tracks.len(),
+        video_ids.len()
+    );
+
+    serde_json::to_string(&tracks)
+        .map_err(|e| format!("[yt_get_cached_tracks] serialization: {e}"))
+}
+
+/// Get all cached video IDs for a playlist, with completion status.
+#[tauri::command]
+pub async fn yt_get_playlist_track_ids(
+    playlist_id: String,
+    cache: State<'_, Arc<tokio::sync::Mutex<PlaylistCache>>>,
+) -> Result<String, String> {
+    println!("[yt_get_playlist_track_ids] playlist_id={playlist_id}");
+
+    let db = cache.lock().await;
+    let track_ids = db
+        .get_track_ids(&playlist_id)
+        .map_err(|e| format!("[yt_get_playlist_track_ids] get_track_ids: {e}"))?;
+    let is_complete = db
+        .is_complete(&playlist_id)
+        .map_err(|e| format!("[yt_get_playlist_track_ids] is_complete: {e}"))?;
+
+    println!(
+        "[yt_get_playlist_track_ids] Found {} track IDs, isComplete={is_complete}",
+        track_ids.len()
+    );
+
+    let response = serde_json::json!({
+        "trackIds": track_ids,
+        "isComplete": is_complete,
+    });
+
+    serde_json::to_string(&response)
+        .map_err(|e| format!("[yt_get_playlist_track_ids] serialization: {e}"))
 }
