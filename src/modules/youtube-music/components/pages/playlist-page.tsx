@@ -1,10 +1,9 @@
-import { useState, useEffect } from "react";
-import { ScrollArea } from "@/components/ui/scroll-area";
+import { useState, useEffect, useRef } from "react";
 import { Input } from "@/components/ui/input";
 import { CollectionHeader } from "../shared/collection-header";
 import { TrackTable } from "../shared/track-table";
-import { ytGetPlaylist } from "../../services/yt-api";
-import { mapPlaylistPage } from "../../services/mappers";
+import { ytGetPlaylist, ytGetPlaylistContinuation } from "../../services/yt-api";
+import { mapPlaylistPage, mapPlaylistTrack } from "../../services/mappers";
 import { usePlayerStore } from "../../stores/player-store";
 import { Play, Shuffle, Search, Loader2 } from "lucide-react";
 import type { Playlist, Track, StackPage } from "../../types/music";
@@ -27,6 +26,8 @@ export function PlaylistPage({
   const [playlist, setPlaylist] = useState<Playlist | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const continuationRef = useRef<string | null>(null);
+  const loadingMoreRef = useRef(false);
   const currentTrack = usePlayerStore((s) => s.currentTrack);
   const isPlaying = usePlayerStore((s) => s.isPlaying);
   const [filter, setFilter] = useState("");
@@ -35,14 +36,17 @@ export function PlaylistPage({
     let cancelled = false;
     setLoading(true);
     setError(null);
+    continuationRef.current = null;
+    loadingMoreRef.current = false;
     console.log("[PlaylistPage] Fetching playlist:", playlistId);
 
     ytGetPlaylist(playlistId)
-      .then((raw) => {
+      .then((response) => {
         if (cancelled) return;
-        const mapped = mapPlaylistPage(raw);
-        console.log("[PlaylistPage] Playlist loaded:", mapped.title, "tracks:", mapped.tracks?.length);
+        const mapped = mapPlaylistPage(response.playlist);
+        console.log("[PlaylistPage] Playlist loaded:", mapped.title, "tracks:", mapped.tracks?.length, "hasMore:", !!response.continuation);
         setPlaylist(mapped);
+        continuationRef.current = response.continuation;
       })
       .catch((err) => {
         if (cancelled) return;
@@ -56,6 +60,39 @@ export function PlaylistPage({
 
     return () => { cancelled = true; };
   }, [playlistId]);
+
+  const loadMore = () => {
+    const token = continuationRef.current;
+    if (!token || loadingMoreRef.current) {
+      console.log("[PlaylistPage] loadMore skipped — token:", !!token, "loading:", loadingMoreRef.current);
+      return;
+    }
+
+    loadingMoreRef.current = true;
+    console.log("[PlaylistPage] Loading more tracks...");
+
+    ytGetPlaylistContinuation(token)
+      .then((response) => {
+        const moreTracks = response.tracks.map(mapPlaylistTrack);
+        console.log("[PlaylistPage] Loaded", moreTracks.length, "more tracks, hasMore:", !!response.continuation);
+        continuationRef.current = response.continuation;
+        setPlaylist((prev) => {
+          if (!prev) return prev;
+          const existingIds = new Set((prev.tracks ?? []).map(t => t.videoId));
+          const uniqueNew = moreTracks.filter(t => !existingIds.has(t.videoId));
+          return {
+            ...prev,
+            tracks: [...(prev.tracks ?? []), ...uniqueNew],
+          };
+        });
+      })
+      .catch((err) => {
+        console.error("[PlaylistPage] Failed to load more:", err);
+      })
+      .finally(() => {
+        loadingMoreRef.current = false;
+      });
+  };
 
   if (loading) {
     return (
@@ -87,57 +124,55 @@ export function PlaylistPage({
       })
     : tracks;
 
-  return (
-    <ScrollArea className="group/page h-full">
-      <div className="mx-auto max-w-screen-xl space-y-6 p-4">
-        <CollectionHeader
-          title={playlist.title}
-          subtitle={playlist.author.name}
-          description="As músicas que você marcou com 'Gostei' em todos os apps do YouTube aparecerão aqui."
-          infoLines={[
-            [
-              playlist.trackCount !== undefined ? `${playlist.trackCount} músicas` : "",
-              "Mais de 1 hora",
-              "Playlist automática",
-              "2026",
-            ]
-              .filter(Boolean)
-              .join(" • "),
-          ]}
-          thumbnailUrl={playlist.thumbnails[0]?.url}
-          actions={[
-            { label: "Reproduzir", icon: Play, onClick: () => onPlayAll(tracks) },
-            { label: "Aleatório", icon: Shuffle, onClick: () => onPlayAll([...tracks].sort(() => Math.random() - 0.5)) },
-          ]}
-          onGoToAuthor={playlist.author.id ? () => onNavigate({ type: "artist", artistId: playlist.author.id! }) : undefined}
+  const headerContent = (
+    <div className="space-y-6 p-4">
+      <CollectionHeader
+        title={playlist.title}
+        subtitle={playlist.author.name}
+        infoLines={[
+          [
+            playlist.trackCount !== undefined ? `${playlist.trackCount} músicas` : "",
+          ]
+            .filter(Boolean)
+            .join(" • "),
+        ]}
+        thumbnailUrl={playlist.thumbnails[playlist.thumbnails.length - 1]?.url ?? playlist.thumbnails[0]?.url}
+        actions={[
+          { label: "Reproduzir", icon: Play, onClick: () => onPlayAll(tracks) },
+          { label: "Aleatório", icon: Shuffle, onClick: () => onPlayAll([...tracks].sort(() => Math.random() - 0.5)) },
+        ]}
+        onGoToAuthor={playlist.author.id ? () => onNavigate({ type: "artist", artistId: playlist.author.id! }) : undefined}
+      />
+
+      <div className="relative">
+        <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+        <Input
+          value={filter}
+          onChange={(e) => setFilter(e.target.value)}
+          placeholder="Filtrar a playlist por título, artista ou álbum"
+          className="pl-8"
         />
-
-        <div className="relative">
-          <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            value={filter}
-            onChange={(e) => setFilter(e.target.value)}
-            placeholder="Filtrar a playlist por título, artista ou álbum"
-            className="pl-8"
-          />
-        </div>
-
-        <TrackTable
-          tracks={filteredTracks}
-          currentTrackId={currentTrack?.videoId}
-          isPlaying={isPlaying}
-          onPlay={onPlayTrack}
-          onAddToQueue={onAddToQueue}
-          onGoToArtist={(id) => onNavigate({ type: "artist", artistId: id })}
-          onGoToAlbum={(id) => onNavigate({ type: "album", albumId: id })}
-        />
-
-        {filter && filteredTracks.length === 0 && (
-          <p className="py-8 text-center text-sm text-muted-foreground">
-            Nenhuma música encontrada para "{filter}"
-          </p>
-        )}
       </div>
-    </ScrollArea>
+    </div>
+  );
+
+  return (
+    // flex-1 min-h-0 is correct for a flex child that must fill available height.
+    // h-full works in most cases but can misresolve when the parent height comes from flex.
+    <div className="flex min-h-0 flex-1 flex-col">
+      <TrackTable
+        tracks={filteredTracks}
+        currentTrackId={currentTrack?.videoId}
+        isPlaying={isPlaying}
+        enableVirtualization
+        headerContent={headerContent}
+        onEndReached={loadMore}
+        onPlay={onPlayTrack}
+        onAddToQueue={onAddToQueue}
+        onGoToArtist={(id) => onNavigate({ type: "artist", artistId: id })}
+        onGoToAlbum={(id) => onNavigate({ type: "album", albumId: id })}
+      />
+
+    </div>
   );
 }

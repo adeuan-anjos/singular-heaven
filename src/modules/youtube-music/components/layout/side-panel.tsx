@@ -1,10 +1,10 @@
-import { useState, useEffect } from "react";
-import { ScrollArea } from "@/components/ui/scroll-area";
+import { useState, useEffect, useRef } from "react";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import { Separator } from "@/components/ui/separator";
-import { Home, Compass, Library, Heart, Loader2 } from "lucide-react";
+import { Home, Compass, Library, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { ytGetLibraryPlaylists, ytGetLibrarySongs } from "../../services/yt-api";
-import { mapLibraryPlaylists, mapLibrarySongs } from "../../services/mappers";
+import { ytGetLibraryPlaylists } from "../../services/yt-api";
+import { mapLibraryPlaylists } from "../../services/mappers";
 import type { Playlist } from "../../types/music";
 
 interface SidePanelProps {
@@ -19,38 +19,32 @@ const NAV_ITEMS = [
   { key: "library", label: "Biblioteca", icon: Library },
 ] as const;
 
+const PLAYLIST_ROW_HEIGHT = 48;
+
 export function SidePanel({
   activeView,
   onViewChange,
   onSelectPlaylist,
 }: SidePanelProps) {
   const [playlists, setPlaylists] = useState<Playlist[]>([]);
-  const [likedCount, setLikedCount] = useState(0);
   const [loading, setLoading] = useState(true);
+  const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     let cancelled = false;
 
     async function fetchSidebarData() {
-      console.log("[SidePanel] Fetching sidebar playlists and liked count...");
+      console.log("[SidePanel] Fetching sidebar playlists...");
       setLoading(true);
       try {
-        const [apiPlaylists, apiSongs] = await Promise.all([
-          ytGetLibraryPlaylists(),
-          ytGetLibrarySongs(),
-        ]);
+        const apiPlaylists = await ytGetLibraryPlaylists();
         if (cancelled) return;
         const mappedPlaylists = mapLibraryPlaylists(apiPlaylists);
-        const mappedSongs = mapLibrarySongs(apiSongs);
-        console.log("[SidePanel] Loaded sidebar data:", {
-          playlistCount: mappedPlaylists.length,
-          likedCount: mappedSongs.length,
-        });
+        console.log("[SidePanel] Loaded playlists:", mappedPlaylists.length);
         setPlaylists(mappedPlaylists);
-        setLikedCount(mappedSongs.length);
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
-        console.error("[SidePanel] Failed to load sidebar data:", msg);
+        console.error("[SidePanel] Failed to load playlists:", msg);
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -59,6 +53,13 @@ export function SidePanel({
     fetchSidebarData();
     return () => { cancelled = true; };
   }, []);
+
+  const virtualizer = useVirtualizer({
+    count: playlists.length,
+    getScrollElement: () => scrollRef.current,
+    estimateSize: () => PLAYLIST_ROW_HEIGHT,
+    overscan: 8,
+  });
 
   const handleNavClick = (key: string) => {
     onViewChange(key);
@@ -96,68 +97,55 @@ export function SidePanel({
           Todas as playlists
         </h3>
       </div>
-      <ScrollArea className="flex-1">
-        {loading ? (
-          <div className="flex items-center justify-center py-8">
-            <Loader2 className="size-4 animate-spin text-muted-foreground" />
-          </div>
-        ) : (
-          <div className="flex flex-col gap-0.5 px-2 pb-4">
-            {/* Curtidas */}
-            <button
-              onClick={() => onSelectPlaylist(null)}
-              className="flex w-full items-center gap-3 rounded-md px-2 py-1.5 text-left transition-colors hover:bg-accent"
-            >
-              <div className="flex size-9 shrink-0 items-center justify-center rounded-sm bg-primary/10">
-                <Heart className="size-4 text-primary" />
-              </div>
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-medium leading-tight">
-                  Curtidas
-                </p>
-                <p className="mt-0.5 truncate text-xs leading-tight text-muted-foreground">
-                  {likedCount} músicas
-                </p>
-              </div>
-            </button>
 
-            {/* User playlists */}
-            {playlists.map((pl) => {
-              const thumbUrl = pl.thumbnails?.[0]?.url;
+      {loading ? (
+        <div className="flex flex-1 items-center justify-center">
+          <Loader2 className="size-4 animate-spin text-muted-foreground" />
+        </div>
+      ) : (
+        <div
+          ref={scrollRef}
+          className="styled-scrollbar min-h-0 flex-1 overflow-y-auto px-2 pb-4"
+        >
+          <div style={{ height: virtualizer.getTotalSize(), position: "relative" }}>
+            {virtualizer.getVirtualItems().map((vItem) => {
+              const pl = playlists[vItem.index];
+              const thumbUrl = pl.thumbnails[0]?.url;
               const initials = pl.title.slice(0, 2).toUpperCase();
+
               return (
-                <button
+                <div
                   key={pl.playlistId}
-                  onClick={() => onSelectPlaylist(pl.playlistId)}
-                  className="flex w-full items-center gap-3 rounded-md px-2 py-1.5 text-left transition-colors hover:bg-accent"
+                  style={{
+                    position: "absolute",
+                    top: 0,
+                    left: 0,
+                    width: "100%",
+                    height: vItem.size,
+                    transform: `translateY(${vItem.start}px)`,
+                  }}
                 >
-                  <div className="flex size-9 shrink-0 items-center justify-center overflow-hidden rounded-sm bg-muted">
-                    {thumbUrl ? (
-                      <img
-                        src={thumbUrl}
-                        alt={pl.title}
-                        className="h-full w-full object-cover"
-                      />
-                    ) : (
-                      <span className="text-xs text-muted-foreground">
-                        {initials}
-                      </span>
-                    )}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium leading-tight">
-                      {pl.title}
-                    </p>
-                    <p className="mt-0.5 truncate text-xs leading-tight text-muted-foreground">
-                      {pl.author?.name} {pl.trackCount != null && `\u2022 ${pl.trackCount} músicas`}
-                    </p>
-                  </div>
-                </button>
+                  <button
+                    onClick={() => onSelectPlaylist(pl.playlistId)}
+                    className="flex h-full w-full items-center gap-3 rounded-md px-2 text-left transition-colors hover:bg-accent"
+                  >
+                    <div className="flex size-9 shrink-0 items-center justify-center overflow-hidden rounded-sm bg-muted">
+                      {thumbUrl ? (
+                        <img referrerPolicy="no-referrer" src={thumbUrl} alt={pl.title} className="h-full w-full object-cover" />
+                      ) : (
+                        <span className="text-xs text-muted-foreground">{initials}</span>
+                      )}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-medium leading-tight">{pl.title}</p>
+                    </div>
+                  </button>
+                </div>
               );
             })}
           </div>
-        )}
-      </ScrollArea>
+        </div>
+      )}
     </div>
   );
 }

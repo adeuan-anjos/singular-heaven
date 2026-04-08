@@ -242,10 +242,31 @@ pub async fn yt_get_playlist(
 ) -> Result<String, String> {
     println!("[yt_get_playlist] playlist_id={playlist_id}");
     let state = state.lock().await;
-    let result = state.client.get_playlist(&playlist_id).await
+    let (playlist, continuation) = state.client.get_playlist(&playlist_id).await
         .map_err(|e| format!("[yt_get_playlist] {e}"))?;
-    serde_json::to_string(&result)
+    let response = serde_json::json!({
+        "playlist": serde_json::to_value(&playlist).unwrap_or_default(),
+        "continuation": continuation,
+    });
+    serde_json::to_string(&response)
         .map_err(|e| format!("[yt_get_playlist] serialization: {e}"))
+}
+
+#[tauri::command]
+pub async fn yt_get_playlist_continuation(
+    continuation_token: String,
+    state: State<'_, Arc<Mutex<YtMusicState>>>,
+) -> Result<String, String> {
+    println!("[yt_get_playlist_continuation]");
+    let state = state.lock().await;
+    let (tracks, next_token) = state.client.get_playlist_continuation(&continuation_token).await
+        .map_err(|e| format!("[yt_get_playlist_continuation] {e}"))?;
+    let response = serde_json::json!({
+        "tracks": serde_json::to_value(&tracks).unwrap_or_default(),
+        "continuation": next_token,
+    });
+    serde_json::to_string(&response)
+        .map_err(|e| format!("[yt_get_playlist_continuation] serialization: {e}"))
 }
 
 // ---------------------------------------------------------------------------
@@ -276,6 +297,48 @@ pub async fn yt_get_lyrics(
         .map_err(|e| format!("[yt_get_lyrics] {e}"))?;
     serde_json::to_string(&result)
         .map_err(|e| format!("[yt_get_lyrics] serialization: {e}"))
+}
+
+// ---------------------------------------------------------------------------
+// Account switching (brand accounts)
+// ---------------------------------------------------------------------------
+
+#[tauri::command]
+pub async fn yt_get_accounts(
+    state: State<'_, Arc<Mutex<YtMusicState>>>,
+) -> Result<String, String> {
+    println!("[yt_get_accounts]");
+    let state = state.lock().await;
+    let result = state.client.get_accounts().await
+        .map_err(|e| format!("[yt_get_accounts] {e}"))?;
+    serde_json::to_string(&result)
+        .map_err(|e| format!("[yt_get_accounts] serialization: {e}"))
+}
+
+#[tauri::command]
+pub async fn yt_switch_account(
+    page_id: Option<String>,
+    app: AppHandle,
+    state: State<'_, Arc<Mutex<YtMusicState>>>,
+) -> Result<String, String> {
+    println!("[yt_switch_account] page_id={page_id:?}");
+    let mut state = state.lock().await;
+    state.client.set_on_behalf_of_user(page_id.clone());
+
+    // Persist pageId to disk
+    if let Ok(dir) = app.path().app_data_dir() {
+        if let Some(ref pid) = page_id {
+            let _ = YtMusicState::save_page_id(&dir, pid);
+        } else {
+            YtMusicState::delete_page_id(&dir);
+        }
+    }
+
+    // Return updated account info
+    let result = state.client.get_accounts().await
+        .map_err(|e| format!("[yt_switch_account] {e}"))?;
+    serde_json::to_string(&result)
+        .map_err(|e| format!("[yt_switch_account] serialization: {e}"))
 }
 
 // ---------------------------------------------------------------------------
@@ -406,8 +469,9 @@ pub async fn yt_auth_logout(
         .app_data_dir()
         .map_err(|e| format!("[yt_auth_logout] Failed to resolve app data dir: {e}"))?;
 
-    // Delete saved cookie file
+    // Delete saved cookie file and page_id
     YtMusicState::delete_cookies(&app_data_dir)?;
+    YtMusicState::delete_page_id(&app_data_dir);
 
     // Recreate unauthenticated state (sync — no .await)
     println!("[yt_auth_logout] Recreating unauthenticated client...");

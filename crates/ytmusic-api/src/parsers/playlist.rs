@@ -5,13 +5,49 @@ use crate::nav::*;
 use crate::types::common::{ArtistRef, AlbumRef};
 use crate::types::playlist::*;
 
+/// Extract the initial continuation token from the first page of a playlist browse response.
+pub fn extract_initial_continuation_token(response: &Value) -> Option<String> {
+    // Try twoColumnBrowseResultsRenderer path (musicPlaylistShelfRenderer)
+    let contents = response.pointer("/contents/twoColumnBrowseResultsRenderer/secondaryContents/sectionListRenderer/contents/0/musicPlaylistShelfRenderer/contents")
+        .or_else(|| response.pointer("/contents/twoColumnBrowseResultsRenderer/secondaryContents/sectionListRenderer/contents/0/musicShelfRenderer/contents"))
+        .and_then(|v| v.as_array());
+
+    contents.and_then(|items| extract_continuation_token(items))
+}
+
 pub fn parse_playlist_response(response: &Value, playlist_id: &str) -> Result<PlaylistPage> {
-    // Header: twoColumnBrowseResultsRenderer → musicResponsiveHeaderRenderer
-    let header = nav(response, &[
-        "contents", "twoColumnBrowseResultsRenderer", "tabs", "0",
-        "tabRenderer", "content", "sectionListRenderer", "contents", "0",
-        "musicResponsiveHeaderRenderer",
-    ]);
+    // Liked songs ("VLLM") uses singleColumnBrowseResultsRenderer; all other
+    // playlists use twoColumnBrowseResultsRenderer. Try both.
+    let is_single_col = response
+        .pointer("/contents/singleColumnBrowseResultsRenderer")
+        .is_some();
+
+    let header = if is_single_col {
+        nav(response, &[
+            "contents", "singleColumnBrowseResultsRenderer", "tabs", "0",
+            "tabRenderer", "content", "sectionListRenderer", "contents", "0",
+            "musicImmersiveHeaderRenderer",
+        ])
+        .or_else(|| nav(response, &[
+            "contents", "singleColumnBrowseResultsRenderer", "tabs", "0",
+            "tabRenderer", "content", "sectionListRenderer", "contents", "0",
+            "musicResponsiveHeaderRenderer",
+        ]))
+    } else {
+        // Try direct musicResponsiveHeaderRenderer first
+        nav(response, &[
+            "contents", "twoColumnBrowseResultsRenderer", "tabs", "0",
+            "tabRenderer", "content", "sectionListRenderer", "contents", "0",
+            "musicResponsiveHeaderRenderer",
+        ])
+        // Editable playlists wrap the header inside musicEditablePlaylistDetailHeaderRenderer
+        .or_else(|| nav(response, &[
+            "contents", "twoColumnBrowseResultsRenderer", "tabs", "0",
+            "tabRenderer", "content", "sectionListRenderer", "contents", "0",
+            "musicEditablePlaylistDetailHeaderRenderer", "header",
+            "musicResponsiveHeaderRenderer",
+        ]))
+    };
 
     let h = header.as_ref();
 
@@ -86,11 +122,38 @@ pub fn parse_playlist_response(response: &Value, playlist_id: &str) -> Result<Pl
 
     let thumbnails = h.map(parse_thumbnails).unwrap_or_default();
 
-    // Tracks: secondaryContents → musicShelfRenderer
-    let tracks_array = nav_array(response, &[
-        "contents", "twoColumnBrowseResultsRenderer", "secondaryContents",
-        "sectionListRenderer", "contents", "0", "musicShelfRenderer", "contents",
-    ]);
+    // Tracks: two-column layout uses secondaryContents; single-column (liked songs)
+    // puts the shelf inside the primary tab content instead.
+    let tracks_array = if is_single_col {
+        nav_array(response, &[
+            "contents", "singleColumnBrowseResultsRenderer", "tabs", "0",
+            "tabRenderer", "content", "sectionListRenderer", "contents", "0",
+            "musicShelfRenderer", "contents",
+        ])
+        .into_iter()
+        // The first item is typically a "shuffle" button with no videoId — skip it
+        .filter(|item| {
+            item.get("musicResponsiveListItemRenderer")
+                .and_then(|r| r.get("playlistItemData"))
+                .and_then(|p| p.get("videoId"))
+                .is_some()
+        })
+        .collect()
+    } else {
+        // Try musicShelfRenderer first, then musicPlaylistShelfRenderer
+        let arr = nav_array(response, &[
+            "contents", "twoColumnBrowseResultsRenderer", "secondaryContents",
+            "sectionListRenderer", "contents", "0", "musicShelfRenderer", "contents",
+        ]);
+        if !arr.is_empty() {
+            arr
+        } else {
+            nav_array(response, &[
+                "contents", "twoColumnBrowseResultsRenderer", "secondaryContents",
+                "sectionListRenderer", "contents", "0", "musicPlaylistShelfRenderer", "contents",
+            ])
+        }
+    };
 
     let mut tracks = Vec::new();
     for item in &tracks_array {
@@ -138,10 +201,12 @@ fn parse_playlist_track(renderer: &Value) -> Option<PlaylistTrack> {
         .and_then(|t| get_text(t));
 
     let col1_runs = get_flex_column_runs(cols, 1).unwrap_or_default();
+    let col2_runs = get_flex_column_runs(cols, 2).unwrap_or_default();
 
-    // Artists: runs with UC browseId; Album: runs with MPRE browseId
+    // Artists from col1; Album from col2 (playlist layout) or col1 fallback
     let artists = parse_artists_from_runs(&col1_runs);
-    let album = parse_album_from_runs(&col1_runs);
+    let album = parse_album_from_runs(&col2_runs)
+        .or_else(|| parse_album_from_runs(&col1_runs));
 
     let thumbnails = parse_thumbnails(renderer);
 
@@ -222,6 +287,38 @@ fn parse_album_from_runs(runs: &[Value]) -> Option<AlbumRef> {
         }
     }
     None
+}
+
+/// Extract the 2025-style continuation token from the last item in a contents array.
+/// The last item is a `continuationItemRenderer` with the token inside.
+pub fn extract_continuation_token(contents: &[Value]) -> Option<String> {
+    contents.last()
+        .and_then(|item| item.get("continuationItemRenderer"))
+        .and_then(|r| r.get("continuationEndpoint"))
+        .and_then(|e| e.get("continuationCommand"))
+        .and_then(|c| c.get("token"))
+        .and_then(|t| t.as_str())
+        .map(|s| s.to_string())
+}
+
+/// Parse a continuation response for playlist tracks.
+/// Continuation responses use `onResponseReceivedActions[0].appendContinuationItemsAction.continuationItems`.
+pub fn parse_playlist_continuation(response: &Value) -> (Vec<PlaylistTrack>, Option<String>) {
+    let items = nav_array(response, &[
+        "onResponseReceivedActions", "0", "appendContinuationItemsAction", "continuationItems",
+    ]);
+
+    let mut tracks = Vec::new();
+    for item in &items {
+        if let Some(renderer) = item.get("musicResponsiveListItemRenderer") {
+            if let Some(track) = parse_playlist_track(renderer) {
+                tracks.push(track);
+            }
+        }
+    }
+
+    let next_token = extract_continuation_token(&items);
+    (tracks, next_token)
 }
 
 /// Extract a 4-digit year from runs (searching from the end).

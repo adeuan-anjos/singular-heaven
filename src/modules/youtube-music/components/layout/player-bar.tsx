@@ -52,6 +52,7 @@ export function PlayerBar({ onOpenQueue, onGoToArtist, onGoToAlbum }: PlayerBarP
 
   if (!track) return null;
 
+  // Use the largest available thumbnail (last in array = highest resolution)
   const imgUrl = track.thumbnails[0]?.url ?? "";
   const artistName = track.artists.map((a) => a.name).join(", ");
 

@@ -117,6 +117,7 @@ export interface ApiArtistSong {
   videoId: string;
   artists: ApiArtistRef[];
   thumbnails: ApiThumbnail[];
+  album: ApiAlbumRef | null;
   plays: string | null;
 }
 
@@ -280,6 +281,16 @@ export interface ApiLyrics {
   source: string | null;
 }
 
+// Account switching
+export interface ApiAccountInfo {
+  name: string;
+  photoUrl: string | null;
+  channelHandle: string | null;
+  pageId: string | null;
+  hasChannel: boolean;
+  isActive: boolean;
+}
+
 // Auth
 export interface ApiAuthStatus {
   authenticated: boolean;
@@ -345,8 +356,23 @@ export async function ytGetLibrarySongs(): Promise<ApiLibrarySong[]> {
   return parseJson(json);
 }
 
-export async function ytGetPlaylist(playlistId: string): Promise<ApiPlaylistPage> {
+export interface ApiPlaylistResponse {
+  playlist: ApiPlaylistPage;
+  continuation: string | null;
+}
+
+export interface ApiPlaylistContinuationResponse {
+  tracks: ApiPlaylistTrack[];
+  continuation: string | null;
+}
+
+export async function ytGetPlaylist(playlistId: string): Promise<ApiPlaylistResponse> {
   const json = await invoke<string>("yt_get_playlist", { playlistId });
+  return parseJson(json);
+}
+
+export async function ytGetPlaylistContinuation(continuationToken: string): Promise<ApiPlaylistContinuationResponse> {
+  const json = await invoke<string>("yt_get_playlist_continuation", { continuationToken });
   return parseJson(json);
 }
 
@@ -374,4 +400,14 @@ export async function ytAuthFromBrowser(browser: string): Promise<ApiAuthStatus>
 
 export async function ytAuthLogout(): Promise<ApiAuthStatus> {
   return invoke<ApiAuthStatus>("yt_auth_logout");
+}
+
+export async function ytGetAccounts(): Promise<ApiAccountInfo[]> {
+  const json = await invoke<string>("yt_get_accounts");
+  return parseJson(json);
+}
+
+export async function ytSwitchAccount(pageId: string | null): Promise<ApiAccountInfo[]> {
+  const json = await invoke<string>("yt_switch_account", { pageId });
+  return parseJson(json);
 }

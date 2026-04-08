@@ -79,4 +79,47 @@ impl YtMusicState {
         }
         Ok(())
     }
+
+    // -------------------------------------------------------------------------
+    // Page ID (brand account) persistence
+    // -------------------------------------------------------------------------
+
+    pub fn get_page_id_path(app_data_dir: &PathBuf) -> PathBuf {
+        app_data_dir.join("yt_page_id.txt")
+    }
+
+    pub fn save_page_id(app_data_dir: &PathBuf, page_id: &str) -> Result<(), String> {
+        let path = Self::get_page_id_path(app_data_dir);
+        println!("[YtMusicState] Saving page_id to {}", path.display());
+        std::fs::create_dir_all(app_data_dir)
+            .map_err(|e| format!("Failed to create app data dir: {e}"))?;
+        std::fs::write(&path, page_id)
+            .map_err(|e| format!("Failed to write page_id file: {e}"))?;
+        println!("[YtMusicState] Page ID saved: {page_id}");
+        Ok(())
+    }
+
+    pub fn load_page_id(app_data_dir: &PathBuf) -> Option<String> {
+        let path = Self::get_page_id_path(app_data_dir);
+        println!("[YtMusicState] Checking for saved page_id at {}", path.display());
+        match std::fs::read_to_string(&path) {
+            Ok(pid) if !pid.trim().is_empty() => {
+                let pid = pid.trim().to_string();
+                println!("[YtMusicState] Page ID loaded: {pid}");
+                Some(pid)
+            }
+            _ => {
+                println!("[YtMusicState] No saved page_id found.");
+                None
+            }
+        }
+    }
+
+    pub fn delete_page_id(app_data_dir: &PathBuf) {
+        let path = Self::get_page_id_path(app_data_dir);
+        if path.exists() {
+            let _ = std::fs::remove_file(&path);
+            println!("[YtMusicState] Page ID deleted.");
+        }
+    }
 }

@@ -276,7 +276,7 @@ fn parse_mood_item(renderer: &Value) -> Option<MoodItem> {
 /// Parse thumbnails from musicTwoRowItemRenderer.
 fn parse_two_row_thumbnails(renderer: &Value) -> Vec<crate::types::common::Thumbnail> {
     let thumbs = nav_array(renderer, &[
-        "thumbnailRenderer", "musicThumbnailSquareRenderer", "thumbnail", "thumbnails",
+        "thumbnailRenderer", "musicThumbnailRenderer", "thumbnail", "thumbnails",
     ]);
     if !thumbs.is_empty() {
         return thumbs.into_iter()

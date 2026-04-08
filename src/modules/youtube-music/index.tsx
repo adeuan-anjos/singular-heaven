@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { LoginScreen } from "./components/auth/login-screen";
+import { AccountPicker } from "./components/auth/account-picker";
 import { SidePanel } from "./components/layout/side-panel";
 import { TopBar } from "./components/layout/top-bar";
 import { PlayerBar } from "./components/layout/player-bar";
@@ -18,13 +19,14 @@ import { useNavigation } from "./hooks/use-navigation";
 import { usePlayerStore } from "./stores/player-store";
 import { useQueueStore } from "./stores/queue-store";
 import type { Track } from "./types/music";
-import { useRenderTracker, useLeakDetector } from "@/lib/debug";
+import { useRenderTracker, useLeakDetector, startMemoryMonitor } from "@/lib/debug";
 
-type AuthState = "loading" | "unauthenticated" | "authenticated" | "skipped";
+type AuthState = "loading" | "unauthenticated" | "account-select" | "authenticated" | "skipped";
 
 export default function YouTubeMusicModule() {
   useRenderTracker("YouTubeMusicModule", {});
   useLeakDetector("YouTubeMusicModule");
+  useEffect(() => { startMemoryMonitor(5000); }, []);
   const [authState, setAuthState] = useState<AuthState>("loading");
   const [activeTab, setActiveTab] = useState("home");
   const [queueOpen, setQueueOpen] = useState(false);
@@ -47,7 +49,7 @@ export default function YouTubeMusicModule() {
         const status = await invoke<{ authenticated: boolean }>("yt_auth_status");
         console.log("[YouTubeMusicModule] yt_auth_status result", status);
         if (!cancelled) {
-          setAuthState(status.authenticated ? "authenticated" : "unauthenticated");
+          setAuthState(status.authenticated ? "account-select" : "unauthenticated");
         }
       } catch (err) {
         console.error("[YouTubeMusicModule] yt_auth_status failed", err);
@@ -68,7 +70,12 @@ export default function YouTubeMusicModule() {
   }, [playerCleanup, queueCleanup]);
 
   const handleAuthenticated = useCallback(() => {
-    console.log("[YouTubeMusicModule] user authenticated successfully");
+    console.log("[YouTubeMusicModule] user authenticated, proceeding to account selection");
+    setAuthState("account-select");
+  }, []);
+
+  const handleAccountSelected = useCallback(() => {
+    console.log("[YouTubeMusicModule] account selected, proceeding to main UI");
     setAuthState("authenticated");
   }, []);
 
@@ -201,9 +208,17 @@ export default function YouTubeMusicModule() {
     );
   }
 
+  if (authState === "account-select") {
+    return (
+      <AccountPicker
+        onAccountSelected={handleAccountSelected}
+      />
+    );
+  }
+
   return (
     <TooltipProvider delay={0}>
-      <div className="flex h-full flex-col">
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
         {/* Top bar — full width, splits into side-panel spacer + nav controls */}
         <TopBar
           onBack={nav.pop}
@@ -222,7 +237,7 @@ export default function YouTubeMusicModule() {
             onViewChange={handleViewChange}
             onSelectPlaylist={handleSelectPlaylist}
           />
-          <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
             {renderContent()}
           </div>
         </div>

@@ -46,7 +46,7 @@ export function CollectionHeader({
       <div className="flex items-start gap-6">
         <div className="flex h-48 w-48 shrink-0 items-center justify-center overflow-hidden rounded-sm bg-muted">
           {thumbnailUrl ? (
-            <img src={thumbnailUrl} alt={title} className="h-full w-full object-cover" />
+            <img referrerPolicy="no-referrer" src={thumbnailUrl} alt={title} className="h-full w-full object-cover" />
           ) : (
             <span className="text-4xl text-muted-foreground">{title.charAt(0)}</span>
           )}

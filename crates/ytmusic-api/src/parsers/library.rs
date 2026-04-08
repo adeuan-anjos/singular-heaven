@@ -9,6 +9,44 @@ use crate::types::library::*;
 // Library playlists (FEmusic_liked_playlists)
 // ---------------------------------------------------------------------------
 
+/// Extract the continuation token from the gridRenderer (if more pages exist).
+pub fn get_library_playlists_continuation(response: &Value) -> Option<String> {
+    nav_str(response, &[
+        "contents", "singleColumnBrowseResultsRenderer", "tabs", "0",
+        "tabRenderer", "content", "sectionListRenderer", "contents", "0",
+        "gridRenderer", "continuations", "0", "nextContinuationData", "continuation",
+    ])
+}
+
+/// Parse items from a continuation response (gridContinuation path).
+pub fn parse_library_playlists_continuation_response(response: &Value) -> Result<(Vec<LibraryPlaylist>, Option<String>)> {
+    let items = nav_array(response, &[
+        "continuationContents", "gridContinuation", "items",
+    ]);
+
+    let mut playlists = Vec::new();
+    for item in &items {
+        if let Some(renderer) = item.get("musicTwoRowItemRenderer") {
+            if renderer.get("navigationEndpoint")
+                .and_then(|n| n.get("createPlaylistEndpoint"))
+                .is_some()
+            {
+                continue;
+            }
+            if let Some(playlist) = parse_library_playlist(renderer) {
+                playlists.push(playlist);
+            }
+        }
+    }
+
+    let next_token = nav_str(response, &[
+        "continuationContents", "gridContinuation", "continuations", "0",
+        "nextContinuationData", "continuation",
+    ]);
+
+    Ok((playlists, next_token))
+}
+
 pub fn parse_library_playlists_response(response: &Value) -> Result<Vec<LibraryPlaylist>> {
     let items = nav_array(response, &[
         "contents", "singleColumnBrowseResultsRenderer", "tabs", "0",
@@ -167,7 +205,7 @@ fn parse_artists_from_runs(runs: &[Value]) -> Vec<ArtistRef> {
 /// Parse thumbnails from musicTwoRowItemRenderer.
 fn parse_two_row_thumbnails(renderer: &Value) -> Vec<crate::types::common::Thumbnail> {
     let thumbs = nav_array(renderer, &[
-        "thumbnailRenderer", "musicThumbnailSquareRenderer", "thumbnail", "thumbnails",
+        "thumbnailRenderer", "musicThumbnailRenderer", "thumbnail", "thumbnails",
     ]);
     if !thumbs.is_empty() {
         return thumbs.into_iter()

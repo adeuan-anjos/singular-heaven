@@ -48,6 +48,7 @@ export function QueueSheet({ open, onOpenChange }: QueueSheetProps) {
               </p>
             )}
             {queue.map((track, i) => {
+              // Use the largest available thumbnail (last in array = highest resolution)
               const imgUrl = track.thumbnails[0]?.url ?? "";
               const isCurrent = i === currentIndex;
 

@@ -246,7 +246,7 @@ export function TopBar({
                         >
                           <div className="mr-3 flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-sm bg-muted">
                             {track.thumbnails[0]?.url ? (
-                              <img src={track.thumbnails[0].url} alt={track.title} className="h-full w-full object-cover" />
+                              <img referrerPolicy="no-referrer" src={track.thumbnails[0].url} alt={track.title} className="h-full w-full object-cover" />
                             ) : (
                               <span className="text-xs text-muted-foreground">{track.title.charAt(0)}</span>
                             )}
@@ -270,7 +270,7 @@ export function TopBar({
                         >
                           <div className="mr-3 flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-sm bg-muted">
                             {artist.thumbnails[0]?.url ? (
-                              <img src={artist.thumbnails[0].url} alt={artist.name} className="h-full w-full object-cover" />
+                              <img referrerPolicy="no-referrer" src={artist.thumbnails[0].url} alt={artist.name} className="h-full w-full object-cover" />
                             ) : (
                               <span className="text-xs text-muted-foreground">{artist.name.charAt(0)}</span>
                             )}
@@ -290,7 +290,7 @@ export function TopBar({
                         >
                           <div className="mr-3 flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-sm bg-muted">
                             {album.thumbnails[0]?.url ? (
-                              <img src={album.thumbnails[0].url} alt={album.title} className="h-full w-full object-cover" />
+                              <img referrerPolicy="no-referrer" src={album.thumbnails[0].url} alt={album.title} className="h-full w-full object-cover" />
                             ) : (
                               <span className="text-xs text-muted-foreground">{album.title.charAt(0)}</span>
                             )}
@@ -313,7 +313,7 @@ export function TopBar({
                         >
                           <div className="mr-3 flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-sm bg-muted">
                             {pl.thumbnails[0]?.url ? (
-                              <img src={pl.thumbnails[0].url} alt={pl.title} className="h-full w-full object-cover" />
+                              <img referrerPolicy="no-referrer" src={pl.thumbnails[0].url} alt={pl.title} className="h-full w-full object-cover" />
                             ) : (
                               <span className="text-xs text-muted-foreground">{pl.title.charAt(0)}</span>
                             )}

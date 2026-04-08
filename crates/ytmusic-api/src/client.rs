@@ -11,6 +11,9 @@ pub struct YtMusicClient {
     cookies: Option<String>,
     language: String,
     country: String,
+    /// Brand account / channel ID for multi-account support.
+    /// When set, all requests include `user.onBehalfOfUser` in the context.
+    on_behalf_of_user: Option<String>,
 }
 
 impl YtMusicClient {
@@ -25,6 +28,7 @@ impl YtMusicClient {
             cookies: None,
             language: "pt-BR".to_string(),
             country: "BR".to_string(),
+            on_behalf_of_user: None,
         })
     }
 
@@ -40,7 +44,19 @@ impl YtMusicClient {
             cookies: Some(cookies),
             language: "pt-BR".to_string(),
             country: "BR".to_string(),
+            on_behalf_of_user: None,
         })
+    }
+
+    /// Set the brand account / channel ID for multi-account support.
+    pub fn set_on_behalf_of_user(&mut self, user_id: Option<String>) {
+        println!("[YtMusicClient] set_on_behalf_of_user: {:?}", user_id);
+        self.on_behalf_of_user = user_id;
+    }
+
+    /// Get the current on_behalf_of_user value.
+    pub fn on_behalf_of_user(&self) -> Option<&str> {
+        self.on_behalf_of_user.as_deref()
     }
 
     /// Check if the client has cookie authentication.
@@ -50,6 +66,14 @@ impl YtMusicClient {
 
     /// Build the InnerTube context object included in every request body.
     fn build_context(&self) -> Value {
+        let mut user = serde_json::json!({
+            "enableSafetyMode": false
+        });
+
+        if let Some(ref obu) = self.on_behalf_of_user {
+            user["onBehalfOfUser"] = Value::String(obu.clone());
+        }
+
         serde_json::json!({
             "client": {
                 "clientName": CLIENT_NAME,
@@ -57,9 +81,7 @@ impl YtMusicClient {
                 "hl": self.language,
                 "gl": self.country,
             },
-            "user": {
-                "enableSafetyMode": false
-            }
+            "user": user
         })
     }
 

@@ -38,6 +38,7 @@ function ChartRow({
   onGoToArtist?: (artistId: string) => void;
   onGoToAlbum?: (albumId: string) => void;
 }) {
+  // Use the largest available thumbnail (last in array = highest resolution)
   const imgUrl = track.thumbnails[0]?.url ?? "";
   const artistName = track.artists.map((a) => a.name).join(", ");
 
@@ -48,7 +49,7 @@ function ChartRow({
     >
       <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-sm bg-muted">
         {imgUrl ? (
-          <img src={imgUrl} alt={track.title} className="h-full w-full object-cover" />
+          <img referrerPolicy="no-referrer" src={imgUrl} alt={track.title} className="h-full w-full object-cover" />
         ) : (
           <span className="text-sm text-muted-foreground">{track.title.charAt(0)}</span>
         )}

@@ -24,6 +24,7 @@ pub struct ArtistSong {
     pub title: String,
     pub video_id: String,
     pub artists: Vec<ArtistRef>,
+    pub album: Option<super::common::AlbumRef>,
     pub thumbnails: Vec<Thumbnail>,
     pub plays: Option<String>,
 }

@@ -29,7 +29,7 @@ export function TopResultCard({
     >
       <div className="relative h-32 w-32 shrink-0 overflow-hidden rounded-sm bg-muted">
         {imgUrl ? (
-          <img
+          <img referrerPolicy="no-referrer"
             src={imgUrl}
             alt={name}
             className="h-full w-full object-cover"

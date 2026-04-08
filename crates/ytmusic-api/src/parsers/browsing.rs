@@ -164,9 +164,21 @@ fn parse_artist_song(renderer: &Value) -> Option<ArtistSong> {
                 .map(|s| s.to_string())
         });
 
+    // Album from col3 (artist page layout)
+    let col3_runs = get_flex_column_runs(cols, 3).unwrap_or_default();
+    let album = col3_runs.first().and_then(|run| {
+        let name = run.get("text")?.as_str()?.to_string();
+        let id = run.get("navigationEndpoint")
+            .and_then(|n| n.get("browseEndpoint"))
+            .and_then(|b| b.get("browseId"))
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string());
+        Some(crate::types::common::AlbumRef { name, id })
+    });
+
     let thumbnails = parse_thumbnails(renderer);
 
-    Some(ArtistSong { title, video_id, artists, thumbnails, plays })
+    Some(ArtistSong { title, video_id, artists, album, thumbnails, plays })
 }
 
 fn parse_artist_album(renderer: &Value) -> Option<ArtistAlbum> {
@@ -618,9 +630,9 @@ fn extract_year_from_runs(runs: &[Value]) -> Option<String> {
 
 /// Parse thumbnails from musicTwoRowItemRenderer — different path than standard.
 fn parse_two_row_thumbnails(renderer: &Value) -> Vec<Thumbnail> {
-    // Try the square thumbnail path first (musicTwoRowItemRenderer)
+    // musicTwoRowItemRenderer uses thumbnailRenderer.musicThumbnailRenderer
     let thumbs = nav_array(renderer, &[
-        "thumbnailRenderer", "musicThumbnailSquareRenderer", "thumbnail", "thumbnails",
+        "thumbnailRenderer", "musicThumbnailRenderer", "thumbnail", "thumbnails",
     ]);
     if !thumbs.is_empty() {
         return thumbs.into_iter()

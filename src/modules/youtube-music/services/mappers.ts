@@ -121,8 +121,8 @@ function mapArtistSong(song: ApiArtistSong): Track {
     videoId: song.videoId,
     title: song.title,
     artists: song.artists.map(mapArtistRef),
-    album: null,
-    duration: "0:00",
+    album: song.album ? { id: song.album.id ?? "", name: song.album.name } : null,
+    duration: "",
     durationSeconds: 0,
     thumbnails: mapThumbnails(song.thumbnails),
     views: song.plays ?? undefined,
@@ -180,10 +180,15 @@ export function mapArtistPage(page: ApiArtistPage): Artist {
 // Album
 // ---------------------------------------------------------------------------
 
-function mapAlbumTrack(track: ApiAlbumTrack, albumArtists: ArtistBasic[]): Track {
+function mapAlbumTrack(track: ApiAlbumTrack, albumArtists: ArtistBasic[], albumThumbnails: Thumbnail[]): Track {
   const artists = track.artists.length > 0
     ? track.artists.map(mapArtistRef)
     : albumArtists;
+
+  // Album tracks often have no individual thumbnails — use album cover as fallback
+  const thumbnails = track.thumbnails.length > 0
+    ? mapThumbnails(track.thumbnails)
+    : albumThumbnails;
 
   return {
     videoId: track.videoId,
@@ -192,19 +197,20 @@ function mapAlbumTrack(track: ApiAlbumTrack, albumArtists: ArtistBasic[]): Track
     album: null,
     duration: track.duration ?? "0:00",
     durationSeconds: parseDuration(track.duration),
-    thumbnails: mapThumbnails(track.thumbnails),
+    thumbnails,
   };
 }
 
 export function mapAlbumPage(page: ApiAlbumPage): Album {
   const albumArtists = page.artists.map(mapArtistRef);
+  const albumThumbnails = mapThumbnails(page.thumbnails);
   return {
     browseId: page.browseId,
     title: page.title,
     artists: albumArtists,
     year: page.year ?? undefined,
-    thumbnails: mapThumbnails(page.thumbnails),
-    tracks: page.tracks.map((t) => mapAlbumTrack(t, albumArtists)),
+    thumbnails: albumThumbnails,
+    tracks: page.tracks.map((t) => mapAlbumTrack(t, albumArtists, albumThumbnails)),
   };
 }
 
@@ -350,7 +356,7 @@ export function mapLibrarySongs(songs: ApiLibrarySong[]): Track[] {
 // Playlist
 // ---------------------------------------------------------------------------
 
-function mapPlaylistTrack(track: ApiPlaylistTrack): Track {
+export function mapPlaylistTrack(track: ApiPlaylistTrack): Track {
   return {
     videoId: track.videoId,
     title: track.title,

@@ -37,17 +37,6 @@ export function VirtualTrackList({
   const items = virtualizer.getVirtualItems();
   const totalSize = virtualizer.getTotalSize();
 
-  console.log("[VirtualTrackList] render", {
-    totalTracks: tracks.length,
-    renderedItems: items.length,
-    containerHeight: parentRef.current?.clientHeight ?? 0,
-    scrollTop: parentRef.current?.scrollTop ?? 0,
-    totalVirtualHeight: totalSize,
-    isScrollable:
-      (parentRef.current?.scrollHeight ?? 0) >
-      (parentRef.current?.clientHeight ?? 0),
-  });
-
   return (
     <div ref={parentRef} className={`styled-scrollbar ${className ?? ""}`} style={{ overflowY: "auto" }}>
       <div
@@ -85,19 +74,6 @@ export function VirtualTrackList({
         })}
       </div>
 
-      {/* Debug overlay */}
-      <div className="pointer-events-none fixed bottom-20 right-4 z-50 rounded bg-black/80 p-2 text-xs text-green-400 font-mono">
-        <div>Tracks: {tracks.length}</div>
-        <div>Rendered: {items.length}</div>
-        <div>Container H: {parentRef.current?.clientHeight ?? 0}px</div>
-        <div>
-          Scrollable:{" "}
-          {(parentRef.current?.scrollHeight ?? 0) >
-          (parentRef.current?.clientHeight ?? 0)
-            ? "YES"
-            : "NO"}
-        </div>
-      </div>
     </div>
   );
 }

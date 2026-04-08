@@ -85,7 +85,8 @@ export function ArtistSongsPage({
 
   if (!artist) return null;
 
-  const imgUrl = artist.thumbnails[0]?.url ?? "";
+  // Use the largest available thumbnail (last in array = highest resolution)
+  const imgUrl = artist.thumbnails[artist.thumbnails.length - 1]?.url ?? "";
 
   const infoLines: string[] = [];
   if (artist.monthlyListeners) infoLines.push(artist.monthlyListeners);

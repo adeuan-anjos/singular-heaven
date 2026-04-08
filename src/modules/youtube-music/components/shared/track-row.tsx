@@ -22,6 +22,7 @@ interface TrackRowProps {
 
 export function TrackRow({ track, index, isPlaying, onPlay, onAddToQueue, onGoToArtist, onGoToAlbum }: TrackRowProps) {
   const [liked, setLiked] = useState(false);
+  // Use the largest available thumbnail (last in the array = highest resolution)
   const imgUrl = track.thumbnails[0]?.url ?? "";
   const artistName = track.artists.map((a) => a.name).join(", ");
 
@@ -56,7 +57,7 @@ export function TrackRow({ track, index, isPlaying, onPlay, onAddToQueue, onGoTo
       )}
       <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-sm bg-muted">
         {imgUrl ? (
-          <img src={imgUrl} alt={track.title} className="h-full w-full object-cover" />
+          <img referrerPolicy="no-referrer" src={imgUrl} alt={track.title} className="h-full w-full object-cover" />
         ) : (
           <span className="text-sm text-muted-foreground">{track.title.charAt(0)}</span>
         )}

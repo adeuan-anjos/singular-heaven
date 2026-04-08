@@ -50,3 +50,15 @@ pub enum VideoType {
     #[serde(rename = "MUSIC_VIDEO_TYPE_OFFICIAL_SOURCE_MUSIC")]
     OfficialSource,
 }
+
+/// YouTube account/channel info for multi-account support.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AccountInfo {
+    pub name: String,
+    pub photo_url: Option<String>,
+    pub channel_handle: Option<String>,
+    pub page_id: Option<String>,
+    pub has_channel: bool,
+    pub is_active: bool,
+}

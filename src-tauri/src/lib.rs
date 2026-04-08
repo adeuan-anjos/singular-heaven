@@ -74,7 +74,14 @@ pub fn run() {
             if let Some(cookie_string) = saved_cookies {
                 println!("[setup] Found saved cookies, creating cookie-auth client...");
                 match YtMusicState::new_from_cookies(cookie_string) {
-                    Ok(state) => {
+                    Ok(mut state) => {
+                        // Restore saved brand account (pageId) if available
+                        if let Some(ref dir) = app_data_dir {
+                            if let Some(page_id) = YtMusicState::load_page_id(dir) {
+                                println!("[setup] Restoring saved page_id: {page_id}");
+                                state.client.set_on_behalf_of_user(Some(page_id));
+                            }
+                        }
                         println!("[setup] Cookie-auth client created from saved cookies.");
                         app.manage(Arc::new(Mutex::new(state)));
                         println!("[setup] YtMusicState added to managed state.");
@@ -113,12 +120,15 @@ pub fn run() {
             youtube_music::commands::yt_get_library_playlists,
             youtube_music::commands::yt_get_library_songs,
             youtube_music::commands::yt_get_playlist,
+            youtube_music::commands::yt_get_playlist_continuation,
             youtube_music::commands::yt_get_watch_playlist,
             youtube_music::commands::yt_get_lyrics,
             youtube_music::commands::yt_auth_status,
             youtube_music::commands::yt_auth_logout,
             youtube_music::commands::yt_detect_browsers,
             youtube_music::commands::yt_auth_from_browser,
+            youtube_music::commands::yt_get_accounts,
+            youtube_music::commands::yt_switch_account,
         ])
         .on_window_event(|window, event| {
             #[cfg(target_os = "windows")]

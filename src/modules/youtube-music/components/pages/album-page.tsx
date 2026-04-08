@@ -96,7 +96,7 @@ export function AlbumPage({
           infoLines={[
             [album.year, `${tracks.length} músicas`].filter(Boolean).join(" • "),
           ]}
-          thumbnailUrl={album.thumbnails[0]?.url}
+          thumbnailUrl={album.thumbnails[album.thumbnails.length - 1]?.url ?? album.thumbnails[0]?.url}
           actions={[
             { label: "Reproduzir", icon: Play, onClick: () => onPlayAll(tracks) },
             { label: "Aleatório", icon: Shuffle, onClick: () => onPlayAll([...tracks].sort(() => Math.random() - 0.5)) },

@@ -26,7 +26,8 @@ export function MediaCard({
   onGoToArtist,
   onGoToAlbum,
 }: MediaCardProps) {
-  const imgUrl = thumbnails[0]?.url ?? "";
+  // Use the largest available thumbnail (last in the array = highest resolution)
+  const imgUrl = thumbnails[thumbnails.length - 1]?.url ?? thumbnails[0]?.url ?? "";
 
   const subtitleParts: React.ReactNode[] = [];
 
@@ -94,7 +95,7 @@ export function MediaCard({
         onClick={onClick}
       >
         {imgUrl ? (
-          <img
+          <img referrerPolicy="no-referrer"
             src={imgUrl}
             alt={title}
             className="h-full w-full object-cover"
