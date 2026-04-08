@@ -153,7 +153,7 @@ export const usePlayerStore = create<PlayerStore>()(
         set({ repeat: next });
       },
 
-      _onTrackEnd: async () => {
+      _onTrackEnd: () => {
         const { repeat, currentTrackId } = get();
 
         if (repeat === "one" && currentTrackId) {
@@ -165,14 +165,7 @@ export const usePlayerStore = create<PlayerStore>()(
         }
 
         const queueState = useQueueStore.getState();
-        let nextId = queueState.next();
-
-        // If no next track but has continuation, try loading more
-        if (!nextId && queueState.continuationToken && !useQueueStore.getState().isLoadingMore) {
-          console.log("[PlayerStore] End of loaded queue, fetching more...");
-          await queueState.loadMore();
-          nextId = useQueueStore.getState().next();
-        }
+        const nextId = queueState.next();
 
         if (nextId) {
           console.log("[PlayerStore] Playing next from queue", { videoId: nextId });
@@ -184,7 +177,7 @@ export const usePlayerStore = create<PlayerStore>()(
             get().play(firstId);
           }
         } else {
-          console.log("[PlayerStore] Queue ended");
+          console.log("[PlayerStore] Queue ended, isComplete=", queueState.isComplete);
           set({ isPlaying: false });
         }
       },
