@@ -62,11 +62,19 @@ export const useQueueStore = create<QueueStore>()(
     },
 
     next: () => {
-      const { currentIndex, trackIds } = get();
+      const { currentIndex, trackIds, continuationToken, isLoadingMore } = get();
       if (currentIndex < trackIds.length - 1) {
         const nextIndex = currentIndex + 1;
         console.log("[QueueStore] next", { from: currentIndex, to: nextIndex });
         set({ currentIndex: nextIndex });
+
+        // Proactive prefetch: load more when within 5 tracks of loaded end
+        const remaining = trackIds.length - 1 - nextIndex;
+        if (remaining <= 5 && continuationToken && !isLoadingMore) {
+          console.log("[QueueStore] Proactive prefetch triggered", { remaining });
+          get().loadMore(); // fire-and-forget, does not block next()
+        }
+
         return trackIds[nextIndex];
       }
       console.log("[QueueStore] next — end of queue");
