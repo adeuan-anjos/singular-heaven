@@ -18,6 +18,7 @@ import { SearchResultsPage } from "./components/search/search-results-page";
 import { useNavigation } from "./hooks/use-navigation";
 import { usePlayerStore } from "./stores/player-store";
 import { useQueueStore } from "./stores/queue-store";
+import { useTrackCacheStore } from "./stores/track-cache-store";
 import type { Track } from "./types/music";
 import { useRenderTracker, useLeakDetector, startMemoryMonitor } from "@/lib/debug";
 
@@ -34,9 +35,11 @@ export default function YouTubeMusicModule() {
 
   const playerPlay = usePlayerStore((s) => s.play);
   const playerCleanup = usePlayerStore((s) => s.cleanup);
-  const queueSetTracks = useQueueStore((s) => s.setTracks);
+  const queueSetQueue = useQueueStore((s) => s.setQueue);
   const queueAddNext = useQueueStore((s) => s.addNext);
   const queueCleanup = useQueueStore((s) => s.cleanup);
+  const trackCachePut = useTrackCacheStore((s) => s.putTracks);
+  const trackCacheClear = useTrackCacheStore((s) => s.clear);
 
   console.log("[YouTubeMusicModule] render", { authState, activeTab, page: nav.currentPage?.type });
 
@@ -66,8 +69,9 @@ export default function YouTubeMusicModule() {
       console.log("[YouTubeMusicModule] unmounting — cleaning up stores");
       playerCleanup();
       queueCleanup();
+      trackCacheClear();
     };
-  }, [playerCleanup, queueCleanup]);
+  }, [playerCleanup, queueCleanup, trackCacheClear]);
 
   const handleAuthenticated = useCallback(() => {
     console.log("[YouTubeMusicModule] user authenticated, proceeding to account selection");
@@ -86,21 +90,26 @@ export default function YouTubeMusicModule() {
 
   const handlePlayTrack = useCallback((track: Track) => {
     console.log("[YouTubeMusicModule] handlePlayTrack", { title: track.title });
-    playerPlay(track);
-    queueSetTracks([track], 0);
-  }, [playerPlay, queueSetTracks]);
+    trackCachePut([track]);
+    playerPlay(track.videoId);
+    queueSetQueue([track.videoId], 0);
+  }, [playerPlay, queueSetQueue, trackCachePut]);
 
-  const handlePlayAll = useCallback((tracks: Track[]) => {
+  const handlePlayAll = useCallback((tracks: Track[], startIndex?: number, continuation?: string | null) => {
     if (tracks.length === 0) return;
-    console.log("[YouTubeMusicModule] handlePlayAll", { count: tracks.length });
-    playerPlay(tracks[0]);
-    queueSetTracks(tracks, 0);
-  }, [playerPlay, queueSetTracks]);
+    const idx = startIndex ?? 0;
+    console.log("[YouTubeMusicModule] handlePlayAll", { count: tracks.length, startIndex: idx });
+    trackCachePut(tracks);
+    const ids = tracks.map(t => t.videoId).filter(Boolean);
+    playerPlay(ids[idx]);
+    queueSetQueue(ids, idx, continuation ?? null);
+  }, [playerPlay, queueSetQueue, trackCachePut]);
 
   const handleAddToQueue = useCallback((track: Track) => {
     console.log("[YouTubeMusicModule] handleAddToQueue", { title: track.title });
-    queueAddNext(track);
-  }, [queueAddNext]);
+    trackCachePut([track]);
+    queueAddNext(track.videoId);
+  }, [queueAddNext, trackCachePut]);
 
   const handleSearchSubmit = useCallback((query: string) => {
     console.log("[YouTubeMusicModule] handleSearchSubmit", { query });
@@ -131,6 +140,7 @@ export default function YouTubeMusicModule() {
               artistId={nav.currentPage.artistId}
               onNavigate={nav.push}
               onPlayTrack={handlePlayTrack}
+              onPlayAll={handlePlayAll}
               onAddToQueue={handleAddToQueue}
             />
           );
@@ -140,6 +150,7 @@ export default function YouTubeMusicModule() {
               artistId={nav.currentPage.artistId}
               onNavigate={nav.push}
               onPlayTrack={handlePlayTrack}
+              onPlayAll={handlePlayAll}
               onAddToQueue={handleAddToQueue}
             />
           );
@@ -169,6 +180,7 @@ export default function YouTubeMusicModule() {
               query={nav.currentPage.query}
               onNavigate={nav.push}
               onPlayTrack={handlePlayTrack}
+              onPlayAll={handlePlayAll}
               onAddToQueue={handleAddToQueue}
             />
           );

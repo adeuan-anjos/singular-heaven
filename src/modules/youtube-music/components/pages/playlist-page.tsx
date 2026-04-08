@@ -13,7 +13,7 @@ interface PlaylistPageProps {
   onNavigate: (page: StackPage) => void;
   onPlayTrack: (track: Track) => void;
   onAddToQueue: (track: Track) => void;
-  onPlayAll: (tracks: Track[]) => void;
+  onPlayAll: (tracks: Track[], startIndex?: number, continuation?: string | null) => void;
 }
 
 export function PlaylistPage({
@@ -28,7 +28,7 @@ export function PlaylistPage({
   const [error, setError] = useState<string | null>(null);
   const continuationRef = useRef<string | null>(null);
   const loadingMoreRef = useRef(false);
-  const currentTrack = usePlayerStore((s) => s.currentTrack);
+  const currentTrackId = usePlayerStore((s) => s.currentTrackId);
   const isPlaying = usePlayerStore((s) => s.isPlaying);
   const [filter, setFilter] = useState("");
 
@@ -138,8 +138,8 @@ export function PlaylistPage({
         ]}
         thumbnailUrl={playlist.thumbnails[playlist.thumbnails.length - 1]?.url ?? playlist.thumbnails[0]?.url}
         actions={[
-          { label: "Reproduzir", icon: Play, onClick: () => onPlayAll(tracks) },
-          { label: "Aleatório", icon: Shuffle, onClick: () => onPlayAll([...tracks].sort(() => Math.random() - 0.5)) },
+          { label: "Reproduzir", icon: Play, onClick: () => onPlayAll(tracks, 0, continuationRef.current) },
+          { label: "Aleatório", icon: Shuffle, onClick: () => onPlayAll([...tracks].sort(() => Math.random() - 0.5), 0, continuationRef.current) },
         ]}
         onGoToAuthor={playlist.author.id ? () => onNavigate({ type: "artist", artistId: playlist.author.id! }) : undefined}
       />
@@ -162,12 +162,20 @@ export function PlaylistPage({
     <div className="flex min-h-0 flex-1 flex-col">
       <TrackTable
         tracks={filteredTracks}
-        currentTrackId={currentTrack?.videoId}
+        currentTrackId={currentTrackId ?? undefined}
         isPlaying={isPlaying}
         enableVirtualization
         headerContent={headerContent}
         onEndReached={loadMore}
-        onPlay={onPlayTrack}
+        onPlay={(track) => {
+          const tracks = playlist?.tracks ?? [];
+          const index = tracks.findIndex(t => t.videoId === track.videoId);
+          if (index >= 0) {
+            onPlayAll(tracks, index, continuationRef.current);
+          } else {
+            onPlayTrack(track);
+          }
+        }}
         onAddToQueue={onAddToQueue}
         onGoToArtist={(id) => onNavigate({ type: "artist", artistId: id })}
         onGoToAlbum={(id) => onNavigate({ type: "album", albumId: id })}

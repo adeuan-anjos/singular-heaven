@@ -1,38 +1,133 @@
+import React, { useCallback } from "react";
 import {
   Sheet,
   SheetContent,
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { X } from "lucide-react";
 import { useQueueStore } from "../../stores/queue-store";
 import { usePlayerStore } from "../../stores/player-store";
+import { useTrack } from "../../stores/track-cache-store";
+import { thumbUrl } from "../../utils/thumb-url";
 
 interface QueueSheetProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }
 
+const QueueItem = React.memo(function QueueItem({
+  videoId,
+  index,
+  isCurrent,
+  onPlay,
+  onRemove,
+}: {
+  videoId: string;
+  index: number;
+  isCurrent: boolean;
+  onPlay: (videoId: string) => void;
+  onRemove: (index: number) => void;
+}) {
+  const track = useTrack(videoId);
+  if (!track) {
+    console.warn("[QueueItem] Cache miss for videoId:", videoId);
+    return (
+      <div className="flex h-14 items-center px-2 text-xs text-muted-foreground">
+        Carregando...
+      </div>
+    );
+  }
+
+  const imgUrl = track.thumbnails[0]?.url ?? "";
+  const artistName = track.artists.map((a) => a.name).join(", ");
+
+  return (
+    <div
+      className={cn(
+        "group flex items-center gap-3 rounded-md px-2 py-1.5",
+        isCurrent ? "bg-accent" : "hover:bg-accent/50"
+      )}
+    >
+      <button
+        type="button"
+        className="flex flex-1 items-center gap-3 min-w-0"
+        onClick={() => onPlay(videoId)}
+      >
+        <Avatar className="h-10 w-10 shrink-0 rounded-sm">
+          <AvatarImage
+            src={thumbUrl(imgUrl, 80)}
+            alt={track.title}
+            className="object-cover"
+          />
+          <AvatarFallback className="rounded-sm">
+            {track.title.charAt(0)}
+          </AvatarFallback>
+        </Avatar>
+        <div className="min-w-0 flex-1 text-left">
+          <p
+            className={cn(
+              "truncate text-sm",
+              isCurrent
+                ? "font-semibold text-foreground"
+                : "text-foreground"
+            )}
+          >
+            {track.title}
+          </p>
+          <p className="truncate text-xs text-muted-foreground">
+            {artistName}
+          </p>
+        </div>
+      </button>
+      <span className="shrink-0 text-xs text-muted-foreground">
+        {track.duration}
+      </span>
+      <Button
+        variant="ghost"
+        size="icon"
+        className="h-7 w-7 shrink-0 opacity-0 group-hover:opacity-100"
+        onClick={() => onRemove(index)}
+      >
+        <X className="h-3.5 w-3.5" />
+      </Button>
+    </div>
+  );
+});
+
 export function QueueSheet({ open, onOpenChange }: QueueSheetProps) {
-  const queue = useQueueStore((s) => s.queue);
+  const trackIds = useQueueStore((s) => s.trackIds);
   const currentIndex = useQueueStore((s) => s.currentIndex);
   const removeFromQueue = useQueueStore((s) => s.removeFromQueue);
-  const setTracks = useQueueStore((s) => s.setTracks);
-  const play = usePlayerStore((s) => s.play);
+  const queuePlayIndex = useQueueStore((s) => s.playIndex);
+  const playerPlay = usePlayerStore((s) => s.play);
 
-  console.log("[QueueSheet] render", { queueLength: queue.length, currentIndex });
+  console.log("[QueueSheet] render", {
+    open,
+    queueLength: trackIds.length,
+    currentIndex,
+  });
 
-  const handlePlayIndex = (index: number) => {
-    const track = queue[index];
-    if (track) {
-      setTracks(queue, index);
-      play(track);
-    }
-  };
+  const handlePlayFromQueue = useCallback(
+    (videoId: string) => {
+      const index = trackIds.indexOf(videoId);
+      if (index >= 0) {
+        const id = queuePlayIndex(index);
+        if (id) playerPlay(id);
+      }
+    },
+    [trackIds, queuePlayIndex, playerPlay]
+  );
+
+  const handleRemove = useCallback(
+    (index: number) => {
+      removeFromQueue(index);
+    },
+    [removeFromQueue]
+  );
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -40,58 +135,24 @@ export function QueueSheet({ open, onOpenChange }: QueueSheetProps) {
         <SheetHeader className="border-b border-border px-4 py-3">
           <SheetTitle>Fila de reprodução</SheetTitle>
         </SheetHeader>
-        <ScrollArea className="flex-1 overflow-auto">
-          <div className="space-y-1 p-2">
-            {queue.length === 0 && (
-              <p className="px-2 py-8 text-center text-sm text-muted-foreground">
-                A fila está vazia
-              </p>
-            )}
-            {queue.map((track, i) => {
-              // Use the largest available thumbnail (last in array = highest resolution)
-              const imgUrl = track.thumbnails[0]?.url ?? "";
-              const isCurrent = i === currentIndex;
-
-              return (
-                <div
-                  key={`${track.videoId}-${i}`}
-                  className={cn(
-                    "group flex items-center gap-3 rounded-md px-2 py-1.5",
-                    isCurrent ? "bg-accent" : "hover:bg-accent/50"
-                  )}
-                >
-                  <button
-                    type="button"
-                    className="flex flex-1 items-center gap-3 min-w-0"
-                    onClick={() => handlePlayIndex(i)}
-                  >
-                    <Avatar className="h-10 w-10 rounded-sm">
-                      <AvatarImage src={imgUrl} alt={track.title} className="object-cover" />
-                      <AvatarFallback className="rounded-sm">{track.title.charAt(0)}</AvatarFallback>
-                    </Avatar>
-                    <div className="min-w-0 flex-1 text-left">
-                      <p className={cn("truncate text-sm", isCurrent ? "font-semibold text-foreground" : "text-foreground")}>
-                        {track.title}
-                      </p>
-                      <p className="truncate text-xs text-muted-foreground">
-                        {track.artists.map((a) => a.name).join(", ")}
-                      </p>
-                    </div>
-                  </button>
-                  <span className="text-xs text-muted-foreground">{track.duration}</span>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-7 w-7 opacity-0 group-hover:opacity-100"
-                    onClick={() => removeFromQueue(i)}
-                  >
-                    <X className="h-3.5 w-3.5" />
-                  </Button>
-                </div>
-              );
-            })}
-          </div>
-        </ScrollArea>
+        <div className="styled-scrollbar min-h-0 flex-1 overflow-y-auto p-2">
+          {trackIds.length === 0 ? (
+            <p className="px-2 py-8 text-center text-sm text-muted-foreground">
+              A fila está vazia
+            </p>
+          ) : (
+            trackIds.map((videoId, index) => (
+              <QueueItem
+                key={`${videoId}-${index}`}
+                videoId={videoId}
+                index={index}
+                isCurrent={index === currentIndex}
+                onPlay={handlePlayFromQueue}
+                onRemove={handleRemove}
+              />
+            ))
+          )}
+        </div>
       </SheetContent>
     </Sheet>
   );

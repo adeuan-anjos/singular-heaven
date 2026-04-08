@@ -14,7 +14,7 @@ interface AlbumPageProps {
   onNavigate: (page: StackPage) => void;
   onPlayTrack: (track: Track) => void;
   onAddToQueue: (track: Track) => void;
-  onPlayAll: (tracks: Track[]) => void;
+  onPlayAll: (tracks: Track[], startIndex?: number, continuation?: string | null) => void;
 }
 
 export function AlbumPage({
@@ -27,7 +27,7 @@ export function AlbumPage({
   const [album, setAlbum] = useState<Album | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const currentTrack = usePlayerStore((s) => s.currentTrack);
+  const currentTrackId = usePlayerStore((s) => s.currentTrackId);
   const isPlaying = usePlayerStore((s) => s.isPlaying);
   const [filter, setFilter] = useState("");
 
@@ -116,9 +116,17 @@ export function AlbumPage({
 
         <TrackTable
           tracks={filteredTracks}
-          currentTrackId={currentTrack?.videoId}
+          currentTrackId={currentTrackId ?? undefined}
           isPlaying={isPlaying}
-          onPlay={onPlayTrack}
+          onPlay={(track) => {
+            const allTracks = album?.tracks ?? [];
+            const index = allTracks.findIndex(t => t.videoId === track.videoId);
+            if (index >= 0) {
+              onPlayAll(allTracks, index);
+            } else {
+              onPlayTrack(track);
+            }
+          }}
           onAddToQueue={onAddToQueue}
           onGoToArtist={(id) => onNavigate({ type: "artist", artistId: id })}
           onGoToAlbum={(id) => onNavigate({ type: "album", albumId: id })}

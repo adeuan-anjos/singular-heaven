@@ -21,10 +21,11 @@ interface ArtistPageProps {
   artistId: string;
   onNavigate: (page: StackPage) => void;
   onPlayTrack: (track: Track) => void;
+  onPlayAll: (tracks: Track[], startIndex?: number, continuation?: string | null) => void;
   onAddToQueue: (track: Track) => void;
 }
 
-export function ArtistPage({ artistId, onNavigate, onPlayTrack, onAddToQueue }: ArtistPageProps) {
+export function ArtistPage({ artistId, onNavigate, onPlayTrack, onPlayAll, onAddToQueue }: ArtistPageProps) {
   const [artist, setArtist] = useState<Artist | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -116,7 +117,15 @@ export function ArtistPage({ artistId, onNavigate, onPlayTrack, onAddToQueue }: 
             <TrackTable
               tracks={artist.topSongs.slice(0, 5)}
               showViews
-              onPlay={onPlayTrack}
+              onPlay={(track) => {
+                const topSongs = artist.topSongs ?? [];
+                const index = topSongs.findIndex(t => t.videoId === track.videoId);
+                if (index >= 0) {
+                  onPlayAll(topSongs, index);
+                } else {
+                  onPlayTrack(track);
+                }
+              }}
               onAddToQueue={onAddToQueue}
               onGoToArtist={(id) => onNavigate({ type: "artist", artistId: id })}
               onGoToAlbum={(id) => onNavigate({ type: "album", albumId: id })}

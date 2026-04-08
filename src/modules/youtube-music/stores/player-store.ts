@@ -1,9 +1,9 @@
 import { create } from "zustand";
 import { subscribeWithSelector } from "zustand/middleware";
-import type { Track, RepeatMode } from "../types/music";
+import type { RepeatMode } from "../types/music";
 import { useQueueStore } from "./queue-store";
+import { useTrackCacheStore } from "./track-cache-store";
 
-// Audio singleton — lives outside React, zero re-renders
 let audio: HTMLAudioElement | null = null;
 
 function getAudio(): HTMLAudioElement {
@@ -16,7 +16,7 @@ function getAudio(): HTMLAudioElement {
 }
 
 interface PlayerState {
-  currentTrack: Track | null;
+  currentTrackId: string | null;
   isPlaying: boolean;
   progress: number;
   duration: number;
@@ -27,7 +27,7 @@ interface PlayerState {
 }
 
 interface PlayerActions {
-  play: (track: Track) => void;
+  play: (videoId: string) => void;
   togglePlay: () => void;
   seek: (value: number) => void;
   setVolume: (value: number) => void;
@@ -64,13 +64,8 @@ export const usePlayerStore = create<PlayerStore>()(
 
       el.addEventListener("play", () => set({ isPlaying: true }));
       el.addEventListener("pause", () => set({ isPlaying: false }));
-
-      el.addEventListener("waiting", () => {
-        console.log("[PlayerStore] audio buffering...");
-      });
-
+      el.addEventListener("waiting", () => console.log("[PlayerStore] audio buffering..."));
       el.addEventListener("canplay", () => set({ isLoading: false }));
-
       el.addEventListener("error", (e) => {
         console.error("[PlayerStore] audio error", e);
         set({ isPlaying: false, isLoading: false });
@@ -80,7 +75,7 @@ export const usePlayerStore = create<PlayerStore>()(
     }
 
     return {
-      currentTrack: null,
+      currentTrackId: null,
       isPlaying: false,
       progress: 0,
       duration: 0,
@@ -89,28 +84,28 @@ export const usePlayerStore = create<PlayerStore>()(
       repeat: "off",
       isLoading: false,
 
-      play: async (track) => {
-        console.log("[PlayerStore] play", { title: track.title, videoId: track.videoId });
+      play: async (videoId) => {
+        const track = useTrackCacheStore.getState().getTrack(videoId);
+        console.log("[PlayerStore] play", { videoId, title: track?.title ?? "unknown" });
 
-        if (!track.videoId) {
-          console.error("[PlayerStore] Cannot play track without videoId", { title: track.title });
+        if (!videoId) {
+          console.error("[PlayerStore] Cannot play without videoId");
           return;
         }
 
         wireAudioEvents();
         const el = getAudio();
         el.pause();
-        set({ currentTrack: track, isPlaying: false, progress: 0, duration: 0, isLoading: true });
+        set({ currentTrackId: videoId, isPlaying: false, progress: 0, duration: 0, isLoading: true });
 
         try {
-          // Windows WebView2: http://stream.localhost/  |  macOS/Linux: stream://localhost/
           const isWindows = navigator.userAgent.includes("Windows");
           const streamUrl = isWindows
-            ? `http://stream.localhost/${track.videoId}`
-            : `stream://localhost/${track.videoId}`;
-          console.log("[PlayerStore] Loading audio via stream protocol", { videoId: track.videoId });
+            ? `http://stream.localhost/${videoId}`
+            : `stream://localhost/${videoId}`;
+          console.log("[PlayerStore] Loading audio", { videoId });
 
-          if (get().currentTrack?.videoId !== track.videoId) {
+          if (get().currentTrackId !== videoId) {
             console.log("[PlayerStore] Track changed during setup, aborting");
             return;
           }
@@ -118,7 +113,7 @@ export const usePlayerStore = create<PlayerStore>()(
           el.src = streamUrl;
           el.volume = get().volume / 100;
           await el.play();
-          console.log("[PlayerStore] Playback started", { title: track.title });
+          console.log("[PlayerStore] Playback started", { videoId });
         } catch (err) {
           console.error("[PlayerStore] Failed to play track", err);
           set({ isPlaying: false, isLoading: false });
@@ -129,23 +124,19 @@ export const usePlayerStore = create<PlayerStore>()(
         const el = getAudio();
         if (!el.src) return;
         if (el.paused) {
-          console.log("[PlayerStore] togglePlay → play");
           el.play();
         } else {
-          console.log("[PlayerStore] togglePlay → pause");
           el.pause();
         }
       },
 
       seek: (value) => {
-        console.log("[PlayerStore] seek", { value });
         const el = getAudio();
         el.currentTime = value;
         set({ progress: value });
       },
 
       setVolume: (value) => {
-        console.log("[PlayerStore] setVolume", { value });
         const el = getAudio();
         el.volume = value / 100;
         set({ volume: value });
@@ -153,22 +144,19 @@ export const usePlayerStore = create<PlayerStore>()(
 
       toggleShuffle: () => {
         const next = !get().shuffle;
-        console.log("[PlayerStore] toggleShuffle", { shuffle: next });
         set({ shuffle: next });
       },
 
       cycleRepeat: () => {
         const current = get().repeat;
-        const next: RepeatMode =
-          current === "off" ? "all" : current === "all" ? "one" : "off";
-        console.log("[PlayerStore] cycleRepeat", { from: current, to: next });
+        const next: RepeatMode = current === "off" ? "all" : current === "all" ? "one" : "off";
         set({ repeat: next });
       },
 
-      _onTrackEnd: () => {
-        const { repeat, currentTrack } = get();
+      _onTrackEnd: async () => {
+        const { repeat, currentTrackId } = get();
 
-        if (repeat === "one" && currentTrack) {
+        if (repeat === "one" && currentTrackId) {
           console.log("[PlayerStore] repeat one — replaying");
           const el = getAudio();
           el.currentTime = 0;
@@ -177,16 +165,23 @@ export const usePlayerStore = create<PlayerStore>()(
         }
 
         const queueState = useQueueStore.getState();
-        const nextTrack = queueState.next();
+        let nextId = queueState.next();
 
-        if (nextTrack) {
-          console.log("[PlayerStore] Playing next from queue", { title: nextTrack.title });
-          get().play(nextTrack);
+        // If no next track but has continuation, try loading more
+        if (!nextId && queueState.continuationToken) {
+          console.log("[PlayerStore] End of loaded queue, fetching more...");
+          await queueState.loadMore();
+          nextId = useQueueStore.getState().next();
+        }
+
+        if (nextId) {
+          console.log("[PlayerStore] Playing next from queue", { videoId: nextId });
+          get().play(nextId);
         } else if (repeat === "all") {
-          const firstTrack = queueState.playIndex(0);
-          if (firstTrack) {
+          const firstId = queueState.playIndex(0);
+          if (firstId) {
             console.log("[PlayerStore] repeat all — looping to start");
-            get().play(firstTrack);
+            get().play(firstId);
           }
         } else {
           console.log("[PlayerStore] Queue ended");
@@ -202,7 +197,7 @@ export const usePlayerStore = create<PlayerStore>()(
           audio.removeAttribute("src");
         }
         set({
-          currentTrack: null,
+          currentTrackId: null,
           isPlaying: false,
           progress: 0,
           duration: 0,

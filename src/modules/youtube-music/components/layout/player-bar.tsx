@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { usePlayerStore } from "../../stores/player-store";
 import { useQueueStore } from "../../stores/queue-store";
+import { useTrack } from "../../stores/track-cache-store";
 import { useRenderTracker } from "@/lib/debug";
 import { ProgressBar } from "./progress-bar";
 import { thumbUrl } from "../../utils/thumb-url";
@@ -33,7 +34,8 @@ export function PlayerBar({ onOpenQueue, onGoToArtist, onGoToAlbum }: PlayerBarP
   useRenderTracker("PlayerBar", { onOpenQueue, onGoToArtist, onGoToAlbum });
   const [liked, setLiked] = useState(false);
 
-  const track = usePlayerStore((s) => s.currentTrack);
+  const currentTrackId = usePlayerStore((s) => s.currentTrackId);
+  const track = useTrack(currentTrackId ?? undefined);
   const isPlaying = usePlayerStore((s) => s.isPlaying);
   const volume = usePlayerStore((s) => s.volume);
   const shuffleOn = usePlayerStore((s) => s.shuffle);
@@ -58,8 +60,8 @@ export function PlayerBar({ onOpenQueue, onGoToArtist, onGoToAlbum }: PlayerBarP
   const artistName = track.artists.map((a) => a.name).join(", ");
 
   const handleNext = () => {
-    const nextTrack = queueNext();
-    if (nextTrack) play(nextTrack);
+    const nextId = queueNext();
+    if (nextId) play(nextId);
   };
 
   const handlePrevious = () => {
@@ -67,8 +69,8 @@ export function PlayerBar({ onOpenQueue, onGoToArtist, onGoToAlbum }: PlayerBarP
       seek(0);
       return;
     }
-    const prevTrack = queuePrevious();
-    if (prevTrack) play(prevTrack);
+    const prevId = queuePrevious();
+    if (prevId) play(prevId);
   };
 
   return (

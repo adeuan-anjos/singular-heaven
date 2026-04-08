@@ -7,7 +7,6 @@ import { TrackTable } from "../shared/track-table";
 import { ytGetArtist } from "../../services/yt-api";
 import { mapArtistPage } from "../../services/mappers";
 import { usePlayerStore } from "../../stores/player-store";
-import { useQueueStore } from "../../stores/queue-store";
 import {
   Shuffle,
   Radio,
@@ -20,6 +19,7 @@ interface ArtistSongsPageProps {
   artistId: string;
   onNavigate: (page: StackPage) => void;
   onPlayTrack: (track: Track) => void;
+  onPlayAll: (tracks: Track[], startIndex?: number, continuation?: string | null) => void;
   onAddToQueue: (track: Track) => void;
 }
 
@@ -27,15 +27,14 @@ export function ArtistSongsPage({
   artistId,
   onNavigate,
   onPlayTrack,
+  onPlayAll,
   onAddToQueue,
 }: ArtistSongsPageProps) {
   const [artist, setArtist] = useState<Artist | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const currentTrack = usePlayerStore((s) => s.currentTrack);
+  const currentTrackId = usePlayerStore((s) => s.currentTrackId);
   const isPlaying = usePlayerStore((s) => s.isPlaying);
-  const play = usePlayerStore((s) => s.play);
-  const setTracks = useQueueStore((s) => s.setTracks);
   const [subscribed, setSubscribed] = useState(false);
   const [liked, setLiked] = useState(false);
   const [filter, setFilter] = useState("");
@@ -106,16 +105,14 @@ export function ArtistSongsPage({
 
   const handlePlayAll = () => {
     if (allSongs.length > 0) {
-      play(allSongs[0]);
-      setTracks(allSongs, 0);
+      onPlayAll(allSongs, 0);
     }
   };
 
   const handleShuffle = () => {
     const shuffled = [...allSongs].sort(() => Math.random() - 0.5);
     if (shuffled.length > 0) {
-      play(shuffled[0]);
-      setTracks(shuffled, 0);
+      onPlayAll(shuffled, 0);
     }
   };
 
@@ -162,9 +159,16 @@ export function ArtistSongsPage({
         <TrackTable
           tracks={filteredSongs}
           showViews
-          currentTrackId={currentTrack?.videoId}
+          currentTrackId={currentTrackId ?? undefined}
           isPlaying={isPlaying}
-          onPlay={onPlayTrack}
+          onPlay={(track) => {
+            const index = allSongs.findIndex(t => t.videoId === track.videoId);
+            if (index >= 0) {
+              onPlayAll(allSongs, index);
+            } else {
+              onPlayTrack(track);
+            }
+          }}
           onAddToQueue={onAddToQueue}
           onGoToArtist={(id) => onNavigate({ type: "artist", artistId: id })}
           onGoToAlbum={(id) => onNavigate({ type: "album", albumId: id })}

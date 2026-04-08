@@ -16,6 +16,7 @@ interface SearchResultsPageProps {
   query: string;
   onNavigate: (page: StackPage) => void;
   onPlayTrack: (track: Track) => void;
+  onPlayAll: (tracks: Track[], startIndex?: number, continuation?: string | null) => void;
   onAddToQueue: (track: Track) => void;
 }
 
@@ -35,12 +36,13 @@ export function SearchResultsPage({
   query,
   onNavigate,
   onPlayTrack,
+  onPlayAll,
   onAddToQueue,
 }: SearchResultsPageProps) {
   const [results, setResults] = useState<SearchResults | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const currentTrackId = usePlayerStore((s) => s.currentTrack?.videoId);
+  const currentTrackId = usePlayerStore((s) => s.currentTrackId);
 
   useEffect(() => {
     let cancelled = false;
@@ -123,7 +125,14 @@ export function SearchResultsPage({
           key={track.videoId}
           track={track}
           index={i}
-          onPlay={onPlayTrack}
+          onPlay={(t) => {
+            const index = results.songs.findIndex(s => s.videoId === t.videoId);
+            if (index >= 0) {
+              onPlayAll(results.songs, index);
+            } else {
+              onPlayTrack(t);
+            }
+          }}
           onAddToQueue={onAddToQueue}
           onGoToArtist={handleGoToArtist}
           onGoToAlbum={handleGoToAlbum}
@@ -196,7 +205,7 @@ export function SearchResultsPage({
         <TopResultSection
           topResult={topResult}
           topSongs={results.songs}
-          currentTrackId={currentTrackId}
+          currentTrackId={currentTrackId ?? undefined}
           onNavigate={onNavigate}
           onPlayTrack={onPlayTrack}
           onAddToQueue={onAddToQueue}

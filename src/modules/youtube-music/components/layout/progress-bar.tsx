@@ -72,7 +72,7 @@ export function ProgressBar() {
   // Also re-sync when track changes (reset progress display)
   useEffect(() => {
     const unsubscribe = usePlayerStore.subscribe(
-      (state) => state.currentTrack,
+      (state) => state.currentTrackId,
       () => {
         const { progress, duration } = usePlayerStore.getState();
         if (duration > 0) {
