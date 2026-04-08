@@ -14,6 +14,7 @@ import { useQueueStore } from "../../stores/queue-store";
 import { usePlayerStore } from "../../stores/player-store";
 import { useTrack } from "../../stores/track-cache-store";
 import { thumbUrl } from "../../utils/thumb-url";
+import { useContainerImageCleanup } from "../../hooks/use-image-cleanup";
 
 interface QueueSheetProps {
   open: boolean;
@@ -33,6 +34,7 @@ const QueueItem = React.memo(function QueueItem({
   onPlay: (videoId: string) => void;
   onRemove: (index: number) => void;
 }) {
+  const avatarCleanupRef = useContainerImageCleanup();
   const track = useTrack(videoId);
   if (!track) {
     console.warn("[QueueItem] Cache miss for videoId:", videoId);
@@ -58,16 +60,18 @@ const QueueItem = React.memo(function QueueItem({
         className="flex flex-1 items-center gap-3 min-w-0"
         onClick={() => onPlay(videoId)}
       >
-        <Avatar className="h-10 w-10 shrink-0 rounded-sm">
-          <AvatarImage
-            src={thumbUrl(imgUrl, 80)}
-            alt={track.title}
-            className="object-cover"
-          />
-          <AvatarFallback className="rounded-sm">
-            {track.title.charAt(0)}
-          </AvatarFallback>
-        </Avatar>
+        <div ref={avatarCleanupRef}>
+          <Avatar className="h-10 w-10 shrink-0 rounded-sm">
+            <AvatarImage
+              src={thumbUrl(imgUrl, 80)}
+              alt={track.title}
+              className="object-cover"
+            />
+            <AvatarFallback className="rounded-sm">
+              {track.title.charAt(0)}
+            </AvatarFallback>
+          </Avatar>
+        </div>
         <div className="min-w-0 flex-1 text-left">
           <p
             className={cn(

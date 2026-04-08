@@ -252,6 +252,35 @@ export default function YouTubeMusicModule() {
     }
   };
 
+  // Smart memory management: Low when idle (5s), Normal when active
+  useEffect(() => {
+    let idleTimer: ReturnType<typeof setTimeout> | null = null;
+    let isLow = false;
+
+    const goNormal = () => {
+      if (isLow) {
+        console.log("[MemoryManager] User active → Normal");
+        invoke("yt_set_memory_level", { low: false }).catch(() => {});
+        isLow = false;
+      }
+      if (idleTimer) clearTimeout(idleTimer);
+      idleTimer = setTimeout(() => {
+        console.log("[MemoryManager] Idle 5s → Low");
+        invoke("yt_set_memory_level", { low: true }).catch(() => {});
+        isLow = true;
+      }, 5000);
+    };
+
+    const events = ["scroll", "mousemove", "keydown", "touchstart", "click"] as const;
+    events.forEach((e) => window.addEventListener(e, goNormal, { passive: true }));
+    goNormal(); // start timer
+
+    return () => {
+      if (idleTimer) clearTimeout(idleTimer);
+      events.forEach((e) => window.removeEventListener(e, goNormal));
+    };
+  }, []);
+
   if (authState === "loading") {
     return (
       <div className="flex h-full items-center justify-center">

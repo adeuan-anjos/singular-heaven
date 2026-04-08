@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { thumbUrl } from "../../utils/thumb-url";
+import { useImageCleanup } from "../../hooks/use-image-cleanup";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -22,6 +23,7 @@ interface TrackRowProps {
 }
 
 export function TrackRow({ track, index, isPlaying, onPlay, onAddToQueue, onGoToArtist, onGoToAlbum }: TrackRowProps) {
+  const imgRef = useImageCleanup();
   const [liked, setLiked] = useState(false);
   // Use the largest available thumbnail (last in the array = highest resolution)
   const imgUrl = track.thumbnails[0]?.url ?? "";
@@ -58,7 +60,7 @@ export function TrackRow({ track, index, isPlaying, onPlay, onAddToQueue, onGoTo
       )}
       <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-sm bg-muted">
         {imgUrl ? (
-          <img referrerPolicy="no-referrer" src={thumbUrl(imgUrl, 80)} alt={track.title} className="h-full w-full object-cover" loading="lazy" decoding="async" />
+          <img ref={imgRef} referrerPolicy="no-referrer" src={thumbUrl(imgUrl, 80)} alt={track.title} className="h-full w-full object-cover" loading="lazy" decoding="async" />
         ) : (
           <span className="text-sm text-muted-foreground">{track.title.charAt(0)}</span>
         )}

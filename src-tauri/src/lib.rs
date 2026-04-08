@@ -14,6 +14,13 @@ fn greet(name: &str) -> String {
     format!("Hello, {}! You've been greeted from Rust!", name)
 }
 
+#[tauri::command]
+fn yt_set_memory_level(window: tauri::WebviewWindow, low: bool) {
+    println!("[yt_set_memory_level] low={low}");
+    #[cfg(target_os = "windows")]
+    set_webview_memory_level(&window, low);
+}
+
 /// On Windows, adjusts WebView2 memory usage target level based on window focus.
 /// When the window loses focus, memory is set to Low (WebView2 swaps data to disk).
 /// When the window regains focus, memory is restored to Normal.
@@ -324,6 +331,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             greet,
+            yt_set_memory_level,
             youtube_music::commands::yt_search,
             youtube_music::commands::yt_search_suggestions,
             youtube_music::commands::yt_get_home,

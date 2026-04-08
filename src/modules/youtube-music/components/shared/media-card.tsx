@@ -99,7 +99,7 @@ export function MediaCard({
       >
         {imgUrl ? (
           <img
-            src={thumbUrl(imgUrl, 400)}
+            src={thumbUrl(imgUrl, 226)}
             alt={title}
             className="h-full w-full object-cover"
             loading="lazy"
