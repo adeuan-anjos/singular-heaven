@@ -168,7 +168,7 @@ export const usePlayerStore = create<PlayerStore>()(
         let nextId = queueState.next();
 
         // If no next track but has continuation, try loading more
-        if (!nextId && queueState.continuationToken) {
+        if (!nextId && queueState.continuationToken && !useQueueStore.getState().isLoadingMore) {
           console.log("[PlayerStore] End of loaded queue, fetching more...");
           await queueState.loadMore();
           nextId = useQueueStore.getState().next();

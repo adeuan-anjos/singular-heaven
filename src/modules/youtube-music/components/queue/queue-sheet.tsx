@@ -129,7 +129,8 @@ export function QueueSheet({ open, onOpenChange }: QueueSheetProps) {
         virtualizer.scrollToIndex(idx, { align: "center" });
       });
     }
-  }, [open, scrollElement, virtualizer]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, scrollElement]);
 
   console.log("[QueueSheet] render", {
     open,
@@ -182,7 +183,7 @@ export function QueueSheet({ open, onOpenChange }: QueueSheetProps) {
                 const videoId = trackIds[virtualRow.index];
                 return (
                   <div
-                    key={`${videoId}-${virtualRow.index}`}
+                    key={virtualRow.key}
                     style={{
                       position: "absolute",
                       top: 0,
