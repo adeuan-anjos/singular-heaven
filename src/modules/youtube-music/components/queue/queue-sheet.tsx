@@ -101,7 +101,8 @@ const QueueItem = React.memo(function QueueItem({
 });
 
 export const QueueSheet = React.memo(function QueueSheet({ open, onOpenChange }: QueueSheetProps) {
-  const trackIds = useQueueStore((s) => s.trackIds);
+  // Subscribe to LENGTH (number) instead of the array — prevents re-render on every appendTrackIds
+  const queueLength = useQueueStore((s) => s.trackIds.length);
   const currentIndex = useQueueStore((s) => s.currentIndex);
   const removeFromQueue = useQueueStore((s) => s.removeFromQueue);
   const queuePlayIndex = useQueueStore((s) => s.playIndex);
@@ -114,10 +115,10 @@ export const QueueSheet = React.memo(function QueueSheet({ open, onOpenChange }:
   }, []);
 
   const virtualizer = useVirtualizer({
-    count: trackIds.length,
+    count: queueLength,
     getScrollElement: () => scrollElement,
     estimateSize: () => 52,
-    overscan: 10,
+    overscan: 3,
     enabled: !!scrollElement,
   });
 
@@ -135,20 +136,21 @@ export const QueueSheet = React.memo(function QueueSheet({ open, onOpenChange }:
 
   console.log("[QueueSheet] render", {
     open,
-    queueLength: trackIds.length,
+    queueLength,
     currentIndex,
     hasScrollElement: !!scrollElement,
   });
 
   const handlePlayFromQueue = useCallback(
     (videoId: string) => {
-      const index = trackIds.indexOf(videoId);
+      const ids = useQueueStore.getState().trackIds;
+      const index = ids.indexOf(videoId);
       if (index >= 0) {
         const id = queuePlayIndex(index);
         if (id) playerPlay(id);
       }
     },
-    [trackIds, queuePlayIndex, playerPlay]
+    [queuePlayIndex, playerPlay]
   );
 
   const handleRemove = useCallback(
@@ -168,7 +170,7 @@ export const QueueSheet = React.memo(function QueueSheet({ open, onOpenChange }:
           ref={scrollRef}
           className="styled-scrollbar min-h-0 flex-1 overflow-y-auto p-2"
         >
-          {trackIds.length === 0 ? (
+          {queueLength === 0 ? (
             <p className="px-2 py-8 text-center text-sm text-muted-foreground">
               A fila está vazia
             </p>
@@ -181,7 +183,7 @@ export const QueueSheet = React.memo(function QueueSheet({ open, onOpenChange }:
               }}
             >
               {virtualizer.getVirtualItems().map((virtualRow) => {
-                const videoId = trackIds[virtualRow.index];
+                const videoId = useQueueStore.getState().trackIds[virtualRow.index];
                 return (
                   <div
                     key={virtualRow.key}

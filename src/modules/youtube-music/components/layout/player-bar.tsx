@@ -1,4 +1,4 @@
-import { useState } from "react";
+import React, { useState } from "react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -30,7 +30,7 @@ interface PlayerBarProps {
   onGoToAlbum?: (albumId: string) => void;
 }
 
-export function PlayerBar({ onOpenQueue, onGoToArtist, onGoToAlbum }: PlayerBarProps) {
+export const PlayerBar = React.memo(function PlayerBar({ onOpenQueue, onGoToArtist, onGoToAlbum }: PlayerBarProps) {
   useRenderTracker("PlayerBar", { onOpenQueue, onGoToArtist, onGoToAlbum });
   const [liked, setLiked] = useState(false);
 
@@ -176,4 +176,4 @@ export function PlayerBar({ onOpenQueue, onGoToArtist, onGoToAlbum }: PlayerBarP
       </div>
     </div>
   );
-}
+});
