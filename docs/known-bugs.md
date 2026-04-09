@@ -20,18 +20,6 @@ Lista de bugs e dívidas técnicas já observados no projeto e deixados para cor
 
 ## Média prioridade
 
-### Sidebar de playlists ainda não segue a composição visual ideal do shadcn
-
-- Sintoma:
-  - A sidebar usa primitives do shadcn, mas a composição ainda é majoritariamente custom.
-- Impacto:
-  - A seção de playlists ainda pode divergir do padrão visual/estrutural recomendado pelo shadcn.
-- Área afetada:
-  - [side-panel.tsx](/./src/modules/youtube-music/components/layout/side-panel.tsx)
-- Observação:
-  - A lógica backend-first da sidebar deve ser mantida.
-  - A pendência é uma refatoração visual/estrutural futura, não uma troca de fonte de dados.
-
 ### CollectionHeader de artista ainda usa like local/fake
 
 - Sintoma:
@@ -97,3 +85,4 @@ Lista de bugs e dívidas técnicas já observados no projeto e deixados para cor
 - Alias `liked -> LM` corrigido no backend.
 - Queue e playlist seguem ordem coerente com a fonte real.
 - `shuffle` / `repeat` foram corrigidos no backend da fila.
+- A sidebar de playlists agora usa composição shadcn-first mantendo a ordem backend-first via `guide`.

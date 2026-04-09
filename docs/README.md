@@ -18,6 +18,7 @@ Documentação viva do projeto.
 ## Explanation
 
 - [YouTube Music Playback Architecture](./docs/explanation/youtube-music-playback-architecture.md)
+- [YouTube Music Sidebar Architecture](./docs/explanation/youtube-music-sidebar-architecture.md)
 - [YouTube Music Track Collections](./docs/explanation/youtube-music-track-collections.md)
 - [YouTube Music Track Likes](./docs/explanation/youtube-music-track-likes.md)
 - [YouTube Music Playlist Management](./docs/explanation/youtube-music-playlist-management.md)

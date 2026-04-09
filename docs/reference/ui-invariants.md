@@ -17,6 +17,9 @@
 - navegação fixa do app é separada da lista de playlists
 - a seção `Todas as playlists` só mostra entradas playlist-like
 - ordem da sidebar deve vir do backend `guide`
+- a sidebar deve usar composição shadcn-first
+- a lista de playlists pode ser virtualizada, mas a estrutura visual da sidebar não deve depender do virtualizer
+- `Nova playlist` pertence ao header do grupo de playlists
 
 ## Queue
 

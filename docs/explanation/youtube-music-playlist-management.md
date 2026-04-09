@@ -74,6 +74,12 @@ Objetivo:
 
 - refletir a ordem real da lateral do YouTube Music
 
+Composição visual:
+
+- sidebar shadcn-first
+- navegação fixa separada da lista de playlists
+- virtualização restrita à lista de playlists
+
 ### Biblioteca
 
 Fonte:
@@ -172,6 +178,7 @@ Por isso a playlist editável precisa carregar esse dado no parser e mantê-lo n
 - playlist usa bookmark/ações de biblioteca
 - ações destrutivas usam `AlertDialog` shadcn
 - clique direito em playlist usa `ContextMenu` shadcn
+- sidebar usa composição shadcn-first, não painel manual genérico
 
 ## Invariantes
 
@@ -180,3 +187,9 @@ Por isso a playlist editável precisa carregar esse dado no parser e mantê-lo n
 - `Remover playlist` só aparece para playlist salva de terceiros
 - `Adicionar à playlist` sempre passa pelo backend
 - `Remover da playlist` só aparece em playlist editável
+
+## Doc relacionada
+
+Para a arquitetura visual e estrutural da sidebar:
+
+- [YouTube Music Sidebar Architecture](./docs/explanation/youtube-music-sidebar-architecture.md)

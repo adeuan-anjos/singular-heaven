@@ -11,6 +11,7 @@ O formato segue o espírito de [Keep a Changelog](https://keepachangelog.com/), 
 - Arquitetura backend-first para likes de track, com mutação real via cookies/InnerTube.
 - Gestão backend-first de playlists: salvar/remover da biblioteca, criar/excluir playlist, adicionar/remover músicas.
 - Sidebar de playlists baseada no `guide` do YouTube Music para refletir a ordem real do produto.
+- Documentação específica da sidebar e das regras de composição com shadcn + virtualização.
 
 ### Changed
 
@@ -22,6 +23,7 @@ O formato segue o espírito de [Keep a Changelog](https://keepachangelog.com/), 
 - Estrutura de documentação reorganizada em `adr/`, `explanation/`, `reference/`, `how-to/` e `archive/`.
 - Novas docs:
   - [Playback Architecture](./docs/explanation/youtube-music-playback-architecture.md)
+  - [Sidebar Architecture](./docs/explanation/youtube-music-sidebar-architecture.md)
   - [Track Collections](./docs/explanation/youtube-music-track-collections.md)
   - [Track Likes](./docs/explanation/youtube-music-track-likes.md)
   - [Playlist Management](./docs/explanation/youtube-music-playlist-management.md)
