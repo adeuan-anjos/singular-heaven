@@ -38,10 +38,15 @@ export function useRenderTracker(
   );
 
   const allChanged = [...changedKeys, ...removedKeys];
+  const tracksProps = Object.keys(props).length > 0 || Object.keys(prevProps).length > 0;
 
-  if (allChanged.length === 0) {
+  if (!tracksProps) {
     console.log(
-      `[RenderTracker] ${componentName} render #${renderCount} — UNNECESSARY (no prop changes)`,
+      `[RenderTracker] ${componentName} render #${renderCount} — no tracked props; render may be caused by state, context, or store updates`,
+    );
+  } else if (allChanged.length === 0) {
+    console.log(
+      `[RenderTracker] ${componentName} render #${renderCount} — props stable; render may be caused by state, context, or store updates`,
     );
   } else {
     console.log(

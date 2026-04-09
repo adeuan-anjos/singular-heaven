@@ -30,6 +30,7 @@ interface TrackTableProps {
   isPlaying?: boolean;
   showViews?: boolean;
   enableVirtualization?: boolean;
+  getTrackKey?: (track: Track, index: number) => string;
   /** Content rendered inside the scroll container, above the track list (scrolls with it). */
   headerContent?: React.ReactNode;
   onEndReached?: () => void;
@@ -304,6 +305,7 @@ export function TrackTable({
   isPlaying = false,
   showViews = false,
   enableVirtualization = false,
+  getTrackKey,
   headerContent,
   onEndReached,
   onPlay,
@@ -323,7 +325,7 @@ export function TrackTable({
         <div className="mt-1 space-y-0.5">
           {tracks.map((track, i) => (
             <TrackTableRow
-              key={track.videoId}
+              key={getTrackKey?.(track, i) ?? `${track.videoId}-${i}`}
               track={track}
               index={i}
               isCurrent={currentTrackId === track.videoId}
@@ -348,6 +350,7 @@ export function TrackTable({
       currentTrackId={currentTrackId}
       isPlaying={isPlaying}
       showViews={showViews}
+      getTrackKey={getTrackKey}
       showDuration={showDuration}
       headerContent={headerContent}
       onEndReached={onEndReached}
@@ -365,6 +368,7 @@ function VirtualizedTrackTable({
   currentTrackId,
   isPlaying = false,
   showViews = false,
+  getTrackKey,
   showDuration = true,
   headerContent,
   onEndReached,
@@ -377,6 +381,7 @@ function VirtualizedTrackTable({
   currentTrackId?: string;
   isPlaying?: boolean;
   showViews?: boolean;
+  getTrackKey?: (track: Track, index: number) => string;
   showDuration?: boolean;
   headerContent?: React.ReactNode;
   onEndReached?: () => void;
@@ -473,7 +478,10 @@ function VirtualizedTrackTable({
             const track = tracks[virtualRow.index];
             return (
               <div
-                key={`${track.videoId}-${virtualRow.index}`}
+                key={
+                  getTrackKey?.(track, virtualRow.index) ??
+                  `${track.videoId}-${virtualRow.index}`
+                }
                 data-index={virtualRow.index}
                 ref={virtualizer.measureElement}
                 style={{

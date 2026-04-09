@@ -438,7 +438,115 @@ export async function ytGetPlaylistTrackIds(playlistId: string): Promise<Playlis
   return parseJson(json);
 }
 
+export interface PlaylistWindowItem extends Track {
+  position: number;
+}
+
+export interface PlaylistWindowResponse {
+  items: PlaylistWindowItem[];
+  offset: number;
+  limit: number;
+  totalLoaded: number;
+  isComplete: boolean;
+}
+
+export async function ytGetPlaylistWindow(
+  playlistId: string,
+  offset: number,
+  limit: number
+): Promise<PlaylistWindowResponse> {
+  const json = await invoke<string>("yt_get_playlist_window", { playlistId, offset, limit });
+  return parseJson(json);
+}
+
 export async function ytGetCachedTracks(videoIds: string[]): Promise<Track[]> {
   const json = await invoke<string>("yt_get_cached_tracks", { videoIds });
   return parseJson(json);
+}
+
+export interface QueueSnapshot {
+  currentIndex: number;
+  totalLoaded: number;
+  playlistId: string | null;
+  isComplete: boolean;
+  shuffle: boolean;
+  repeat: "off" | "all" | "one";
+}
+
+export interface QueueWindowItem {
+  index: number;
+  itemId: number;
+  videoId: string;
+}
+
+export interface QueueWindowResponse {
+  items: QueueWindowItem[];
+  offset: number;
+  limit: number;
+  snapshot: QueueSnapshot;
+}
+
+export interface QueueCommandResponse {
+  trackId: string | null;
+  snapshot: QueueSnapshot;
+}
+
+export async function ytQueueSet(
+  trackIds: string[],
+  startIndex: number,
+  playlistId: string | null,
+  isComplete: boolean,
+  shuffle: boolean
+): Promise<QueueCommandResponse> {
+  return invoke<QueueCommandResponse>("yt_queue_set", {
+    trackIds,
+    startIndex,
+    playlistId,
+    isComplete,
+    shuffle,
+  });
+}
+
+export async function ytQueueGetState(): Promise<QueueSnapshot> {
+  return invoke<QueueSnapshot>("yt_queue_get_state");
+}
+
+export async function ytQueueGetWindow(offset: number, limit: number): Promise<QueueWindowResponse> {
+  return invoke<QueueWindowResponse>("yt_queue_get_window", { offset, limit });
+}
+
+export async function ytQueuePlayIndex(index: number): Promise<QueueCommandResponse> {
+  return invoke<QueueCommandResponse>("yt_queue_play_index", { index });
+}
+
+export async function ytQueueNext(): Promise<QueueCommandResponse> {
+  return invoke<QueueCommandResponse>("yt_queue_next");
+}
+
+export async function ytQueuePrevious(): Promise<QueueCommandResponse> {
+  return invoke<QueueCommandResponse>("yt_queue_previous");
+}
+
+export async function ytQueueHandleTrackEnd(): Promise<QueueCommandResponse> {
+  return invoke<QueueCommandResponse>("yt_queue_handle_track_end");
+}
+
+export async function ytQueueAddNext(videoId: string): Promise<QueueCommandResponse> {
+  return invoke<QueueCommandResponse>("yt_queue_add_next", { videoId });
+}
+
+export async function ytQueueRemove(index: number): Promise<QueueCommandResponse> {
+  return invoke<QueueCommandResponse>("yt_queue_remove", { index });
+}
+
+export async function ytQueueToggleShuffle(): Promise<QueueCommandResponse> {
+  return invoke<QueueCommandResponse>("yt_queue_toggle_shuffle");
+}
+
+export async function ytQueueCycleRepeat(): Promise<QueueCommandResponse> {
+  return invoke<QueueCommandResponse>("yt_queue_cycle_repeat");
+}
+
+export async function ytQueueClear(): Promise<QueueCommandResponse> {
+  return invoke<QueueCommandResponse>("yt_queue_clear");
 }

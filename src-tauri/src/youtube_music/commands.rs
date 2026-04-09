@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use serde::Serialize;
@@ -5,7 +6,8 @@ use tauri::{AppHandle, Emitter, Manager, State};
 use tokio::sync::Mutex;
 
 use super::client::YtMusicState;
-use crate::playlist_cache::{self, PlaylistCache};
+use crate::playback_queue::{PlaybackQueue, QueueCommandResponse, QueueSnapshot, QueueWindowResponse};
+use crate::playlist_cache::{self, CachedPlaylistMeta, PlaylistCache};
 
 // ---------------------------------------------------------------------------
 // Auth response DTOs
@@ -520,6 +522,47 @@ struct PlaylistTracksUpdated {
     is_complete: bool,
 }
 
+fn build_cached_playlist_response(
+    meta: &CachedPlaylistMeta,
+    tracks: Vec<playlist_cache::CachedTrack>,
+    track_ids: Vec<String>,
+) -> Result<String, String> {
+    let thumbnails = meta
+        .thumbnail_url
+        .as_ref()
+        .map(|url| {
+            vec![serde_json::json!({
+                "url": url,
+                "width": 226,
+                "height": 226,
+            })]
+        })
+        .unwrap_or_default();
+
+    let response = serde_json::json!({
+        "playlistId": meta.playlist_id,
+        "title": meta.title,
+        "author": meta.author_name.as_ref().map(|name| serde_json::json!({
+            "name": name,
+            "id": meta.author_id,
+        })),
+        "trackCount": meta.track_count,
+        "thumbnails": thumbnails,
+        "tracks": tracks,
+        "trackIds": track_ids,
+        "isComplete": meta.is_complete,
+    });
+
+    serde_json::to_string(&response)
+        .map_err(|e| format!("[yt_load_playlist] cached serialization: {e}"))
+}
+
+fn emit_queue_state_updated(app: &AppHandle, snapshot: &QueueSnapshot) {
+    if let Err(error) = app.emit("queue-state-updated", snapshot) {
+        eprintln!("[queue-state-updated] emit error: {error}");
+    }
+}
+
 /// Load a playlist: fetch first page from InnerTube, cache in SQLite,
 /// return compact data to the frontend, and spawn a background task for
 /// any remaining continuation pages.
@@ -528,9 +571,46 @@ pub async fn yt_load_playlist(
     playlist_id: String,
     state: State<'_, Arc<Mutex<YtMusicState>>>,
     cache: State<'_, Arc<tokio::sync::Mutex<PlaylistCache>>>,
+    playlist_loads: State<'_, Arc<tokio::sync::Mutex<HashSet<String>>>>,
     app: AppHandle,
 ) -> Result<String, String> {
     println!("[yt_load_playlist] playlist_id={playlist_id}");
+
+    let already_loading = {
+        let loads = playlist_loads.lock().await;
+        loads.contains(&playlist_id)
+    };
+
+    if already_loading {
+        println!(
+            "[yt_load_playlist] playlist_id={} already loading, reusing cached snapshot",
+            playlist_id
+        );
+        let db = cache.lock().await;
+        let meta = db
+            .get_meta(&playlist_id)
+            .map_err(|e| format!("[yt_load_playlist] get_meta: {e}"))?;
+        let track_ids = db
+            .get_track_ids(&playlist_id)
+            .map_err(|e| format!("[yt_load_playlist] get_track_ids: {e}"))?;
+        let tracks = db
+            .get_tracks_for_playlist(&playlist_id)
+            .map_err(|e| format!("[yt_load_playlist] get_tracks_for_playlist: {e}"))?;
+
+        if let Some(meta) = meta {
+            println!(
+                "[yt_load_playlist] playlist_id={} returning cached snapshot with {} tracks",
+                playlist_id,
+                track_ids.len()
+            );
+            return build_cached_playlist_response(&meta, tracks, track_ids);
+        }
+
+        println!(
+            "[yt_load_playlist] playlist_id={} marked in-flight but no cached snapshot yet; continuing with direct fetch",
+            playlist_id
+        );
+    }
 
     // 1. Fetch first page from InnerTube
     let (page, continuation) = {
@@ -551,6 +631,8 @@ pub async fn yt_load_playlist(
     let initial_track_ids: Vec<String> = page.tracks.iter().map(|t| t.video_id.clone()).collect();
     {
         let db = cache.lock().await;
+        db.clear_playlist_tracks(&playlist_id)
+            .map_err(|e| format!("[yt_load_playlist] clear_playlist_tracks: {e}"))?;
         db.save_meta(
             &playlist_id,
             &page.title,
@@ -574,8 +656,28 @@ pub async fn yt_load_playlist(
 
     // 3. Spawn background fetch for remaining pages
     if let Some(cont_token) = continuation {
+        let should_spawn = {
+            let mut loads = playlist_loads.lock().await;
+            if loads.insert(playlist_id.clone()) {
+                println!(
+                    "[yt_load_playlist] playlist_id={} registered as in-flight",
+                    playlist_id
+                );
+                true
+            } else {
+                println!(
+                    "[yt_load_playlist] playlist_id={} already registered in-flight after fetch; skipping duplicate spawn",
+                    playlist_id
+                );
+                false
+            }
+        };
+
+        if should_spawn {
         let state_arc = state.inner().clone();
         let cache_arc = cache.inner().clone();
+        let loads_arc = playlist_loads.inner().clone();
+        let queue_arc = app.state::<Arc<tokio::sync::Mutex<PlaybackQueue>>>().inner().clone();
         let pid = playlist_id.clone();
         let app_handle = app.clone();
         let mut offset = page.tracks.len();
@@ -630,6 +732,19 @@ pub async fn yt_load_playlist(
                             eprintln!("[yt_load_playlist:bg] emit error: {e}");
                         }
 
+                        let snapshot = {
+                            let mut queue = queue_arc.lock().await;
+                            if queue.append_playlist_batch(&pid, &payload.new_track_ids, complete) {
+                                Some(queue.snapshot())
+                            } else {
+                                None
+                            }
+                        };
+
+                        if let Some(snapshot) = snapshot {
+                            emit_queue_state_updated(&app_handle, &snapshot);
+                        }
+
                         println!(
                             "[yt_load_playlist:bg] Saved {} tracks, total={offset}, complete={complete}",
                             track_count
@@ -647,8 +762,17 @@ pub async fn yt_load_playlist(
                 }
             }
 
+            {
+                let mut loads = loads_arc.lock().await;
+                let removed = loads.remove(&pid);
+                println!(
+                    "[yt_load_playlist:bg] playlist_id={} cleared from in-flight registry removed={}",
+                    pid, removed
+                );
+            }
             println!("[yt_load_playlist:bg] Background fetch done for {pid}");
         });
+        }
     }
 
     // 4. Build response
@@ -727,4 +851,251 @@ pub async fn yt_get_playlist_track_ids(
 
     serde_json::to_string(&response)
         .map_err(|e| format!("[yt_get_playlist_track_ids] serialization: {e}"))
+}
+
+/// Get a paginated window of cached playlist tracks, ordered by playlist position.
+#[tauri::command]
+pub async fn yt_get_playlist_window(
+    playlist_id: String,
+    offset: usize,
+    limit: usize,
+    cache: State<'_, Arc<tokio::sync::Mutex<PlaylistCache>>>,
+) -> Result<String, String> {
+    println!(
+        "[yt_get_playlist_window] playlist_id={} offset={} limit={}",
+        playlist_id, offset, limit
+    );
+
+    let db = cache.lock().await;
+    let items = db
+        .get_playlist_window(&playlist_id, offset, limit)
+        .map_err(|e| format!("[yt_get_playlist_window] get_playlist_window: {e}"))?;
+    let total_loaded = db
+        .track_count(&playlist_id)
+        .map_err(|e| format!("[yt_get_playlist_window] track_count: {e}"))?;
+    let is_complete = db
+        .is_complete(&playlist_id)
+        .map_err(|e| format!("[yt_get_playlist_window] is_complete: {e}"))?;
+
+    let first = items.first().map(|item| {
+        serde_json::json!({
+            "position": item.position,
+            "videoId": item.track.video_id,
+        })
+    });
+    let last = items.last().map(|item| {
+        serde_json::json!({
+            "position": item.position,
+            "videoId": item.track.video_id,
+        })
+    });
+
+    println!(
+        "[yt_get_playlist_window] returned={} totalLoaded={} isComplete={} first={} last={}",
+        items.len(),
+        total_loaded,
+        is_complete,
+        first.unwrap_or_default(),
+        last.unwrap_or_default()
+    );
+
+    let response = serde_json::json!({
+        "items": items,
+        "offset": offset,
+        "limit": limit,
+        "totalLoaded": total_loaded,
+        "isComplete": is_complete,
+    });
+
+    serde_json::to_string(&response)
+        .map_err(|e| format!("[yt_get_playlist_window] serialization: {e}"))
+}
+
+#[tauri::command]
+pub async fn yt_queue_set(
+    track_ids: Vec<String>,
+    start_index: usize,
+    playlist_id: Option<String>,
+    is_complete: bool,
+    shuffle: bool,
+    queue: State<'_, Arc<tokio::sync::Mutex<PlaybackQueue>>>,
+    app: AppHandle,
+) -> Result<QueueCommandResponse, String> {
+    println!(
+        "[yt_queue_set] count={} start_index={} playlist_id={:?} is_complete={} shuffle={}",
+        track_ids.len(),
+        start_index,
+        playlist_id,
+        is_complete,
+        shuffle
+    );
+
+    let response = {
+        let mut queue = queue.lock().await;
+        queue.set_queue(track_ids, start_index, playlist_id, is_complete, shuffle)
+    };
+
+    emit_queue_state_updated(&app, &response.snapshot);
+    Ok(response)
+}
+
+#[tauri::command]
+pub async fn yt_queue_get_state(
+    queue: State<'_, Arc<tokio::sync::Mutex<PlaybackQueue>>>,
+) -> Result<QueueSnapshot, String> {
+    let queue = queue.lock().await;
+    Ok(queue.snapshot())
+}
+
+#[tauri::command]
+pub async fn yt_queue_get_window(
+    offset: usize,
+    limit: usize,
+    queue: State<'_, Arc<tokio::sync::Mutex<PlaybackQueue>>>,
+) -> Result<QueueWindowResponse, String> {
+    let queue = queue.lock().await;
+    let response = queue.get_window(offset, limit);
+    let first = response.items.first().map(|item| {
+        serde_json::json!({
+            "index": item.index,
+            "videoId": item.video_id,
+        })
+    });
+    let last = response.items.last().map(|item| {
+        serde_json::json!({
+            "index": item.index,
+            "videoId": item.video_id,
+        })
+    });
+    println!(
+        "[yt_queue_get_window] offset={} limit={} returned={} first={} last={}",
+        offset,
+        limit,
+        response.items.len(),
+        first.unwrap_or_default(),
+        last.unwrap_or_default()
+    );
+    Ok(response)
+}
+
+#[tauri::command]
+pub async fn yt_queue_play_index(
+    index: usize,
+    queue: State<'_, Arc<tokio::sync::Mutex<PlaybackQueue>>>,
+    app: AppHandle,
+) -> Result<QueueCommandResponse, String> {
+    let response = {
+        let mut queue = queue.lock().await;
+        queue.play_index(index)
+    };
+    emit_queue_state_updated(&app, &response.snapshot);
+    Ok(response)
+}
+
+#[tauri::command]
+pub async fn yt_queue_next(
+    queue: State<'_, Arc<tokio::sync::Mutex<PlaybackQueue>>>,
+    app: AppHandle,
+) -> Result<QueueCommandResponse, String> {
+    let response = {
+        let mut queue = queue.lock().await;
+        queue.next_track()
+    };
+    emit_queue_state_updated(&app, &response.snapshot);
+    Ok(response)
+}
+
+#[tauri::command]
+pub async fn yt_queue_previous(
+    queue: State<'_, Arc<tokio::sync::Mutex<PlaybackQueue>>>,
+    app: AppHandle,
+) -> Result<QueueCommandResponse, String> {
+    let response = {
+        let mut queue = queue.lock().await;
+        queue.previous_track()
+    };
+    emit_queue_state_updated(&app, &response.snapshot);
+    Ok(response)
+}
+
+#[tauri::command]
+pub async fn yt_queue_handle_track_end(
+    queue: State<'_, Arc<tokio::sync::Mutex<PlaybackQueue>>>,
+    app: AppHandle,
+) -> Result<QueueCommandResponse, String> {
+    let response = {
+        let mut queue = queue.lock().await;
+        queue.handle_track_end()
+    };
+    emit_queue_state_updated(&app, &response.snapshot);
+    Ok(response)
+}
+
+#[tauri::command]
+pub async fn yt_queue_add_next(
+    video_id: String,
+    queue: State<'_, Arc<tokio::sync::Mutex<PlaybackQueue>>>,
+    app: AppHandle,
+) -> Result<QueueCommandResponse, String> {
+    println!("[yt_queue_add_next] video_id={video_id}");
+    let response = {
+        let mut queue = queue.lock().await;
+        queue.add_next(video_id)
+    };
+    emit_queue_state_updated(&app, &response.snapshot);
+    Ok(response)
+}
+
+#[tauri::command]
+pub async fn yt_queue_remove(
+    index: usize,
+    queue: State<'_, Arc<tokio::sync::Mutex<PlaybackQueue>>>,
+    app: AppHandle,
+) -> Result<QueueCommandResponse, String> {
+    println!("[yt_queue_remove] index={index}");
+    let response = {
+        let mut queue = queue.lock().await;
+        queue.remove_index(index)
+    };
+    emit_queue_state_updated(&app, &response.snapshot);
+    Ok(response)
+}
+
+#[tauri::command]
+pub async fn yt_queue_toggle_shuffle(
+    queue: State<'_, Arc<tokio::sync::Mutex<PlaybackQueue>>>,
+    app: AppHandle,
+) -> Result<QueueCommandResponse, String> {
+    let response = {
+        let mut queue = queue.lock().await;
+        queue.toggle_shuffle()
+    };
+    emit_queue_state_updated(&app, &response.snapshot);
+    Ok(response)
+}
+
+#[tauri::command]
+pub async fn yt_queue_cycle_repeat(
+    queue: State<'_, Arc<tokio::sync::Mutex<PlaybackQueue>>>,
+    app: AppHandle,
+) -> Result<QueueCommandResponse, String> {
+    let response = {
+        let mut queue = queue.lock().await;
+        queue.cycle_repeat()
+    };
+    emit_queue_state_updated(&app, &response.snapshot);
+    Ok(response)
+}
+
+#[tauri::command]
+pub async fn yt_queue_clear(
+    queue: State<'_, Arc<tokio::sync::Mutex<PlaybackQueue>>>,
+    app: AppHandle,
+) -> Result<QueueCommandResponse, String> {
+    let response = {
+        let mut queue = queue.lock().await;
+        queue.clear()
+    };
+    emit_queue_state_updated(&app, &response.snapshot);
+    Ok(response)
 }

@@ -13,6 +13,7 @@ interface TrackCacheActions {
   putTracks: (tracks: Track[]) => void;
   putTrack: (track: Track) => void;
   getTrack: (videoId: string) => Track | undefined;
+  removeTracks: (videoIds: string[]) => void;
   clear: () => void;
 }
 
@@ -65,6 +66,27 @@ export const useTrackCacheStore = create<TrackCacheStore>()((set, get) => ({
   },
 
   getTrack: (videoId) => get().tracks[videoId],
+
+  removeTracks: (videoIds) => {
+    if (videoIds.length === 0) return;
+    const uniqueIds = Array.from(new Set(videoIds.filter(Boolean)));
+    set((state) => {
+      let changed = false;
+      const next = { ...state.tracks };
+      for (const videoId of uniqueIds) {
+        if (next[videoId]) {
+          delete next[videoId];
+          changed = true;
+        }
+      }
+      if (!changed) return state;
+      return { tracks: next };
+    });
+    console.log("[TrackCache] removeTracks", {
+      removed: uniqueIds.length,
+      total: Object.keys(get().tracks).length,
+    });
+  },
 
   clear: () => {
     console.log("[TrackCache] clear");

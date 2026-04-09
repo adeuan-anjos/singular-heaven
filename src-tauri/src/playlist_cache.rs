@@ -17,6 +17,26 @@ pub struct CachedTrack {
     pub thumbnails: Vec<CachedThumbnail>,
 }
 
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CachedPlaylistMeta {
+    pub playlist_id: String,
+    pub title: String,
+    pub author_name: Option<String>,
+    pub author_id: Option<String>,
+    pub track_count: Option<String>,
+    pub thumbnail_url: Option<String>,
+    pub is_complete: bool,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CachedPlaylistWindowItem {
+    pub position: usize,
+    #[serde(flatten)]
+    pub track: CachedTrack,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CachedArtist {
     pub name: String,
@@ -118,6 +138,19 @@ impl PlaylistCache {
         Ok(())
     }
 
+    /// Clear cached rows for a playlist before a fresh fetch.
+    pub fn clear_playlist_tracks(&self, playlist_id: &str) -> SqlResult<()> {
+        println!(
+            "[PlaylistCache] clear_playlist_tracks playlist_id={}",
+            playlist_id
+        );
+        self.conn.execute(
+            "DELETE FROM playlist_tracks WHERE playlist_id = ?1",
+            params![playlist_id],
+        )?;
+        Ok(())
+    }
+
     /// Save a batch of tracks at given starting position. Uses a transaction for performance.
     pub fn save_tracks(
         &self,
@@ -190,6 +223,38 @@ impl PlaylistCache {
         Ok(result == 1)
     }
 
+    /// Get cached playlist metadata if present.
+    pub fn get_meta(&self, playlist_id: &str) -> SqlResult<Option<CachedPlaylistMeta>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT playlist_id, title, author_name, author_id, track_count, thumbnail_url, is_complete
+             FROM playlist_meta
+             WHERE playlist_id = ?1",
+        )?;
+
+        let mut rows = stmt.query(params![playlist_id])?;
+        let Some(row) = rows.next()? else {
+            println!("[PlaylistCache] get_meta playlist_id={} miss", playlist_id);
+            return Ok(None);
+        };
+
+        let meta = CachedPlaylistMeta {
+            playlist_id: row.get(0)?,
+            title: row.get(1)?,
+            author_name: row.get(2)?,
+            author_id: row.get(3)?,
+            track_count: row.get(4)?,
+            thumbnail_url: row.get(5)?,
+            is_complete: row.get::<_, i32>(6)? == 1,
+        };
+
+        println!(
+            "[PlaylistCache] get_meta playlist_id={} hit complete={}",
+            playlist_id, meta.is_complete
+        );
+
+        Ok(Some(meta))
+    }
+
     /// Get total cached track count for a playlist.
     pub fn track_count(&self, playlist_id: &str) -> SqlResult<usize> {
         let count: usize = self
@@ -224,6 +289,119 @@ impl PlaylistCache {
             ids.len()
         );
         Ok(ids)
+    }
+
+    /// Get all cached tracks for a playlist, ordered by position.
+    pub fn get_tracks_for_playlist(&self, playlist_id: &str) -> SqlResult<Vec<CachedTrack>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT video_id, title, artists_json, album_name, album_id, duration, duration_secs, thumbnail_url
+             FROM playlist_tracks
+             WHERE playlist_id = ?1
+             ORDER BY position",
+        )?;
+
+        let tracks: Vec<CachedTrack> = stmt
+            .query_map(params![playlist_id], |row| {
+                let artists_json: String = row.get(2)?;
+                let artists: Vec<CachedArtist> =
+                    serde_json::from_str(&artists_json).unwrap_or_default();
+                let album_name: Option<String> = row.get(3)?;
+                let album_id: Option<String> = row.get(4)?;
+                let thumb_url: Option<String> = row.get(7)?;
+
+                Ok(CachedTrack {
+                    video_id: row.get(0)?,
+                    title: row.get(1)?,
+                    artists,
+                    album: album_name.map(|name| CachedAlbum {
+                        id: album_id.unwrap_or_default(),
+                        name,
+                    }),
+                    duration: row.get::<_, Option<String>>(5)?.unwrap_or_default(),
+                    duration_seconds: row.get(6)?,
+                    thumbnails: thumb_url
+                        .map(|url| vec![CachedThumbnail { url, width: 226, height: 226 }])
+                        .unwrap_or_default(),
+                })
+            })?
+            .filter_map(|r| match r {
+                Ok(v) => Some(v),
+                Err(e) => {
+                    eprintln!("[PlaylistCache] row parse error: {e}");
+                    None
+                }
+            })
+            .collect();
+
+        println!(
+            "[PlaylistCache] get_tracks_for_playlist playlist_id={} count={}",
+            playlist_id,
+            tracks.len()
+        );
+
+        Ok(tracks)
+    }
+
+    /// Get a window of cached playlist tracks, ordered by position.
+    pub fn get_playlist_window(
+        &self,
+        playlist_id: &str,
+        offset: usize,
+        limit: usize,
+    ) -> SqlResult<Vec<CachedPlaylistWindowItem>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT position, video_id, title, artists_json, album_name, album_id, duration, duration_secs, thumbnail_url
+             FROM playlist_tracks
+             WHERE playlist_id = ?1
+             ORDER BY position
+             LIMIT ?2 OFFSET ?3",
+        )?;
+
+        let items: Vec<CachedPlaylistWindowItem> = stmt
+            .query_map(params![playlist_id, limit, offset], |row| {
+                let artists_json: String = row.get(3)?;
+                let artists: Vec<CachedArtist> =
+                    serde_json::from_str(&artists_json).unwrap_or_default();
+                let album_name: Option<String> = row.get(4)?;
+                let album_id: Option<String> = row.get(5)?;
+                let thumb_url: Option<String> = row.get(8)?;
+
+                Ok(CachedPlaylistWindowItem {
+                    position: row.get(0)?,
+                    track: CachedTrack {
+                        video_id: row.get(1)?,
+                        title: row.get(2)?,
+                        artists,
+                        album: album_name.map(|name| CachedAlbum {
+                            id: album_id.unwrap_or_default(),
+                            name,
+                        }),
+                        duration: row.get::<_, Option<String>>(6)?.unwrap_or_default(),
+                        duration_seconds: row.get(7)?,
+                        thumbnails: thumb_url
+                            .map(|url| vec![CachedThumbnail { url, width: 226, height: 226 }])
+                            .unwrap_or_default(),
+                    },
+                })
+            })?
+            .filter_map(|r| match r {
+                Ok(v) => Some(v),
+                Err(e) => {
+                    eprintln!("[PlaylistCache] row parse error: {e}");
+                    None
+                }
+            })
+            .collect();
+
+        println!(
+            "[PlaylistCache] get_playlist_window playlist_id={} offset={} limit={} count={}",
+            playlist_id,
+            offset,
+            limit,
+            items.len()
+        );
+
+        Ok(items)
     }
 
     /// Resolve tracks by video IDs. Returns CachedTrack objects matching the frontend Track shape.
@@ -278,12 +456,22 @@ impl PlaylistCache {
             })
             .collect();
 
+        let mut tracks_by_id = std::collections::HashMap::new();
+        for track in tracks {
+            tracks_by_id.insert(track.video_id.clone(), track);
+        }
+
+        let ordered_tracks: Vec<CachedTrack> = video_ids
+            .iter()
+            .filter_map(|video_id| tracks_by_id.get(video_id).cloned())
+            .collect();
+
         println!(
             "[PlaylistCache] get_tracks_by_ids requested={} found={}",
             video_ids.len(),
-            tracks.len()
+            ordered_tracks.len()
         );
-        Ok(tracks)
+        Ok(ordered_tracks)
     }
 }
 

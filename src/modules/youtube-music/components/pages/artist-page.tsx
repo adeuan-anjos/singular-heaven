@@ -8,7 +8,7 @@ import { MediaCard } from "../shared/media-card";
 import { TrackTable } from "../shared/track-table";
 import { ytGetArtist } from "../../services/yt-api";
 import { mapArtistPage } from "../../services/mappers";
-import type { Artist, Track, StackPage } from "../../types/music";
+import type { Artist, PlayAllOptions, Track, StackPage } from "../../types/music";
 import {
   Shuffle,
   Radio,
@@ -21,7 +21,13 @@ interface ArtistPageProps {
   artistId: string;
   onNavigate: (page: StackPage) => void;
   onPlayTrack: (track: Track) => void;
-  onPlayAll: (tracks: Track[], startIndex?: number, playlistId?: string, isComplete?: boolean) => void;
+  onPlayAll: (
+    tracks: Track[],
+    startIndex?: number,
+    playlistId?: string,
+    isComplete?: boolean,
+    options?: PlayAllOptions
+  ) => void;
   onAddToQueue: (track: Track) => void;
 }
 

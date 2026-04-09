@@ -38,18 +38,18 @@ export const PlayerBar = React.memo(function PlayerBar({ onOpenQueue, onGoToArti
   const track = useTrack(currentTrackId ?? undefined);
   const isPlaying = usePlayerStore((s) => s.isPlaying);
   const volume = usePlayerStore((s) => s.volume);
-  const shuffleOn = usePlayerStore((s) => s.shuffle);
-  const repeat = usePlayerStore((s) => s.repeat);
+  const shuffleOn = useQueueStore((s) => s.shuffle);
+  const repeat = useQueueStore((s) => s.repeat);
 
   const togglePlay = usePlayerStore((s) => s.togglePlay);
   const seek = usePlayerStore((s) => s.seek);
   const setVolume = usePlayerStore((s) => s.setVolume);
-  const toggleShuffle = usePlayerStore((s) => s.toggleShuffle);
-  const cycleRepeat = usePlayerStore((s) => s.cycleRepeat);
   const play = usePlayerStore((s) => s.play);
 
   const queueNext = useQueueStore((s) => s.next);
   const queuePrevious = useQueueStore((s) => s.previous);
+  const toggleShuffle = useQueueStore((s) => s.toggleShuffle);
+  const cycleRepeat = useQueueStore((s) => s.cycleRepeat);
 
   console.log("[PlayerBar] render", { track: track?.title });
 
@@ -60,8 +60,9 @@ export const PlayerBar = React.memo(function PlayerBar({ onOpenQueue, onGoToArti
   const artistName = track.artists.map((a) => a.name).join(", ");
 
   const handleNext = () => {
-    const nextId = queueNext();
-    if (nextId) play(nextId);
+    void queueNext().then((nextId) => {
+      if (nextId) play(nextId);
+    });
   };
 
   const handlePrevious = () => {
@@ -69,8 +70,9 @@ export const PlayerBar = React.memo(function PlayerBar({ onOpenQueue, onGoToArti
       seek(0);
       return;
     }
-    const prevId = queuePrevious();
-    if (prevId) play(prevId);
+    void queuePrevious().then((prevId) => {
+      if (prevId) play(prevId);
+    });
   };
 
   return (
@@ -125,7 +127,7 @@ export const PlayerBar = React.memo(function PlayerBar({ onOpenQueue, onGoToArti
       {/* Center: Controls + progress */}
       <div className="flex flex-col items-center gap-1">
         <div className="flex items-center gap-2">
-          <Toggle size="sm" pressed={shuffleOn} onPressedChange={() => toggleShuffle()} aria-label="Shuffle">
+          <Toggle size="sm" pressed={shuffleOn} onPressedChange={() => void toggleShuffle()} aria-label="Shuffle">
             <Shuffle className="h-4 w-4" />
           </Toggle>
           <Button variant="ghost" size="icon" className="h-8 w-8" onClick={handlePrevious}>
@@ -140,7 +142,7 @@ export const PlayerBar = React.memo(function PlayerBar({ onOpenQueue, onGoToArti
           <Toggle
             size="sm"
             pressed={repeat !== "off"}
-            onPressedChange={() => cycleRepeat()}
+            onPressedChange={() => void cycleRepeat()}
             aria-label="Repetir"
           >
             {repeat === "one" ? <Repeat1 className="h-4 w-4" /> : <Repeat className="h-4 w-4" />}

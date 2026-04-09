@@ -1,7 +1,9 @@
 mod playlist_cache;
+mod playback_queue;
 mod thumb_cache;
 mod youtube_music;
 
+use std::collections::HashSet;
 use std::sync::Arc;
 use tauri::Manager;
 use tokio::sync::Mutex;
@@ -278,6 +280,12 @@ pub fn run() {
                     .map_err(|e| format!("Failed to open playlist cache: {e}"))?;
                 app.manage(Arc::new(tokio::sync::Mutex::new(cache)));
                 println!("[setup] PlaylistCache added to managed state.");
+                app.manage(Arc::new(tokio::sync::Mutex::new(HashSet::<String>::new())));
+                println!("[setup] Playlist load registry added to managed state.");
+                app.manage(Arc::new(tokio::sync::Mutex::new(
+                    playback_queue::PlaybackQueue::default(),
+                )));
+                println!("[setup] PlaybackQueue added to managed state.");
             }
 
             // Priority 1: Try loading saved cookies from disk
@@ -355,6 +363,19 @@ pub fn run() {
             youtube_music::commands::yt_load_playlist,
             youtube_music::commands::yt_get_cached_tracks,
             youtube_music::commands::yt_get_playlist_track_ids,
+            youtube_music::commands::yt_get_playlist_window,
+            youtube_music::commands::yt_queue_set,
+            youtube_music::commands::yt_queue_get_state,
+            youtube_music::commands::yt_queue_get_window,
+            youtube_music::commands::yt_queue_play_index,
+            youtube_music::commands::yt_queue_next,
+            youtube_music::commands::yt_queue_previous,
+            youtube_music::commands::yt_queue_handle_track_end,
+            youtube_music::commands::yt_queue_add_next,
+            youtube_music::commands::yt_queue_remove,
+            youtube_music::commands::yt_queue_toggle_shuffle,
+            youtube_music::commands::yt_queue_cycle_repeat,
+            youtube_music::commands::yt_queue_clear,
         ])
         .on_window_event(|window, event| {
             #[cfg(target_os = "windows")]

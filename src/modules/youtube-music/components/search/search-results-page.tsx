@@ -10,13 +10,19 @@ import { TopResultSection } from "./top-result-section";
 import { ytSearch } from "../../services/yt-api";
 import { mapSearchResults } from "../../services/mappers";
 import { usePlayerStore } from "../../stores/player-store";
-import type { Track, SearchResults, StackPage } from "../../types/music";
+import type { PlayAllOptions, Track, SearchResults, StackPage } from "../../types/music";
 
 interface SearchResultsPageProps {
   query: string;
   onNavigate: (page: StackPage) => void;
   onPlayTrack: (track: Track) => void;
-  onPlayAll: (tracks: Track[], startIndex?: number, playlistId?: string, isComplete?: boolean) => void;
+  onPlayAll: (
+    tracks: Track[],
+    startIndex?: number,
+    playlistId?: string,
+    isComplete?: boolean,
+    options?: PlayAllOptions
+  ) => void;
   onAddToQueue: (track: Track) => void;
 }
 

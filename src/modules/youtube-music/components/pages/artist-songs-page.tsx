@@ -13,13 +13,19 @@ import {
   Search,
   Loader2,
 } from "lucide-react";
-import type { Artist, Track, StackPage } from "../../types/music";
+import type { Artist, PlayAllOptions, Track, StackPage } from "../../types/music";
 
 interface ArtistSongsPageProps {
   artistId: string;
   onNavigate: (page: StackPage) => void;
   onPlayTrack: (track: Track) => void;
-  onPlayAll: (tracks: Track[], startIndex?: number, playlistId?: string, isComplete?: boolean) => void;
+  onPlayAll: (
+    tracks: Track[],
+    startIndex?: number,
+    playlistId?: string,
+    isComplete?: boolean,
+    options?: PlayAllOptions
+  ) => void;
   onAddToQueue: (track: Track) => void;
 }
 
@@ -110,9 +116,8 @@ export function ArtistSongsPage({
   };
 
   const handleShuffle = () => {
-    const shuffled = [...allSongs].sort(() => Math.random() - 0.5);
-    if (shuffled.length > 0) {
-      onPlayAll(shuffled, 0);
+    if (allSongs.length > 0) {
+      onPlayAll(allSongs, 0, undefined, true, { shuffle: true });
     }
   };
 

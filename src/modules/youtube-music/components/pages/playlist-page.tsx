@@ -2,17 +2,70 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { Input } from "@/components/ui/input";
 import { CollectionHeader } from "../shared/collection-header";
 import { TrackTable } from "../shared/track-table";
-import { ytLoadPlaylist, ytGetPlaylistTrackIds, ytGetCachedTracks } from "../../services/yt-api";
+import { ytLoadPlaylist, ytGetPlaylistTrackIds, ytGetPlaylistWindow } from "../../services/yt-api";
 import { usePlayerStore } from "../../stores/player-store";
 import { Play, Shuffle, Search, Loader2 } from "lucide-react";
-import type { Playlist, Track, StackPage } from "../../types/music";
+import type { PlayAllOptions, Playlist, Track, StackPage } from "../../types/music";
+import type { LoadPlaylistResponse, PlaylistWindowItem } from "../../services/yt-api";
+
+const pendingPlaylistLoads = new Map<string, Promise<LoadPlaylistResponse>>();
+const PLAYLIST_WINDOW_SIZE = 100;
+
+type PlaylistTrackEntry = Track & {
+  playlistPosition: number;
+  playlistRowKey: string;
+};
+
+function toPlaylistTrackEntry(
+  playlistId: string,
+  track: Track,
+  position: number
+): PlaylistTrackEntry {
+  return {
+    ...track,
+    playlistPosition: position,
+    playlistRowKey: `${playlistId}:${position}`,
+  };
+}
+
+function fromWindowItem(
+  playlistId: string,
+  item: PlaylistWindowItem
+): PlaylistTrackEntry {
+  return toPlaylistTrackEntry(playlistId, item, item.position);
+}
+
+function mergePlaylistTracks(
+  current: PlaylistTrackEntry[],
+  incoming: PlaylistTrackEntry[]
+): PlaylistTrackEntry[] {
+  const byPosition = new Map<number, PlaylistTrackEntry>();
+
+  for (const track of current) {
+    byPosition.set(track.playlistPosition, track);
+  }
+
+  for (const track of incoming) {
+    byPosition.set(track.playlistPosition, track);
+  }
+
+  return Array.from(byPosition.entries())
+    .sort((a, b) => a[0] - b[0])
+    .map(([, track]) => track);
+}
 
 interface PlaylistPageProps {
   playlistId: string;
   onNavigate: (page: StackPage) => void;
   onPlayTrack: (track: Track) => void;
   onAddToQueue: (track: Track) => void;
-  onPlayAll: (tracks: Track[], startIndex?: number, playlistId?: string, isComplete?: boolean) => void;
+  onPlayAll: (
+    tracks: Track[],
+    startIndex?: number,
+    playlistId?: string,
+    isComplete?: boolean,
+    options?: PlayAllOptions
+  ) => void;
 }
 
 export function PlaylistPage({
@@ -32,12 +85,45 @@ export function PlaylistPage({
   const isPlaying = usePlayerStore((s) => s.isPlaying);
   const [filter, setFilter] = useState("");
 
+  const resolvePlaybackSnapshot = useCallback(async () => {
+    console.log("[PlaylistPage] resolving playback snapshot", {
+      playlistId,
+      loadedTracks: playlist?.tracks?.length ?? 0,
+      knownTrackIds: trackIdsRef.current.length,
+      knownComplete: isCompleteRef.current,
+    });
+
+    const snapshot = await ytGetPlaylistTrackIds(playlistId);
+    trackIdsRef.current = snapshot.trackIds;
+    isCompleteRef.current = snapshot.isComplete;
+
+    console.log("[PlaylistPage] playback snapshot resolved", {
+      playlistId,
+      loadedTracks: playlist?.tracks?.length ?? 0,
+      totalTrackIds: snapshot.trackIds.length,
+      isComplete: snapshot.isComplete,
+    });
+    return snapshot;
+  }, [playlist?.tracks?.length, playlistId]);
+
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
     setError(null);
 
-    ytLoadPlaylist(playlistId).then((data) => {
+    let request = pendingPlaylistLoads.get(playlistId);
+    if (request) {
+      console.log("[PlaylistPage] reusing in-flight load", { playlistId });
+    } else {
+      console.log("[PlaylistPage] starting load", { playlistId });
+      request = ytLoadPlaylist(playlistId).finally(() => {
+        pendingPlaylistLoads.delete(playlistId);
+        console.log("[PlaylistPage] load settled", { playlistId });
+      });
+      pendingPlaylistLoads.set(playlistId, request);
+    }
+
+    request.then((data) => {
       if (cancelled) return;
       console.log("[PlaylistPage] loaded from cache", {
         title: data.title,
@@ -51,7 +137,9 @@ export function PlaylistPage({
         author: data.author ?? { id: null, name: "" },
         trackCount: data.trackCount ? parseInt(data.trackCount) : undefined,
         thumbnails: data.thumbnails,
-        tracks: data.tracks,
+        tracks: data.tracks.map((track, index) =>
+          toPlaylistTrackEntry(data.playlistId, track, index)
+        ),
       });
       trackIdsRef.current = data.trackIds;
       isCompleteRef.current = data.isComplete;
@@ -70,19 +158,53 @@ export function PlaylistPage({
     if (loadingMoreRef.current || !playlist) return;
     loadingMoreRef.current = true;
     try {
-      const { trackIds: allIds } = await ytGetPlaylistTrackIds(playlistId);
-      const existingIds = new Set((playlist.tracks ?? []).map((t) => t.videoId));
-      const newIds = allIds.filter((id) => !existingIds.has(id)).slice(0, 100);
-      if (newIds.length === 0) {
+      const currentTracks = (playlist.tracks as PlaylistTrackEntry[] | undefined) ?? [];
+      const response = await ytGetPlaylistWindow(
+        playlistId,
+        currentTracks.length,
+        PLAYLIST_WINDOW_SIZE
+      );
+
+      if (response.items.length === 0) {
+        isCompleteRef.current = response.isComplete;
         loadingMoreRef.current = false;
         return;
       }
-      const newTracks = await ytGetCachedTracks(newIds);
-      console.log("[PlaylistPage] loadMore from cache", { new: newTracks.length });
-      setPlaylist((prev) =>
-        prev ? { ...prev, tracks: [...(prev.tracks ?? []), ...newTracks] } : prev
+
+      const newTracks = response.items.map((item) => fromWindowItem(playlistId, item));
+      console.log(
+        `[PlaylistPage] loadMore window ${JSON.stringify({
+          offset: response.offset,
+          received: response.items.length,
+          totalLoaded: response.totalLoaded,
+          isComplete: response.isComplete,
+          first: response.items[0]
+            ? {
+                position: response.items[0].position,
+                videoId: response.items[0].videoId,
+              }
+            : null,
+          last: response.items[response.items.length - 1]
+            ? {
+                position: response.items[response.items.length - 1].position,
+                videoId: response.items[response.items.length - 1].videoId,
+              }
+            : null,
+        })}`
       );
-      trackIdsRef.current = allIds;
+
+      setPlaylist((prev) =>
+        prev
+          ? {
+              ...prev,
+              tracks: mergePlaylistTracks(
+                ((prev.tracks as PlaylistTrackEntry[] | undefined) ?? []),
+                newTracks
+              ),
+            }
+          : prev
+      );
+      isCompleteRef.current = response.isComplete;
     } catch (err) {
       console.error("[PlaylistPage] loadMore error", err);
     } finally {
@@ -108,7 +230,7 @@ export function PlaylistPage({
 
   if (!playlist) return null;
 
-  const tracks = playlist.tracks ?? [];
+  const tracks = ((playlist.tracks as PlaylistTrackEntry[] | undefined) ?? []);
   const filteredTracks = filter
     ? tracks.filter((t) => {
         const q = filter.toLowerCase();
@@ -134,11 +256,43 @@ export function PlaylistPage({
         ]}
         thumbnailUrl={playlist.thumbnails[playlist.thumbnails.length - 1]?.url ?? playlist.thumbnails[0]?.url}
         actions={[
-          { label: "Reproduzir", icon: Play, onClick: () => onPlayAll(tracks, 0, playlistId, isCompleteRef.current) },
-          { label: "Aleatório", icon: Shuffle, onClick: () => {
-            const shuffled = [...tracks].sort(() => Math.random() - 0.5);
-            onPlayAll(shuffled, 0, playlistId, isCompleteRef.current);
-          }},
+          {
+            label: "Reproduzir",
+            icon: Play,
+            onClick: async () => {
+              const playback = await resolvePlaybackSnapshot();
+              const currentTracks = playlist.tracks ?? [];
+              console.log(
+                `[PlaylistPage] play all using playback tracks ${JSON.stringify({
+                  playlistId,
+                  tracks: currentTracks.length,
+                  queueTrackIds: playback.trackIds.length,
+                  isComplete: playback.isComplete,
+                })}`
+              );
+              onPlayAll(currentTracks, 0, playlistId, playback.isComplete, {
+                queueTrackIds: playback.trackIds,
+              });
+            },
+          },
+          {
+            label: "Aleatório",
+            icon: Shuffle,
+            onClick: async () => {
+              const playback = await resolvePlaybackSnapshot();
+              const currentTracks = playlist.tracks ?? [];
+              console.log("[PlaylistPage] shuffle play using playback tracks", {
+                playlistId,
+                tracks: currentTracks.length,
+                queueTrackIds: playback.trackIds.length,
+                isComplete: playback.isComplete,
+              });
+              onPlayAll(currentTracks, 0, playlistId, playback.isComplete, {
+                queueTrackIds: playback.trackIds,
+                shuffle: true,
+              });
+            },
+          },
         ]}
         onGoToAuthor={playlist.author.id ? () => onNavigate({ type: "artist", artistId: playlist.author.id! }) : undefined}
       />
@@ -164,13 +318,38 @@ export function PlaylistPage({
         currentTrackId={currentTrackId ?? undefined}
         isPlaying={isPlaying}
         enableVirtualization
+        getTrackKey={(track) =>
+          (track as PlaylistTrackEntry).playlistRowKey ?? track.videoId
+        }
         headerContent={headerContent}
         onEndReached={loadMore}
         onPlay={(track) => {
-          const tracks = playlist?.tracks ?? [];
-          const index = tracks.findIndex((t) => t.videoId === track.videoId);
+          const currentTracks = ((playlist?.tracks as PlaylistTrackEntry[] | undefined) ?? []);
+          const playlistTrack = track as PlaylistTrackEntry;
+          const index =
+            typeof playlistTrack.playlistPosition === "number"
+              ? playlistTrack.playlistPosition
+              : currentTracks.findIndex((t) => t.videoId === track.videoId);
           if (index >= 0) {
-            onPlayAll(tracks, index, playlistId, isCompleteRef.current);
+            resolvePlaybackSnapshot()
+              .then((playback) => {
+                console.log(
+                  `[PlaylistPage] row play using playback tracks ${JSON.stringify({
+                    playlistId,
+                    requestedIndex: index,
+                    resolvedIndex: index,
+                    videoId: track.videoId,
+                    isComplete: playback.isComplete,
+                  })}`
+                );
+                onPlayAll(currentTracks, index, playlistId, playback.isComplete, {
+                  queueTrackIds: playback.trackIds,
+                });
+              })
+              .catch((error) => {
+                console.error("[PlaylistPage] row playback resolution failed", error);
+                onPlayAll(currentTracks, index, playlistId, isCompleteRef.current);
+              });
           } else {
             onPlayTrack(track);
           }

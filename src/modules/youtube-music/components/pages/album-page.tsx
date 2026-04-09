@@ -7,14 +7,20 @@ import { ytGetAlbum } from "../../services/yt-api";
 import { mapAlbumPage } from "../../services/mappers";
 import { usePlayerStore } from "../../stores/player-store";
 import { Play, Shuffle, Search, Loader2 } from "lucide-react";
-import type { Album, Track, StackPage } from "../../types/music";
+import type { Album, PlayAllOptions, Track, StackPage } from "../../types/music";
 
 interface AlbumPageProps {
   albumId: string;
   onNavigate: (page: StackPage) => void;
   onPlayTrack: (track: Track) => void;
   onAddToQueue: (track: Track) => void;
-  onPlayAll: (tracks: Track[], startIndex?: number, playlistId?: string, isComplete?: boolean) => void;
+  onPlayAll: (
+    tracks: Track[],
+    startIndex?: number,
+    playlistId?: string,
+    isComplete?: boolean,
+    options?: PlayAllOptions
+  ) => void;
 }
 
 export function AlbumPage({
@@ -99,7 +105,7 @@ export function AlbumPage({
           thumbnailUrl={album.thumbnails[album.thumbnails.length - 1]?.url ?? album.thumbnails[0]?.url}
           actions={[
             { label: "Reproduzir", icon: Play, onClick: () => onPlayAll(tracks) },
-            { label: "Aleatório", icon: Shuffle, onClick: () => onPlayAll([...tracks].sort(() => Math.random() - 0.5)) },
+            { label: "Aleatório", icon: Shuffle, onClick: () => onPlayAll(tracks, 0, undefined, true, { shuffle: true }) },
           ]}
           onGoToAuthor={album.artists[0]?.id ? () => onNavigate({ type: "artist", artistId: album.artists[0].id! }) : undefined}
         />

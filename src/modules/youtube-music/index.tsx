@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -20,7 +20,8 @@ import { useNavigation } from "./hooks/use-navigation";
 import { usePlayerStore } from "./stores/player-store";
 import { useQueueStore } from "./stores/queue-store";
 import { useTrackCacheStore } from "./stores/track-cache-store";
-import type { Track } from "./types/music";
+import { ytGetCachedTracks, type QueueSnapshot } from "./services/yt-api";
+import type { PlayAllOptions, Track } from "./types/music";
 import { useRenderTracker, useLeakDetector, startMemoryMonitor } from "@/lib/debug";
 
 type AuthState = "loading" | "unauthenticated" | "account-select" | "authenticated" | "skipped";
@@ -32,6 +33,7 @@ export default function YouTubeMusicModule() {
   const [authState, setAuthState] = useState<AuthState>("loading");
   const [activeTab, setActiveTab] = useState("home");
   const [queueOpen, setQueueOpen] = useState(false);
+  const queueOpenRef = useRef(queueOpen);
   const nav = useNavigation();
 
   const playerPlay = usePlayerStore((s) => s.play);
@@ -39,10 +41,16 @@ export default function YouTubeMusicModule() {
   const queueSetQueue = useQueueStore((s) => s.setQueue);
   const queueAddNext = useQueueStore((s) => s.addNext);
   const queueCleanup = useQueueStore((s) => s.cleanup);
+  const queueHydrate = useQueueStore((s) => s.hydrate);
+  const queueSyncSnapshot = useQueueStore((s) => s.syncSnapshot);
   const trackCachePut = useTrackCacheStore((s) => s.putTracks);
   const trackCacheClear = useTrackCacheStore((s) => s.clear);
 
   console.log("[YouTubeMusicModule] render", { authState, activeTab, page: nav.currentPage?.type });
+
+  useEffect(() => {
+    queueOpenRef.current = queueOpen;
+  }, [queueOpen]);
 
   useEffect(() => {
     console.log("[YouTubeMusicModule] mounted — checking auth status");
@@ -64,15 +72,16 @@ export default function YouTubeMusicModule() {
     }
 
     checkAuth();
+    void queueHydrate();
 
     return () => {
       cancelled = true;
       console.log("[YouTubeMusicModule] unmounting — cleaning up stores");
       playerCleanup();
-      queueCleanup();
+      void queueCleanup();
       trackCacheClear();
     };
-  }, [playerCleanup, queueCleanup, trackCacheClear]);
+  }, [playerCleanup, queueCleanup, queueHydrate, trackCacheClear]);
 
   useEffect(() => {
     let cancelled = false;
@@ -86,27 +95,29 @@ export default function YouTubeMusicModule() {
 
     const flushPendingEvents = () => {
       debounceTimer = null;
-      if (pendingIds.length === 0) return;
+      if (pendingIds.length === 0 && !pendingComplete) return;
       const ids = pendingIds;
       const done = pendingComplete;
       pendingIds = [];
       pendingComplete = false;
-
       const queueState = useQueueStore.getState();
+
       console.log("[YouTubeMusicModule] flush playlist events", {
         newTracks: ids.length,
         isComplete: done,
+        queueOpen: queueOpenRef.current,
+        currentQueueSize: queueState.totalLoaded,
       });
-      queueState.appendTrackIds(ids);
-      if (done) queueState.markComplete();
 
-      // Pre-populate L1 cache
-      invoke<string>("yt_get_cached_tracks", { videoIds: ids })
-        .then((json) => {
-          const tracks: Track[] = JSON.parse(json);
-          if (tracks.length > 0) trackCachePut(tracks);
-        })
-        .catch((err) => console.error("[YouTubeMusicModule] pre-populate L1 error", err));
+      if (ids.length > 0) {
+        // Pre-populate L1 cache
+        invoke<string>("yt_get_cached_tracks", { videoIds: ids })
+          .then((json) => {
+            const tracks: Track[] = JSON.parse(json);
+            if (tracks.length > 0) trackCachePut(tracks);
+          })
+          .catch((err) => console.error("[YouTubeMusicModule] pre-populate L1 error", err));
+      }
     };
 
     listen<{
@@ -136,9 +147,30 @@ export default function YouTubeMusicModule() {
       unlisten?.();
       if (debounceTimer) clearTimeout(debounceTimer);
       // Flush any pending events before unmount
-      if (pendingIds.length > 0) flushPendingEvents();
+      if (pendingIds.length > 0 || pendingComplete) flushPendingEvents();
     };
   }, [trackCachePut]);
+
+  useEffect(() => {
+    let cancelled = false;
+    let unlisten: UnlistenFn | null = null;
+
+    listen<QueueSnapshot>("queue-state-updated", (event) => {
+      if (cancelled) return;
+      queueSyncSnapshot(event.payload);
+    }).then((fn) => {
+      if (cancelled) {
+        fn();
+      } else {
+        unlisten = fn;
+      }
+    });
+
+    return () => {
+      cancelled = true;
+      unlisten?.();
+    };
+  }, [queueSyncSnapshot]);
 
   const handleAuthenticated = useCallback(() => {
     console.log("[YouTubeMusicModule] user authenticated, proceeding to account selection");
@@ -155,35 +187,65 @@ export default function YouTubeMusicModule() {
     setAuthState("skipped");
   }, []);
 
-  const handlePlayTrack = useCallback((track: Track) => {
+  const handlePlayTrack = useCallback(async (track: Track) => {
     console.log("[YouTubeMusicModule] handlePlayTrack", { title: track.title });
     trackCachePut([track]);
-    playerPlay(track.videoId);
-    queueSetQueue([track.videoId], 0);
+    const queueTrackId = await queueSetQueue([track.videoId], 0, null, true, false);
+    playerPlay(queueTrackId ?? track.videoId);
   }, [playerPlay, queueSetQueue, trackCachePut]);
 
   const handlePlayAll = useCallback(
-    (tracks: Track[], startIndex?: number, playlistId?: string, isComplete?: boolean) => {
-      if (tracks.length === 0) return;
-      const idx = startIndex ?? 0;
+    async (
+      tracks: Track[],
+      startIndex?: number,
+      playlistId?: string,
+      isComplete?: boolean,
+      options?: PlayAllOptions
+    ) => {
+      const ids = (options?.queueTrackIds ?? tracks.map((t) => t.videoId).filter(Boolean));
+      if (ids.length === 0) return;
+      const idx = Math.min(startIndex ?? 0, ids.length - 1);
       console.log("[YouTubeMusicModule] handlePlayAll", {
         count: tracks.length,
+        queueCount: ids.length,
         startIndex: idx,
         playlistId,
         isComplete,
+        shuffle: options?.shuffle ?? false,
       });
-      trackCachePut(tracks);
-      const ids = tracks.map((t) => t.videoId).filter(Boolean);
-      playerPlay(ids[idx]);
-      queueSetQueue(ids, idx, playlistId ?? null, isComplete ?? true);
+
+      if (tracks.length > 0) {
+        trackCachePut(tracks);
+      }
+
+      const targetTrackId = ids[idx];
+      if (!tracks.some((track) => track.videoId === targetTrackId)) {
+        try {
+          const resolvedTracks = await ytGetCachedTracks([targetTrackId]);
+          if (resolvedTracks.length > 0) {
+            trackCachePut(resolvedTracks);
+          }
+        } catch (error) {
+          console.error("[YouTubeMusicModule] failed to resolve selected track from cache", error);
+        }
+      }
+
+      const queueTrackId = await queueSetQueue(
+        ids,
+        idx,
+        playlistId ?? null,
+        isComplete ?? true,
+        options?.shuffle ?? false
+      );
+      playerPlay(queueTrackId ?? targetTrackId);
     },
     [playerPlay, queueSetQueue, trackCachePut]
   );
 
-  const handleAddToQueue = useCallback((track: Track) => {
+  const handleAddToQueue = useCallback(async (track: Track) => {
     console.log("[YouTubeMusicModule] handleAddToQueue", { title: track.title });
     trackCachePut([track]);
-    queueAddNext(track.videoId);
+    await queueAddNext(track.videoId);
   }, [queueAddNext, trackCachePut]);
 
   const handleOpenQueue = useCallback(() => setQueueOpen(true), []);

@@ -1,6 +1,5 @@
 import { create } from "zustand";
 import { subscribeWithSelector } from "zustand/middleware";
-import type { RepeatMode } from "../types/music";
 import { useQueueStore } from "./queue-store";
 import { useTrackCacheStore } from "./track-cache-store";
 
@@ -21,8 +20,6 @@ interface PlayerState {
   progress: number;
   duration: number;
   volume: number;
-  shuffle: boolean;
-  repeat: RepeatMode;
   isLoading: boolean;
 }
 
@@ -31,8 +28,6 @@ interface PlayerActions {
   togglePlay: () => void;
   seek: (value: number) => void;
   setVolume: (value: number) => void;
-  toggleShuffle: () => void;
-  cycleRepeat: () => void;
   cleanup: () => void;
   _onTrackEnd: () => void;
 }
@@ -80,8 +75,6 @@ export const usePlayerStore = create<PlayerStore>()(
       progress: 0,
       duration: 0,
       volume: 80,
-      shuffle: false,
-      repeat: "off",
       isLoading: false,
 
       play: async (videoId) => {
@@ -142,44 +135,22 @@ export const usePlayerStore = create<PlayerStore>()(
         set({ volume: value });
       },
 
-      toggleShuffle: () => {
-        const next = !get().shuffle;
-        set({ shuffle: next });
-      },
-
-      cycleRepeat: () => {
-        const current = get().repeat;
-        const next: RepeatMode = current === "off" ? "all" : current === "all" ? "one" : "off";
-        set({ repeat: next });
-      },
-
       _onTrackEnd: () => {
-        const { repeat, currentTrackId } = get();
-
-        if (repeat === "one" && currentTrackId) {
-          console.log("[PlayerStore] repeat one — replaying");
-          const el = getAudio();
-          el.currentTime = 0;
-          el.play();
-          return;
-        }
-
-        const queueState = useQueueStore.getState();
-        const nextId = queueState.next();
-
-        if (nextId) {
-          console.log("[PlayerStore] Playing next from queue", { videoId: nextId });
-          get().play(nextId);
-        } else if (repeat === "all") {
-          const firstId = queueState.playIndex(0);
-          if (firstId) {
-            console.log("[PlayerStore] repeat all — looping to start");
-            get().play(firstId);
-          }
-        } else {
-          console.log("[PlayerStore] Queue ended, isComplete=", queueState.isComplete);
-          set({ isPlaying: false });
-        }
+        void useQueueStore.getState()
+          .handleTrackEnd()
+          .then((nextId) => {
+            if (nextId) {
+              console.log("[PlayerStore] queue advanced on track end", { videoId: nextId });
+              get().play(nextId);
+            } else {
+              console.log("[PlayerStore] queue ended");
+              set({ isPlaying: false });
+            }
+          })
+          .catch((error) => {
+            console.error("[PlayerStore] failed to advance queue on track end", error);
+            set({ isPlaying: false });
+          });
       },
 
       cleanup: () => {

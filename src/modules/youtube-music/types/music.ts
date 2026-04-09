@@ -96,3 +96,8 @@ export interface ChartTrack extends Track {
 }
 
 export type RepeatMode = "off" | "all" | "one";
+
+export interface PlayAllOptions {
+  queueTrackIds?: string[];
+  shuffle?: boolean;
+}
