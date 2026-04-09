@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useReducer } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import {
   Sheet,
@@ -108,32 +108,37 @@ function QueueSheetContent() {
   const queuePlayIndex = useQueueStore((s) => s.playIndex);
   const playerPlay = usePlayerStore((s) => s.play);
 
-  // Use ref instead of useState to avoid re-render when scroll element mounts.
-  // The forceUpdate only fires once when the ref goes from null → element.
+  // Delay virtualizer activation until Sheet opening animation completes (~350ms).
+  // Without this, the virtualizer detects container resize on every animation frame
+  // → recalculates range → onChange → re-render → hundreds of wasted renders.
+  const [animationDone, setAnimationDone] = useState(false);
   const scrollElementRef = useRef<HTMLDivElement | null>(null);
-  const [, forceUpdate] = useReducer((x: number) => x + 1, 0);
   const scrollRef = useCallback((node: HTMLDivElement | null) => {
-    if (node && !scrollElementRef.current) {
-      scrollElementRef.current = node;
-      forceUpdate(); // single re-render to activate virtualizer
-    }
+    scrollElementRef.current = node;
   }, []);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      console.log("[QueueSheetContent] animation settled, activating virtualizer");
+      setAnimationDone(true);
+    }, 400);
+    return () => clearTimeout(timer);
+  }, []);
+
+  const virtualizerEnabled = animationDone && !!scrollElementRef.current;
 
   const virtualizer = useVirtualizer({
     count: queueLength,
     getScrollElement: () => scrollElementRef.current,
     estimateSize: () => 52,
     overscan: 3,
-    enabled: !!scrollElementRef.current,
-    // Disable flushSync to prevent synchronous render cascades
-    // when Zustand state updates trigger virtualizer measurements.
-    // Documented fix: TanStack Virtual issues #628, #651, #1094
+    enabled: virtualizerEnabled,
     useFlushSync: false,
   });
 
-  // Auto-scroll to current track when content mounts
+  // Auto-scroll to current track after virtualizer activates
   useEffect(() => {
-    if (!scrollElementRef.current) return;
+    if (!virtualizerEnabled) return;
     const idx = useQueueStore.getState().currentIndex;
     if (idx >= 0) {
       requestAnimationFrame(() => {
@@ -141,7 +146,9 @@ function QueueSheetContent() {
       });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [scrollElementRef.current]);
+  }, [virtualizerEnabled]);
+
+  console.log("[QueueSheetContent] render", { queueLength, currentIndex, animationDone, virtualizerEnabled });
 
   const handlePlayFromQueue = useCallback(
     (videoId: string) => {
