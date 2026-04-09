@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useReducer } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import {
   Sheet,
@@ -108,17 +108,23 @@ function QueueSheetContent() {
   const queuePlayIndex = useQueueStore((s) => s.playIndex);
   const playerPlay = usePlayerStore((s) => s.play);
 
-  const [scrollElement, setScrollElement] = useState<HTMLDivElement | null>(null);
+  // Use ref instead of useState to avoid re-render when scroll element mounts.
+  // The forceUpdate only fires once when the ref goes from null → element.
+  const scrollElementRef = useRef<HTMLDivElement | null>(null);
+  const [, forceUpdate] = useReducer((x: number) => x + 1, 0);
   const scrollRef = useCallback((node: HTMLDivElement | null) => {
-    setScrollElement(node);
+    if (node && !scrollElementRef.current) {
+      scrollElementRef.current = node;
+      forceUpdate(); // single re-render to activate virtualizer
+    }
   }, []);
 
   const virtualizer = useVirtualizer({
     count: queueLength,
-    getScrollElement: () => scrollElement,
+    getScrollElement: () => scrollElementRef.current,
     estimateSize: () => 52,
     overscan: 3,
-    enabled: !!scrollElement,
+    enabled: !!scrollElementRef.current,
     // Disable flushSync to prevent synchronous render cascades
     // when Zustand state updates trigger virtualizer measurements.
     // Documented fix: TanStack Virtual issues #628, #651, #1094
@@ -127,7 +133,7 @@ function QueueSheetContent() {
 
   // Auto-scroll to current track when content mounts
   useEffect(() => {
-    if (!scrollElement) return;
+    if (!scrollElementRef.current) return;
     const idx = useQueueStore.getState().currentIndex;
     if (idx >= 0) {
       requestAnimationFrame(() => {
@@ -135,9 +141,7 @@ function QueueSheetContent() {
       });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [scrollElement]);
-
-  console.log("[QueueSheet] render", { queueLength, currentIndex, hasScrollElement: !!scrollElement });
+  }, [scrollElementRef.current]);
 
   const handlePlayFromQueue = useCallback(
     (videoId: string) => {
