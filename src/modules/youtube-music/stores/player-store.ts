@@ -139,6 +139,19 @@ export const usePlayerStore = create<PlayerStore>()(
         void useQueueStore.getState()
           .handleTrackEnd()
           .then((nextId) => {
+            const currentTrackId = get().currentTrackId;
+
+            if (nextId && currentTrackId && nextId === currentTrackId) {
+              const el = getAudio();
+              el.currentTime = 0;
+              set({ progress: 0, isLoading: false });
+              void el.play().catch((error) => {
+                console.error("[PlayerStore] failed to replay current track", error);
+                set({ isPlaying: false });
+              });
+              return;
+            }
+
             if (nextId) {
               console.log("[PlayerStore] queue advanced on track end", { videoId: nextId });
               get().play(nextId);
