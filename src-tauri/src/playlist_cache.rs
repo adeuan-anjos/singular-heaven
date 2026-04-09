@@ -5,7 +5,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 // ── Types returned to frontend (match TS Track shape exactly) ──
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CachedTrack {
     pub video_id: String,
@@ -37,19 +37,38 @@ pub struct CachedPlaylistWindowItem {
     pub track: CachedTrack,
 }
 
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CachedCollectionMeta {
+    pub collection_type: String,
+    pub collection_id: String,
+    pub title: String,
+    pub subtitle: Option<String>,
+    pub thumbnail_url: Option<String>,
+    pub is_complete: bool,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CachedCollectionWindowItem {
+    pub position: usize,
+    #[serde(flatten)]
+    pub track: CachedTrack,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CachedArtist {
     pub name: String,
     pub id: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CachedAlbum {
     pub id: String,
     pub name: String,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CachedThumbnail {
     pub url: String,
     pub width: u32,
@@ -100,7 +119,36 @@ impl PlaylistCache {
              );
 
              CREATE INDEX IF NOT EXISTS idx_tracks_video_id
-                 ON playlist_tracks(video_id);",
+                 ON playlist_tracks(video_id);
+
+             CREATE TABLE IF NOT EXISTS collection_meta (
+                 collection_type TEXT NOT NULL,
+                 collection_id TEXT NOT NULL,
+                 title TEXT NOT NULL,
+                 subtitle TEXT,
+                 thumbnail_url TEXT,
+                 is_complete INTEGER DEFAULT 1,
+                 cached_at INTEGER NOT NULL,
+                 PRIMARY KEY (collection_type, collection_id)
+             );
+
+             CREATE TABLE IF NOT EXISTS collection_tracks (
+                 collection_type TEXT NOT NULL,
+                 collection_id TEXT NOT NULL,
+                 position INTEGER NOT NULL,
+                 video_id TEXT NOT NULL,
+                 title TEXT NOT NULL,
+                 artists_json TEXT NOT NULL DEFAULT '[]',
+                 album_name TEXT,
+                 album_id TEXT,
+                 duration TEXT,
+                 duration_secs REAL DEFAULT 0,
+                 thumbnail_url TEXT,
+                 PRIMARY KEY (collection_type, collection_id, position)
+             );
+
+             CREATE INDEX IF NOT EXISTS idx_collection_tracks_video_id
+                 ON collection_tracks(video_id);",
         )?;
 
         println!("[PlaylistCache] Schema initialized");
@@ -268,6 +316,225 @@ impl PlaylistCache {
         Ok(count)
     }
 
+    pub fn save_collection_meta(
+        &self,
+        collection_type: &str,
+        collection_id: &str,
+        title: &str,
+        subtitle: Option<&str>,
+        thumbnail_url: Option<&str>,
+        is_complete: bool,
+    ) -> SqlResult<()> {
+        println!(
+            "[PlaylistCache] save_collection_meta type={} id={} title={}",
+            collection_type, collection_id, title
+        );
+        self.conn.execute(
+            "INSERT OR REPLACE INTO collection_meta
+             (collection_type, collection_id, title, subtitle, thumbnail_url, is_complete, cached_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+            params![
+                collection_type,
+                collection_id,
+                title,
+                subtitle,
+                thumbnail_url,
+                if is_complete { 1 } else { 0 },
+                now_timestamp(),
+            ],
+        )?;
+        Ok(())
+    }
+
+    pub fn clear_collection_tracks(
+        &self,
+        collection_type: &str,
+        collection_id: &str,
+    ) -> SqlResult<()> {
+        println!(
+            "[PlaylistCache] clear_collection_tracks type={} id={}",
+            collection_type, collection_id
+        );
+        self.conn.execute(
+            "DELETE FROM collection_tracks WHERE collection_type = ?1 AND collection_id = ?2",
+            params![collection_type, collection_id],
+        )?;
+        Ok(())
+    }
+
+    pub fn save_collection_tracks(
+        &self,
+        collection_type: &str,
+        collection_id: &str,
+        start_pos: usize,
+        tracks: &[(
+            String,
+            String,
+            String,
+            Option<String>,
+            Option<String>,
+            Option<String>,
+            f64,
+            Option<String>,
+        )],
+    ) -> SqlResult<usize> {
+        let tx = self.conn.unchecked_transaction()?;
+        let mut count = 0;
+        {
+            let mut stmt = tx.prepare_cached(
+                "INSERT OR REPLACE INTO collection_tracks
+                 (collection_type, collection_id, position, video_id, title, artists_json, album_name, album_id, duration, duration_secs, thumbnail_url)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+            )?;
+            for (i, t) in tracks.iter().enumerate() {
+                stmt.execute(params![
+                    collection_type,
+                    collection_id,
+                    start_pos + i,
+                    t.0,
+                    t.1,
+                    t.2,
+                    t.3,
+                    t.4,
+                    t.5,
+                    t.6,
+                    t.7,
+                ])?;
+                count += 1;
+            }
+        }
+        tx.commit()?;
+        println!(
+            "[PlaylistCache] save_collection_tracks type={} id={} start={} count={}",
+            collection_type, collection_id, start_pos, count
+        );
+        Ok(count)
+    }
+
+    pub fn is_collection_complete(
+        &self,
+        collection_type: &str,
+        collection_id: &str,
+    ) -> SqlResult<bool> {
+        let result: i32 = self
+            .conn
+            .query_row(
+                "SELECT is_complete FROM collection_meta WHERE collection_type = ?1 AND collection_id = ?2",
+                params![collection_type, collection_id],
+                |row| row.get(0),
+            )
+            .unwrap_or(0);
+        Ok(result == 1)
+    }
+
+    pub fn collection_track_count(
+        &self,
+        collection_type: &str,
+        collection_id: &str,
+    ) -> SqlResult<usize> {
+        let count: usize = self
+            .conn
+            .query_row(
+                "SELECT COUNT(*) FROM collection_tracks WHERE collection_type = ?1 AND collection_id = ?2",
+                params![collection_type, collection_id],
+                |row| row.get(0),
+            )
+            .unwrap_or(0);
+        Ok(count)
+    }
+
+    pub fn get_collection_track_ids(
+        &self,
+        collection_type: &str,
+        collection_id: &str,
+    ) -> SqlResult<Vec<String>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT video_id FROM collection_tracks
+             WHERE collection_type = ?1 AND collection_id = ?2
+             ORDER BY position",
+        )?;
+        let ids: Vec<String> = stmt
+            .query_map(params![collection_type, collection_id], |row| row.get(0))?
+            .filter_map(|r| match r {
+                Ok(v) => Some(v),
+                Err(e) => {
+                    eprintln!("[PlaylistCache] collection row parse error: {e}");
+                    None
+                }
+            })
+            .collect();
+        println!(
+            "[PlaylistCache] get_collection_track_ids type={} id={} count={}",
+            collection_type,
+            collection_id,
+            ids.len()
+        );
+        Ok(ids)
+    }
+
+    pub fn get_collection_window(
+        &self,
+        collection_type: &str,
+        collection_id: &str,
+        offset: usize,
+        limit: usize,
+    ) -> SqlResult<Vec<CachedCollectionWindowItem>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT position, video_id, title, artists_json, album_name, album_id, duration, duration_secs, thumbnail_url
+             FROM collection_tracks
+             WHERE collection_type = ?1 AND collection_id = ?2
+             ORDER BY position
+             LIMIT ?3 OFFSET ?4",
+        )?;
+
+        let items: Vec<CachedCollectionWindowItem> = stmt
+            .query_map(params![collection_type, collection_id, limit, offset], |row| {
+                let artists_json: String = row.get(3)?;
+                let artists: Vec<CachedArtist> =
+                    serde_json::from_str(&artists_json).unwrap_or_default();
+                let album_name: Option<String> = row.get(4)?;
+                let album_id: Option<String> = row.get(5)?;
+                let thumb_url: Option<String> = row.get(8)?;
+
+                Ok(CachedCollectionWindowItem {
+                    position: row.get(0)?,
+                    track: CachedTrack {
+                        video_id: row.get(1)?,
+                        title: row.get(2)?,
+                        artists,
+                        album: album_name.map(|name| CachedAlbum {
+                            id: album_id.unwrap_or_default(),
+                            name,
+                        }),
+                        duration: row.get::<_, Option<String>>(6)?.unwrap_or_default(),
+                        duration_seconds: row.get(7)?,
+                        thumbnails: thumb_url
+                            .map(|url| vec![CachedThumbnail { url, width: 226, height: 226 }])
+                            .unwrap_or_default(),
+                    },
+                })
+            })?
+            .filter_map(|r| match r {
+                Ok(v) => Some(v),
+                Err(e) => {
+                    eprintln!("[PlaylistCache] collection row parse error: {e}");
+                    None
+                }
+            })
+            .collect();
+
+        println!(
+            "[PlaylistCache] get_collection_window type={} id={} offset={} limit={} count={}",
+            collection_type,
+            collection_id,
+            offset,
+            limit,
+            items.len()
+        );
+
+        Ok(items)
+    }
+
     /// Get all video IDs for a playlist, ordered by position.
     pub fn get_track_ids(&self, playlist_id: &str) -> SqlResult<Vec<String>> {
         let mut stmt = self.conn.prepare(
@@ -409,11 +676,46 @@ impl PlaylistCache {
         if video_ids.is_empty() {
             return Ok(vec![]);
         }
+        let mut tracks_by_id = self.query_tracks_by_ids_from_table("collection_tracks", video_ids)?;
+
+        let missing_ids: Vec<String> = video_ids
+            .iter()
+            .filter(|video_id| !tracks_by_id.contains_key(*video_id))
+            .cloned()
+            .collect();
+
+        if !missing_ids.is_empty() {
+            for (video_id, track) in self.query_tracks_by_ids_from_table("playlist_tracks", &missing_ids)? {
+                tracks_by_id.insert(video_id, track);
+            }
+        }
+
+        let ordered_tracks: Vec<CachedTrack> = video_ids
+            .iter()
+            .filter_map(|video_id| tracks_by_id.get(video_id).cloned())
+            .collect();
+
+        println!(
+            "[PlaylistCache] get_tracks_by_ids requested={} found={}",
+            video_ids.len(),
+            ordered_tracks.len()
+        );
+        Ok(ordered_tracks)
+    }
+
+    fn query_tracks_by_ids_from_table(
+        &self,
+        table_name: &str,
+        video_ids: &[String],
+    ) -> SqlResult<std::collections::HashMap<String, CachedTrack>> {
+        if video_ids.is_empty() {
+            return Ok(std::collections::HashMap::new());
+        }
+
         let placeholders: String = video_ids.iter().map(|_| "?").collect::<Vec<_>>().join(",");
         let sql = format!(
             "SELECT video_id, title, artists_json, album_name, album_id, duration, duration_secs, thumbnail_url
-             FROM playlist_tracks WHERE video_id IN ({}) GROUP BY video_id",
-            placeholders
+             FROM {table_name} WHERE video_id IN ({placeholders}) GROUP BY video_id"
         );
         let mut stmt = self.conn.prepare(&sql)?;
         let params_vec: Vec<Box<dyn rusqlite::types::ToSql>> = video_ids
@@ -450,7 +752,7 @@ impl PlaylistCache {
             .filter_map(|r| match r {
                 Ok(v) => Some(v),
                 Err(e) => {
-                    eprintln!("[PlaylistCache] row parse error: {e}");
+                    eprintln!("[PlaylistCache] row parse error from {}: {e}", table_name);
                     None
                 }
             })
@@ -460,18 +762,7 @@ impl PlaylistCache {
         for track in tracks {
             tracks_by_id.insert(track.video_id.clone(), track);
         }
-
-        let ordered_tracks: Vec<CachedTrack> = video_ids
-            .iter()
-            .filter_map(|video_id| tracks_by_id.get(video_id).cloned())
-            .collect();
-
-        println!(
-            "[PlaylistCache] get_tracks_by_ids requested={} found={}",
-            video_ids.len(),
-            ordered_tracks.len()
-        );
-        Ok(ordered_tracks)
+        Ok(tracks_by_id)
     }
 }
 
@@ -576,6 +867,41 @@ pub fn playlist_tracks_to_cached(
                 duration_seconds: parse_duration(t.duration.as_deref()),
                 thumbnails,
             }
+        })
+        .collect()
+}
+
+pub fn cached_tracks_to_rows(
+    tracks: &[CachedTrack],
+) -> Vec<(
+    String,
+    String,
+    String,
+    Option<String>,
+    Option<String>,
+    Option<String>,
+    f64,
+    Option<String>,
+)> {
+    tracks
+        .iter()
+        .map(|t| {
+            let artists_json = serde_json::to_string(&t.artists).unwrap_or_else(|_| "[]".into());
+            let (album_name, album_id) = match &t.album {
+                Some(a) => (Some(a.name.clone()), Some(a.id.clone())),
+                None => (None, None),
+            };
+            let thumb_url = t.thumbnails.first().map(|th| th.url.clone());
+            (
+                t.video_id.clone(),
+                t.title.clone(),
+                artists_json,
+                album_name,
+                album_id,
+                Some(t.duration.clone()),
+                t.duration_seconds,
+                thumb_url,
+            )
         })
         .collect()
 }

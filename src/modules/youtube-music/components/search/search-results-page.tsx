@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Loader2 } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
@@ -9,6 +9,11 @@ import { CarouselSection } from "../shared/carousel-section";
 import { TopResultSection } from "./top-result-section";
 import { ytSearch } from "../../services/yt-api";
 import { mapSearchResults } from "../../services/mappers";
+import {
+  cacheFiniteTrackCollection,
+  createTrackCollectionId,
+  type TrackCollectionEntry,
+} from "../../services/track-collections";
 import { usePlayerStore } from "../../stores/player-store";
 import type { PlayAllOptions, Track, SearchResults, StackPage } from "../../types/music";
 
@@ -46,8 +51,10 @@ export function SearchResultsPage({
   onAddToQueue,
 }: SearchResultsPageProps) {
   const [results, setResults] = useState<SearchResults | null>(null);
+  const [songEntries, setSongEntries] = useState<TrackCollectionEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const trackIdsRef = useRef<string[]>([]);
   const currentTrackId = usePlayerStore((s) => s.currentTrackId);
 
   useEffect(() => {
@@ -56,6 +63,8 @@ export function SearchResultsPage({
     async function fetchResults() {
       if (!query.trim()) {
         setResults(null);
+        setSongEntries([]);
+        trackIdsRef.current = [];
         setLoading(false);
         return;
       }
@@ -67,17 +76,31 @@ export function SearchResultsPage({
         const apiResponse = await ytSearch(query);
         if (cancelled) return;
         const mapped = mapSearchResults(apiResponse);
+        const collection = await cacheFiniteTrackCollection({
+          collectionType: "search-songs",
+          collectionId: createTrackCollectionId("search-songs", query.toLowerCase()),
+          title: `Resultados para ${query}`,
+          subtitle: "Músicas",
+          thumbnailUrl: mapped.songs[0]?.thumbnails?.[0]?.url ?? null,
+          isComplete: true,
+          tracks: mapped.songs,
+        });
+        if (cancelled) return;
         console.log("[SearchResultsPage] Search results:", {
           songs: mapped.songs.length,
           artists: mapped.artists.length,
           albums: mapped.albums.length,
           playlists: mapped.playlists.length,
         });
+        trackIdsRef.current = collection.trackIds;
+        setSongEntries(collection.entries);
         setResults(mapped);
       } catch (err) {
         if (cancelled) return;
         const msg = err instanceof Error ? err.message : String(err);
         console.error("[SearchResultsPage] Search failed:", msg);
+        setSongEntries([]);
+        trackIdsRef.current = [];
         setError(msg);
       } finally {
         if (!cancelled) setLoading(false);
@@ -96,6 +119,19 @@ export function SearchResultsPage({
 
   const handleGoToAlbum = (albumId: string) => {
     onNavigate({ type: "album", albumId });
+  };
+
+  const handlePlaySearchTrack = (track: Track) => {
+    const index =
+      (track as TrackCollectionEntry).collectionPosition ??
+      songEntries.findIndex((entry) => entry.videoId === track.videoId);
+    if (index >= 0) {
+      onPlayAll(songEntries, index, undefined, true, {
+        queueTrackIds: trackIdsRef.current,
+      });
+      return;
+    }
+    onPlayTrack(track);
   };
 
   if (loading) {
@@ -126,19 +162,13 @@ export function SearchResultsPage({
   const renderSongsSection = (title?: string) => (
     <div className="space-y-1">
       {title && <h2 className="text-lg font-semibold text-foreground">{title}</h2>}
-      {results.songs.map((track, i) => (
+      {songEntries.map((track, i) => (
         <TrackRow
-          key={track.videoId}
+          key={track.collectionRowKey}
           track={track}
           index={i}
-          onPlay={(t) => {
-            const index = results.songs.findIndex(s => s.videoId === t.videoId);
-            if (index >= 0) {
-              onPlayAll(results.songs, index);
-            } else {
-              onPlayTrack(t);
-            }
-          }}
+          isPlaying={track.videoId === currentTrackId}
+          onPlay={handlePlaySearchTrack}
           onAddToQueue={onAddToQueue}
           onGoToArtist={handleGoToArtist}
           onGoToAlbum={handleGoToAlbum}
@@ -201,19 +231,19 @@ export function SearchResultsPage({
     ? { kind: "artist" as const, artist: results.artists[0] }
     : results.albums[0]
       ? { kind: "album" as const, album: results.albums[0] }
-      : results.songs[0]
-        ? { kind: "song" as const, song: results.songs[0] }
+      : songEntries[0]
+        ? { kind: "song" as const, song: songEntries[0] }
         : null;
 
   const renderAllTab = () => (
     <div className="space-y-6">
-      {topResult && results.songs.length > 0 && (
+      {topResult && songEntries.length > 0 && (
         <TopResultSection
           topResult={topResult}
-          topSongs={results.songs}
+          topSongs={songEntries}
           currentTrackId={currentTrackId ?? undefined}
           onNavigate={onNavigate}
-          onPlayTrack={onPlayTrack}
+          onPlayTrack={handlePlaySearchTrack}
           onAddToQueue={onAddToQueue}
           onGoToArtist={handleGoToArtist}
           onGoToAlbum={handleGoToAlbum}

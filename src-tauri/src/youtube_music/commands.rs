@@ -1,13 +1,13 @@
 use std::collections::HashSet;
 use std::sync::Arc;
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, Manager, State};
 use tokio::sync::Mutex;
 
 use super::client::YtMusicState;
 use crate::playback_queue::{PlaybackQueue, QueueCommandResponse, QueueSnapshot, QueueWindowResponse};
-use crate::playlist_cache::{self, CachedPlaylistMeta, PlaylistCache};
+use crate::playlist_cache::{self, CachedCollectionMeta, CachedPlaylistMeta, CachedTrack, PlaylistCache};
 
 // ---------------------------------------------------------------------------
 // Auth response DTOs
@@ -563,6 +563,51 @@ fn emit_queue_state_updated(app: &AppHandle, snapshot: &QueueSnapshot) {
     }
 }
 
+#[derive(Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CollectionSnapshotInput {
+    pub collection_type: String,
+    pub collection_id: String,
+    pub title: String,
+    pub subtitle: Option<String>,
+    pub thumbnail_url: Option<String>,
+    pub is_complete: bool,
+    pub tracks: Vec<CachedTrack>,
+}
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CollectionTrackIdsResponse {
+    pub track_ids: Vec<String>,
+    pub is_complete: bool,
+}
+
+fn persist_collection_snapshot(
+    db: &PlaylistCache,
+    snapshot: &CollectionSnapshotInput,
+) -> Result<(), String> {
+    let rows = playlist_cache::cached_tracks_to_rows(&snapshot.tracks);
+    db.clear_collection_tracks(&snapshot.collection_type, &snapshot.collection_id)
+        .map_err(|e| format!("[persist_collection_snapshot] clear_collection_tracks: {e}"))?;
+    db.save_collection_meta(
+        &snapshot.collection_type,
+        &snapshot.collection_id,
+        &snapshot.title,
+        snapshot.subtitle.as_deref(),
+        snapshot.thumbnail_url.as_deref(),
+        snapshot.is_complete,
+    )
+    .map_err(|e| format!("[persist_collection_snapshot] save_collection_meta: {e}"))?;
+    db.save_collection_tracks(
+        &snapshot.collection_type,
+        &snapshot.collection_id,
+        0,
+        &rows,
+    )
+    .map_err(|e| format!("[persist_collection_snapshot] save_collection_tracks: {e}"))?;
+    Ok(())
+}
+
 /// Load a playlist: fetch first page from InnerTube, cache in SQLite,
 /// return compact data to the frontend, and spawn a background task for
 /// any remaining continuation pages.
@@ -645,6 +690,17 @@ pub async fn yt_load_playlist(
 
         db.save_tracks(&playlist_id, 0, &track_rows)
             .map_err(|e| format!("[yt_load_playlist] save_tracks: {e}"))?;
+        db.save_collection_meta(
+            "playlist",
+            &playlist_id,
+            &page.title,
+            page.author.as_ref().map(|a| a.name.as_str()),
+            page.thumbnails.first().map(|t| t.url.as_str()),
+            continuation.is_none(),
+        )
+        .map_err(|e| format!("[yt_load_playlist] save_collection_meta: {e}"))?;
+        db.save_collection_tracks("playlist", &playlist_id, 0, &track_rows)
+            .map_err(|e| format!("[yt_load_playlist] save_collection_tracks: {e}"))?;
 
         if continuation.is_none() {
             db.mark_complete(&playlist_id)
@@ -681,6 +737,9 @@ pub async fn yt_load_playlist(
         let pid = playlist_id.clone();
         let app_handle = app.clone();
         let mut offset = page.tracks.len();
+        let collection_title = page.title.clone();
+        let collection_subtitle = page.author.as_ref().map(|a| a.name.clone());
+        let collection_thumbnail = page.thumbnails.first().map(|t| t.url.clone());
 
         tokio::spawn(async move {
             println!("[yt_load_playlist:bg] Starting background fetch for {pid}");
@@ -712,9 +771,23 @@ pub async fn yt_load_playlist(
                                 eprintln!("[yt_load_playlist:bg] save_tracks error: {e}");
                                 break;
                             }
-                            if complete {
-                                if let Err(e) = db.mark_complete(&pid) {
-                                    eprintln!("[yt_load_playlist:bg] mark_complete error: {e}");
+                            if let Err(e) = db.save_collection_tracks("playlist", &pid, offset, &rows) {
+                                eprintln!("[yt_load_playlist:bg] save_collection_tracks error: {e}");
+                                break;
+                                }
+                                if complete {
+                                    if let Err(e) = db.mark_complete(&pid) {
+                                        eprintln!("[yt_load_playlist:bg] mark_complete error: {e}");
+                                    }
+                                if let Err(e) = db.save_collection_meta(
+                                    "playlist",
+                                    &pid,
+                                    &collection_title,
+                                    collection_subtitle.as_deref(),
+                                    collection_thumbnail.as_deref(),
+                                    true,
+                                ) {
+                                    eprintln!("[yt_load_playlist:bg] save_collection_meta error: {e}");
                                 }
                             }
                         }
@@ -909,6 +982,107 @@ pub async fn yt_get_playlist_window(
 
     serde_json::to_string(&response)
         .map_err(|e| format!("[yt_get_playlist_window] serialization: {e}"))
+}
+
+#[tauri::command]
+pub async fn yt_cache_collection_snapshot(
+    snapshot: CollectionSnapshotInput,
+    cache: State<'_, Arc<tokio::sync::Mutex<PlaylistCache>>>,
+) -> Result<CachedCollectionMeta, String> {
+    println!(
+        "[yt_cache_collection_snapshot] type={} id={} tracks={}",
+        snapshot.collection_type,
+        snapshot.collection_id,
+        snapshot.tracks.len()
+    );
+    let db = cache.lock().await;
+    persist_collection_snapshot(&db, &snapshot)?;
+    Ok(CachedCollectionMeta {
+        collection_type: snapshot.collection_type,
+        collection_id: snapshot.collection_id,
+        title: snapshot.title,
+        subtitle: snapshot.subtitle,
+        thumbnail_url: snapshot.thumbnail_url,
+        is_complete: snapshot.is_complete,
+    })
+}
+
+#[tauri::command]
+pub async fn yt_get_collection_track_ids(
+    collection_type: String,
+    collection_id: String,
+    cache: State<'_, Arc<tokio::sync::Mutex<PlaylistCache>>>,
+) -> Result<CollectionTrackIdsResponse, String> {
+    println!(
+        "[yt_get_collection_track_ids] type={} id={}",
+        collection_type, collection_id
+    );
+    let db = cache.lock().await;
+    let track_ids = db
+        .get_collection_track_ids(&collection_type, &collection_id)
+        .map_err(|e| format!("[yt_get_collection_track_ids] get_collection_track_ids: {e}"))?;
+    let is_complete = db
+        .is_collection_complete(&collection_type, &collection_id)
+        .map_err(|e| format!("[yt_get_collection_track_ids] is_collection_complete: {e}"))?;
+    Ok(CollectionTrackIdsResponse {
+        track_ids,
+        is_complete,
+    })
+}
+
+#[tauri::command]
+pub async fn yt_get_collection_window(
+    collection_type: String,
+    collection_id: String,
+    offset: usize,
+    limit: usize,
+    cache: State<'_, Arc<tokio::sync::Mutex<PlaylistCache>>>,
+) -> Result<String, String> {
+    println!(
+        "[yt_get_collection_window] type={} id={} offset={} limit={}",
+        collection_type, collection_id, offset, limit
+    );
+    let db = cache.lock().await;
+    let items = db
+        .get_collection_window(&collection_type, &collection_id, offset, limit)
+        .map_err(|e| format!("[yt_get_collection_window] get_collection_window: {e}"))?;
+    let total_loaded = db
+        .collection_track_count(&collection_type, &collection_id)
+        .map_err(|e| format!("[yt_get_collection_window] collection_track_count: {e}"))?;
+    let is_complete = db
+        .is_collection_complete(&collection_type, &collection_id)
+        .map_err(|e| format!("[yt_get_collection_window] is_collection_complete: {e}"))?;
+    let first = items.first().map(|item| {
+        serde_json::json!({
+            "position": item.position,
+            "videoId": item.track.video_id,
+        })
+    });
+    let last = items.last().map(|item| {
+        serde_json::json!({
+            "position": item.position,
+            "videoId": item.track.video_id,
+        })
+    });
+    println!(
+        "[yt_get_collection_window] returned={} totalLoaded={} isComplete={} first={} last={}",
+        items.len(),
+        total_loaded,
+        is_complete,
+        first.unwrap_or_default(),
+        last.unwrap_or_default()
+    );
+
+    let response = serde_json::json!({
+        "items": items,
+        "offset": offset,
+        "limit": limit,
+        "totalLoaded": total_loaded,
+        "isComplete": is_complete,
+    });
+
+    serde_json::to_string(&response)
+        .map_err(|e| format!("[yt_get_collection_window] serialization: {e}"))
 }
 
 #[tauri::command]

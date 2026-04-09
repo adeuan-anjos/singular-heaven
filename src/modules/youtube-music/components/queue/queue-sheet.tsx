@@ -131,6 +131,7 @@ function QueueSheetContent() {
   const {
     totalLoaded,
     revealedCount,
+    pagesVersion,
     currentIndex,
     isComplete,
     pageSize,
@@ -145,6 +146,7 @@ function QueueSheetContent() {
     useShallow((s) => ({
       totalLoaded: s.totalLoaded,
       revealedCount: s.revealedCount,
+      pagesVersion: s.pagesVersion,
       currentIndex: s.currentIndex,
       isComplete: s.isComplete,
       pageSize: s.pageSize,
@@ -158,11 +160,16 @@ function QueueSheetContent() {
     }))
   );
   const playerPlay = usePlayerStore((s) => s.play);
+  const cachedTracks = useTrackCacheStore((s) => s.tracks);
+  const hydrateTracks = useTrackCacheStore((s) => s.hydrateTracks);
+  const prefetchTracks = useTrackCacheStore((s) => s.prefetchTracks);
 
   // Delay virtualizer activation until Sheet opening animation completes (~350ms).
   // Without this, the virtualizer detects container resize on every animation frame
   // → recalculates range → onChange → re-render → hundreds of wasted renders.
   const [animationDone, setAnimationDone] = useState(false);
+  const [initialVisibleHydrationPending, setInitialVisibleHydrationPending] = useState(false);
+  const [initialVisibleHydrationFinished, setInitialVisibleHydrationFinished] = useState(false);
   const scrollElementRef = useRef<HTMLDivElement | null>(null);
   const didInitialScrollRef = useRef(false);
   const terminalRowVisibleRef = useRef<"reveal" | "loading" | null>(null);
@@ -224,6 +231,7 @@ function QueueSheetContent() {
     initializeReveal,
     pageSize,
     revealedCount,
+    pagesVersion,
     totalLoaded,
     virtualizerEnabled,
   ]);
@@ -264,6 +272,25 @@ function QueueSheetContent() {
   }, [revealedCount, terminalRowType, totalLoaded]);
 
   const virtualItems = virtualizer.getVirtualItems();
+  const visibleContentRows = virtualItems.filter(
+    (virtualRow) => !(terminalRowType !== null && virtualRow.index === terminalRowIndex)
+  );
+  const visibleEntries = visibleContentRows
+    .map((virtualRow) => getItemAt(virtualRow.index))
+    .filter((entry): entry is NonNullable<typeof entry> => !!entry);
+  const missingVisibleTrackIds = visibleEntries
+    .map((entry) => entry.videoId)
+    .filter((videoId) => !cachedTracks[videoId]);
+  const hasUnresolvedVisibleRows =
+    visibleContentRows.length > 0 &&
+    (visibleEntries.length < visibleContentRows.length || missingVisibleTrackIds.length > 0);
+  const shouldShowInitialSpinner =
+    virtualizerEnabled &&
+    revealedCount > 0 &&
+    !initialVisibleHydrationFinished &&
+    (initialVisibleHydrationPending ||
+      (virtualItems.length > 0 && hasUnresolvedVisibleRows));
+
   const lastVisibleIndex = virtualItems[virtualItems.length - 1]?.index ?? -1;
   const attemptRevealMore = useCallback(() => {
     const scrollElement = scrollElementRef.current;
@@ -347,6 +374,61 @@ function QueueSheetContent() {
     void ensureRange(firstVisible, lastVisible);
   }, [ensureRange, revealedCount, virtualItems]);
 
+  useEffect(() => {
+    if (missingVisibleTrackIds.length === 0) return;
+    console.log("[QueueSheetContent] prefetch visible tracks", {
+      missing: missingVisibleTrackIds.length,
+      sample: missingVisibleTrackIds.slice(0, 5),
+    });
+    prefetchTracks(missingVisibleTrackIds);
+  }, [missingVisibleTrackIds, prefetchTracks]);
+
+  useEffect(() => {
+    if (!virtualizerEnabled || revealedCount === 0 || initialVisibleHydrationFinished) {
+      return;
+    }
+
+    if (visibleContentRows.length === 0) {
+      return;
+    }
+
+    if (visibleEntries.length === 0) {
+      setInitialVisibleHydrationPending(false);
+      return;
+    }
+
+    if (missingVisibleTrackIds.length === 0) {
+      setInitialVisibleHydrationPending(false);
+      setInitialVisibleHydrationFinished(true);
+      return;
+    }
+
+    let cancelled = false;
+    setInitialVisibleHydrationPending(true);
+
+    void hydrateTracks(missingVisibleTrackIds)
+      .catch((error) => {
+        console.error("[QueueSheetContent] initial visible hydration failed", error);
+      })
+      .finally(() => {
+        if (cancelled) return;
+        setInitialVisibleHydrationPending(false);
+        setInitialVisibleHydrationFinished(true);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    hydrateTracks,
+    initialVisibleHydrationFinished,
+    missingVisibleTrackIds,
+    visibleContentRows.length,
+    visibleEntries.length,
+    revealedCount,
+    virtualizerEnabled,
+  ]);
+
   const handlePlayFromQueue = useCallback(
     (index: number) => {
       void queuePlayIndex(index).then((id) => {
@@ -378,12 +460,22 @@ function QueueSheetContent() {
             A fila está vazia
           </p>
         ) : (
-          <div
-            style={{
-              height: `${virtualizer.getTotalSize()}px`,
-              position: "relative",
-              width: "100%",
-            }}
+          <div className="relative">
+            {shouldShowInitialSpinner ? (
+              <div className="flex min-h-[220px] items-center justify-center">
+                <div className="flex items-center gap-3 text-sm text-muted-foreground">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <span>Carregando fila...</span>
+                </div>
+              </div>
+            ) : null}
+            <div
+              style={{
+                height: `${virtualizer.getTotalSize()}px`,
+                position: "relative",
+                width: "100%",
+                visibility: shouldShowInitialSpinner ? "hidden" : "visible",
+              }}
             >
               {virtualItems.map((virtualRow) => {
                 const isTerminalRow =
@@ -407,11 +499,11 @@ function QueueSheetContent() {
                     style={{
                       position: "absolute",
                       top: 0,
-                    left: 0,
-                    width: "100%",
-                    height: `${virtualRow.size}px`,
-                    transform: `translateY(${virtualRow.start}px)`,
-                  }}
+                      left: 0,
+                      width: "100%",
+                      height: `${virtualRow.size}px`,
+                      transform: `translateY(${virtualRow.start}px)`,
+                    }}
                   >
                     {isTerminalRow && terminalRowType === "loading" ? (
                       <QueueLoadingRow />
@@ -421,13 +513,13 @@ function QueueSheetContent() {
                         totalLoaded={totalLoaded}
                       />
                     ) : videoId ? (
-                    <QueueItem
-                      videoId={videoId}
-                      index={virtualRow.index}
-                      isCurrent={virtualRow.index === currentIndex}
-                      onPlay={handlePlayFromQueue}
-                      onRemove={handleRemove}
-                    />
+                      <QueueItem
+                        videoId={videoId}
+                        index={virtualRow.index}
+                        isCurrent={virtualRow.index === currentIndex}
+                        onPlay={handlePlayFromQueue}
+                        onRemove={handleRemove}
+                      />
                     ) : (
                       <div className="flex h-14 items-center px-2 text-xs text-muted-foreground">
                         Carregando faixa...
@@ -436,6 +528,7 @@ function QueueSheetContent() {
                   </div>
                 );
               })}
+            </div>
           </div>
         )}
       </div>
@@ -452,14 +545,19 @@ export const QueueSheet = React.memo(function QueueSheet({ open, onOpenChange }:
   const totalLoaded = useQueueStore((s) => s.totalLoaded);
   const currentTrackId = usePlayerStore((s) => s.currentTrackId);
   const removeTracks = useTrackCacheStore((s) => s.removeTracks);
+  const cacheBaselineRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     if (open) {
+      cacheBaselineRef.current = new Set(
+        Object.keys(useTrackCacheStore.getState().tracks)
+      );
       console.log(
         `[QueueSheet] opening ${JSON.stringify({
           revealedCount,
           totalLoaded,
           currentTrackId,
+          cacheBaseline: cacheBaselineRef.current.size,
         })}`
       );
     }
@@ -468,12 +566,17 @@ export const QueueSheet = React.memo(function QueueSheet({ open, onOpenChange }:
   const handleOpenChange = useCallback(
     (nextOpen: boolean) => {
       if (!nextOpen) {
-        const loadedIds = getLoadedVideoIds().filter((videoId) => videoId !== currentTrackId);
+        const baselineIds = cacheBaselineRef.current;
+        const loadedIds = getLoadedVideoIds().filter(
+          (videoId) =>
+            videoId !== currentTrackId && !baselineIds.has(videoId)
+        );
         console.log(
           `[QueueSheet] closing — resetting visual state ${JSON.stringify({
             revealedCount,
             totalLoaded,
             loadedIdsToEvict: loadedIds.length,
+            cacheBaseline: baselineIds.size,
             currentTrackId,
           })}`
         );
@@ -481,6 +584,7 @@ export const QueueSheet = React.memo(function QueueSheet({ open, onOpenChange }:
           removeTracks(loadedIds);
         }
         resetVisualState();
+        cacheBaselineRef.current = new Set();
       }
       onOpenChange(nextOpen);
     },

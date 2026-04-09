@@ -8,6 +8,10 @@ import { SectionHeader } from "../shared/section-header";
 import { ChartList } from "../shared/chart-list";
 import { ytGetExplore } from "../../services/yt-api";
 import { mapExplorePage, mapExploreSongToChart } from "../../services/mappers";
+import {
+  cacheFiniteTrackCollection,
+  createTrackCollectionId,
+} from "../../services/track-collections";
 import type { Track, ExploreData, ChartTrack, StackPage } from "../../types/music";
 
 interface ExploreViewProps {
@@ -39,6 +43,39 @@ export function ExploreView({ onNavigate, onPlayTrack }: ExploreViewProps) {
           chartTracks: charts.length,
           moods: mapped.moodsAndGenres.length,
           newVideos: mapped.newVideos.length,
+        });
+        void cacheFiniteTrackCollection({
+          collectionType: "explore-section",
+          collectionId: createTrackCollectionId("explore", "top-songs"),
+          title: "Top músicas",
+          subtitle: "Explore",
+          thumbnailUrl: charts[0]?.thumbnails?.[0]?.url ?? null,
+          isComplete: true,
+          tracks: charts,
+        }).catch((error) => {
+          console.error("[ExploreView] failed to cache top songs collection", error);
+        });
+        void cacheFiniteTrackCollection({
+          collectionType: "explore-section",
+          collectionId: createTrackCollectionId("explore", "trending"),
+          title: "Em alta",
+          subtitle: "Explore",
+          thumbnailUrl: mapped.trending[0]?.thumbnails?.[0]?.url ?? null,
+          isComplete: true,
+          tracks: mapped.trending,
+        }).catch((error) => {
+          console.error("[ExploreView] failed to cache trending collection", error);
+        });
+        void cacheFiniteTrackCollection({
+          collectionType: "explore-section",
+          collectionId: createTrackCollectionId("explore", "new-videos"),
+          title: "Novos vídeos",
+          subtitle: "Explore",
+          thumbnailUrl: mapped.newVideos[0]?.thumbnails?.[0]?.url ?? null,
+          isComplete: true,
+          tracks: mapped.newVideos,
+        }).catch((error) => {
+          console.error("[ExploreView] failed to cache new videos collection", error);
         });
         setData(mapped);
         setChartTracks(charts);

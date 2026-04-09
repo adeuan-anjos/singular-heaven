@@ -24,6 +24,7 @@ const inflightWindows = new Set<number>();
 
 interface QueueState {
   pages: Record<number, QueueWindowItem[]>;
+  pagesVersion: number;
   totalLoaded: number;
   revealedCount: number;
   currentIndex: number;
@@ -111,6 +112,7 @@ function applySnapshot(snapshot: QueueSnapshot): Partial<QueueState> {
 
 export const useQueueStore = create<QueueStore>()((set, get) => ({
   pages: emptyPages(),
+  pagesVersion: 0,
   totalLoaded: 0,
   revealedCount: 0,
   currentIndex: -1,
@@ -151,6 +153,7 @@ export const useQueueStore = create<QueueStore>()((set, get) => ({
       ...applySnapshot(response.snapshot),
       revealedCount: deriveRevealedCount(0, response.snapshot, true),
       pages: emptyPages(),
+      pagesVersion: 0,
     });
     return response.trackId;
   },
@@ -248,6 +251,7 @@ export const useQueueStore = create<QueueStore>()((set, get) => ({
       return {
         revealedCount: 0,
         pages: emptyPages(),
+        pagesVersion: state.pagesVersion + 1,
       };
     });
   },
@@ -295,6 +299,7 @@ export const useQueueStore = create<QueueStore>()((set, get) => ({
             );
             set((state) => ({
               ...applySnapshot(response.snapshot),
+              pagesVersion: state.pagesVersion + 1,
               pages: {
                 ...state.pages,
                 [pageOffset]: response.items,
@@ -373,6 +378,7 @@ export const useQueueStore = create<QueueStore>()((set, get) => ({
       ...applySnapshot(response.snapshot),
       revealedCount: deriveRevealedCount(state.revealedCount, response.snapshot, false),
       pages: emptyPages(),
+      pagesVersion: state.pagesVersion + 1,
     }));
   },
 
@@ -386,6 +392,7 @@ export const useQueueStore = create<QueueStore>()((set, get) => ({
         response.snapshot.totalLoaded
       ),
       pages: emptyPages(),
+      pagesVersion: state.pagesVersion + 1,
     }));
   },
 
@@ -396,6 +403,7 @@ export const useQueueStore = create<QueueStore>()((set, get) => ({
       ...applySnapshot(response.snapshot),
       revealedCount: deriveRevealedCount(state.revealedCount, response.snapshot, false),
       pages: emptyPages(),
+      pagesVersion: state.pagesVersion + 1,
     }));
   },
 
@@ -416,6 +424,7 @@ export const useQueueStore = create<QueueStore>()((set, get) => ({
       ...applySnapshot(response.snapshot),
       revealedCount: 0,
       pages: emptyPages(),
+      pagesVersion: 0,
     });
   },
 }));

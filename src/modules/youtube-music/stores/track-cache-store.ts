@@ -13,7 +13,9 @@ interface TrackCacheActions {
   putTracks: (tracks: Track[]) => void;
   putTrack: (track: Track) => void;
   getTrack: (videoId: string) => Track | undefined;
+  hydrateTracks: (videoIds: string[]) => Promise<void>;
   removeTracks: (videoIds: string[]) => void;
+  prefetchTracks: (videoIds: string[]) => void;
   clear: () => void;
 }
 
@@ -67,6 +69,26 @@ export const useTrackCacheStore = create<TrackCacheStore>()((set, get) => ({
 
   getTrack: (videoId) => get().tracks[videoId],
 
+  hydrateTracks: async (videoIds) => {
+    const ids = Array.from(new Set(videoIds.filter(Boolean))).filter(
+      (videoId) => !get().tracks[videoId]
+    );
+    if (ids.length === 0) return;
+    console.log("[TrackCache] hydrateTracks", {
+      requested: ids.length,
+      sample: ids.slice(0, 5),
+    });
+    const json = await invoke<string>("yt_get_cached_tracks", { videoIds: ids });
+    const tracks: Track[] = JSON.parse(json);
+    console.log("[TrackCache] hydrateTracks resolved", {
+      requested: ids.length,
+      found: tracks.length,
+    });
+    if (tracks.length > 0) {
+      get().putTracks(tracks);
+    }
+  },
+
   removeTracks: (videoIds) => {
     if (videoIds.length === 0) return;
     const uniqueIds = Array.from(new Set(videoIds.filter(Boolean)));
@@ -86,6 +108,20 @@ export const useTrackCacheStore = create<TrackCacheStore>()((set, get) => ({
       removed: uniqueIds.length,
       total: Object.keys(get().tracks).length,
     });
+  },
+
+  prefetchTracks: (videoIds) => {
+    const ids = Array.from(new Set(videoIds.filter(Boolean))).filter(
+      (videoId) => !get().tracks[videoId]
+    );
+    if (ids.length === 0) return;
+    console.log("[TrackCache] prefetchTracks", {
+      requested: ids.length,
+      sample: ids.slice(0, 5),
+    });
+    for (const videoId of ids) {
+      requestTrackFromDisk(videoId);
+    }
   },
 
   clear: () => {

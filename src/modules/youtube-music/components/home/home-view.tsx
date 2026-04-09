@@ -5,6 +5,10 @@ import { CarouselSection } from "../shared/carousel-section";
 import { MediaCard } from "../shared/media-card";
 import { ytGetHome } from "../../services/yt-api";
 import { mapHomeSections } from "../../services/mappers";
+import {
+  cacheFiniteTrackCollection,
+  createTrackCollectionId,
+} from "../../services/track-collections";
 import type { Track, Album, Artist, Playlist, HomeSection, StackPage } from "../../types/music";
 import { useRenderTracker } from "@/lib/debug";
 
@@ -115,6 +119,21 @@ export function HomeView({ onNavigate, onPlayTrack }: HomeViewProps) {
         if (cancelled) return;
         const mapped = mapHomeSections(apiSections);
         console.log("[HomeView] Loaded home sections:", mapped.length);
+        mapped.forEach((section, index) => {
+          const tracks = section.contents.filter(isTrack);
+          if (tracks.length === 0) return;
+          void cacheFiniteTrackCollection({
+            collectionType: "home-section",
+            collectionId: createTrackCollectionId("home", index, section.title),
+            title: section.title,
+            subtitle: "Home",
+            thumbnailUrl: tracks[0]?.thumbnails?.[0]?.url ?? null,
+            isComplete: true,
+            tracks,
+          }).catch((error) => {
+            console.error("[HomeView] failed to cache section collection", error);
+          });
+        });
         setSections(mapped);
       } catch (err) {
         if (cancelled) return;

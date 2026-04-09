@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Input } from "@/components/ui/input";
 import { CollectionHeader } from "../shared/collection-header";
@@ -6,6 +6,11 @@ import type { CollectionHeaderAction } from "../shared/collection-header";
 import { TrackTable } from "../shared/track-table";
 import { ytGetArtist } from "../../services/yt-api";
 import { mapArtistPage } from "../../services/mappers";
+import {
+  cacheFiniteTrackCollection,
+  createTrackCollectionId,
+  type TrackCollectionEntry,
+} from "../../services/track-collections";
 import { usePlayerStore } from "../../stores/player-store";
 import {
   Shuffle,
@@ -37,8 +42,10 @@ export function ArtistSongsPage({
   onAddToQueue,
 }: ArtistSongsPageProps) {
   const [artist, setArtist] = useState<Artist | null>(null);
+  const [collectionTracks, setCollectionTracks] = useState<TrackCollectionEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const trackIdsRef = useRef<string[]>([]);
   const currentTrackId = usePlayerStore((s) => s.currentTrackId);
   const isPlaying = usePlayerStore((s) => s.isPlaying);
   const [subscribed, setSubscribed] = useState(false);
@@ -52,10 +59,27 @@ export function ArtistSongsPage({
     console.log("[ArtistSongsPage] Fetching artist:", artistId);
 
     ytGetArtist(artistId)
-      .then((raw) => {
+      .then(async (raw) => {
         if (cancelled) return;
         const mapped = mapArtistPage(raw);
+        const allSongs = mapped.topSongs ?? [];
+        const collectionId = createTrackCollectionId("artist-songs", artistId);
+        const collection = await cacheFiniteTrackCollection({
+          collectionType: "artist-songs",
+          collectionId,
+          title: mapped.name,
+          subtitle: "Músicas",
+          thumbnailUrl:
+            mapped.thumbnails[mapped.thumbnails.length - 1]?.url ??
+            mapped.thumbnails[0]?.url ??
+            null,
+          isComplete: true,
+          tracks: allSongs,
+        });
+        if (cancelled) return;
         console.log("[ArtistSongsPage] Artist loaded:", mapped.name, "songs:", mapped.topSongs?.length);
+        trackIdsRef.current = collection.trackIds;
+        setCollectionTracks(collection.entries);
         setArtist(mapped);
         setSubscribed(mapped.subscribed ?? false);
       })
@@ -97,7 +121,7 @@ export function ArtistSongsPage({
   if (artist.monthlyListeners) infoLines.push(artist.monthlyListeners);
   if (artist.subscribers) infoLines.push(`${artist.subscribers} inscritos`);
 
-  const allSongs = artist.topSongs ?? [];
+  const allSongs = collectionTracks;
   const filteredSongs = filter
     ? allSongs.filter((t) => {
         const q = filter.toLowerCase();
@@ -111,13 +135,18 @@ export function ArtistSongsPage({
 
   const handlePlayAll = () => {
     if (allSongs.length > 0) {
-      onPlayAll(allSongs, 0);
+      onPlayAll(allSongs, 0, undefined, true, {
+        queueTrackIds: trackIdsRef.current,
+      });
     }
   };
 
   const handleShuffle = () => {
     if (allSongs.length > 0) {
-      onPlayAll(allSongs, 0, undefined, true, { shuffle: true });
+      onPlayAll(allSongs, 0, undefined, true, {
+        queueTrackIds: trackIdsRef.current,
+        shuffle: true,
+      });
     }
   };
 
@@ -166,10 +195,17 @@ export function ArtistSongsPage({
           showViews
           currentTrackId={currentTrackId ?? undefined}
           isPlaying={isPlaying}
+          getTrackKey={(track) =>
+            (track as TrackCollectionEntry).collectionRowKey ?? track.videoId
+          }
           onPlay={(track) => {
-            const index = allSongs.findIndex(t => t.videoId === track.videoId);
+            const index =
+              (track as TrackCollectionEntry).collectionPosition ??
+              allSongs.findIndex((t) => t.videoId === track.videoId);
             if (index >= 0) {
-              onPlayAll(allSongs, index);
+              onPlayAll(allSongs, index, undefined, true, {
+                queueTrackIds: trackIdsRef.current,
+              });
             } else {
               onPlayTrack(track);
             }

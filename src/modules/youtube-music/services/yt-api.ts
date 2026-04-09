@@ -450,12 +450,78 @@ export interface PlaylistWindowResponse {
   isComplete: boolean;
 }
 
+export type TrackCollectionType =
+  | "playlist"
+  | "album"
+  | "artist-songs"
+  | "search-songs"
+  | "home-section"
+  | "explore-section";
+
+export interface TrackCollectionSnapshotInput {
+  collectionType: TrackCollectionType;
+  collectionId: string;
+  title: string;
+  subtitle?: string | null;
+  thumbnailUrl?: string | null;
+  isComplete: boolean;
+  tracks: Track[];
+}
+
+export interface CollectionWindowItem extends Track {
+  position: number;
+}
+
+export interface CollectionWindowResponse {
+  items: CollectionWindowItem[];
+  offset: number;
+  limit: number;
+  totalLoaded: number;
+  isComplete: boolean;
+}
+
+export interface CollectionTrackIdsResponse {
+  trackIds: string[];
+  isComplete: boolean;
+}
+
 export async function ytGetPlaylistWindow(
   playlistId: string,
   offset: number,
   limit: number
 ): Promise<PlaylistWindowResponse> {
   const json = await invoke<string>("yt_get_playlist_window", { playlistId, offset, limit });
+  return parseJson(json);
+}
+
+export async function ytCacheCollectionSnapshot(
+  snapshot: TrackCollectionSnapshotInput
+): Promise<void> {
+  await invoke("yt_cache_collection_snapshot", { snapshot });
+}
+
+export async function ytGetCollectionTrackIds(
+  collectionType: TrackCollectionType,
+  collectionId: string
+): Promise<CollectionTrackIdsResponse> {
+  return invoke<CollectionTrackIdsResponse>("yt_get_collection_track_ids", {
+    collectionType,
+    collectionId,
+  });
+}
+
+export async function ytGetCollectionWindow(
+  collectionType: TrackCollectionType,
+  collectionId: string,
+  offset: number,
+  limit: number
+): Promise<CollectionWindowResponse> {
+  const json = await invoke<string>("yt_get_collection_window", {
+    collectionType,
+    collectionId,
+    offset,
+    limit,
+  });
   return parseJson(json);
 }
 
