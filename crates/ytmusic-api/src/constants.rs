@@ -25,6 +25,9 @@ pub const ENDPOINT_NEXT: &str = "next";
 pub const ENDPOINT_PLAYER: &str = "player";
 pub const ENDPOINT_SEARCH_SUGGESTIONS: &str = "music/get_search_suggestions";
 pub const ENDPOINT_GET_QUEUE: &str = "music/get_queue";
+pub const ENDPOINT_PLAYLIST_CREATE: &str = "playlist/create";
+pub const ENDPOINT_PLAYLIST_DELETE: &str = "playlist/delete";
+pub const ENDPOINT_PLAYLIST_EDIT: &str = "browse/edit_playlist";
 
 // ---------------------------------------------------------------------------
 // Android VR client — for streaming URLs (no PO token required)

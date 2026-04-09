@@ -10,6 +10,9 @@ pub struct LibraryPlaylist {
     pub playlist_id: String,
     pub subtitle: Option<String>,
     pub thumbnails: Vec<Thumbnail>,
+    pub is_owned_by_user: bool,
+    pub is_editable: bool,
+    pub is_special: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]

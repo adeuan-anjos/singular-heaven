@@ -1,6 +1,11 @@
-import { useState, type ComponentType } from "react";
+import { type ComponentType, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
-import { Heart, Ellipsis } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Ellipsis } from "lucide-react";
 
 export interface CollectionHeaderAction {
   label: string;
@@ -20,9 +25,8 @@ export interface CollectionHeaderProps {
   description?: string;
   /** Action buttons — each page configures its own set */
   actions: CollectionHeaderAction[];
-  /** Heart toggle */
-  onLikeToggle?: () => void;
-  liked?: boolean;
+  trailingActions?: ReactNode;
+  menuContent?: ReactNode;
 }
 
 export function CollectionHeader({
@@ -33,13 +37,9 @@ export function CollectionHeader({
   infoLines,
   description,
   actions,
-  onLikeToggle,
-  liked,
+  trailingActions,
+  menuContent,
 }: CollectionHeaderProps) {
-  const [internalLiked, setInternalLiked] = useState(false);
-  const isLiked = liked ?? internalLiked;
-  const toggleLike = onLikeToggle ?? (() => setInternalLiked((v) => !v));
-
   return (
     <div className="space-y-4">
       {/* Cover + Info */}
@@ -87,12 +87,17 @@ export function CollectionHeader({
             {action.label}
           </Button>
         ))}
-        <Button variant="ghost" size="icon" onClick={toggleLike}>
-          <Heart className={`h-5 w-5 ${isLiked ? "fill-red-500 text-red-500" : ""}`} />
-        </Button>
-        <Button variant="ghost" size="icon">
-          <Ellipsis className="h-5 w-5" />
-        </Button>
+        {trailingActions}
+        {menuContent ? (
+          <DropdownMenu>
+            <DropdownMenuTrigger render={<Button variant="ghost" size="icon" />}>
+              <Ellipsis className="h-5 w-5" />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              {menuContent}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        ) : null}
       </div>
     </div>
   );

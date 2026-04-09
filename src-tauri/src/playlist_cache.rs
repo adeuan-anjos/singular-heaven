@@ -9,6 +9,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 #[serde(rename_all = "camelCase")]
 pub struct CachedTrack {
     pub video_id: String,
+    pub set_video_id: Option<String>,
     pub title: String,
     pub artists: Vec<CachedArtist>,
     pub album: Option<CachedAlbum>,
@@ -26,6 +27,9 @@ pub struct CachedPlaylistMeta {
     pub author_id: Option<String>,
     pub track_count: Option<String>,
     pub thumbnail_url: Option<String>,
+    pub is_owned_by_user: bool,
+    pub is_editable: bool,
+    pub is_special: bool,
     pub is_complete: bool,
 }
 
@@ -100,6 +104,9 @@ impl PlaylistCache {
                  author_id TEXT,
                  track_count TEXT,
                  thumbnail_url TEXT,
+                 is_owned_by_user INTEGER DEFAULT 0,
+                 is_editable INTEGER DEFAULT 0,
+                 is_special INTEGER DEFAULT 0,
                  is_complete INTEGER DEFAULT 0,
                  cached_at INTEGER NOT NULL
              );
@@ -114,6 +121,7 @@ impl PlaylistCache {
                  album_id TEXT,
                  duration TEXT,
                  duration_secs REAL DEFAULT 0,
+                 set_video_id TEXT,
                  thumbnail_url TEXT,
                  PRIMARY KEY (playlist_id, position)
              );
@@ -143,6 +151,7 @@ impl PlaylistCache {
                  album_id TEXT,
                  duration TEXT,
                  duration_secs REAL DEFAULT 0,
+                 set_video_id TEXT,
                  thumbnail_url TEXT,
                  PRIMARY KEY (collection_type, collection_id, position)
              );
@@ -150,6 +159,42 @@ impl PlaylistCache {
              CREATE INDEX IF NOT EXISTS idx_collection_tracks_video_id
                  ON collection_tracks(video_id);",
         )?;
+
+        let playlist_has_set_video_id = {
+            let mut stmt = conn.prepare("PRAGMA table_info(playlist_tracks)")?;
+            let rows = stmt.query_map([], |row| row.get::<_, String>(1))?;
+            let has_column = rows.filter_map(|r| r.ok()).any(|name| name == "set_video_id");
+            has_column
+        };
+        if !playlist_has_set_video_id {
+            conn.execute("ALTER TABLE playlist_tracks ADD COLUMN set_video_id TEXT", [])?;
+        }
+
+        for (table, column, sql_type) in [
+            ("playlist_meta", "is_owned_by_user", "INTEGER DEFAULT 0"),
+            ("playlist_meta", "is_editable", "INTEGER DEFAULT 0"),
+            ("playlist_meta", "is_special", "INTEGER DEFAULT 0"),
+        ] {
+            let has_column = {
+                let mut stmt = conn.prepare(&format!("PRAGMA table_info({table})"))?;
+                let rows = stmt.query_map([], |row| row.get::<_, String>(1))?;
+                let has_column = rows.filter_map(|r| r.ok()).any(|name| name == column);
+                has_column
+            };
+            if !has_column {
+                conn.execute(&format!("ALTER TABLE {table} ADD COLUMN {column} {sql_type}"), [])?;
+            }
+        }
+
+        let collection_has_set_video_id = {
+            let mut stmt = conn.prepare("PRAGMA table_info(collection_tracks)")?;
+            let rows = stmt.query_map([], |row| row.get::<_, String>(1))?;
+            let has_column = rows.filter_map(|r| r.ok()).any(|name| name == "set_video_id");
+            has_column
+        };
+        if !collection_has_set_video_id {
+            conn.execute("ALTER TABLE collection_tracks ADD COLUMN set_video_id TEXT", [])?;
+        }
 
         println!("[PlaylistCache] Schema initialized");
         Ok(Self { conn })
@@ -164,6 +209,9 @@ impl PlaylistCache {
         author_id: Option<&str>,
         track_count: Option<&str>,
         thumbnail_url: Option<&str>,
+        is_owned_by_user: bool,
+        is_editable: bool,
+        is_special: bool,
     ) -> SqlResult<()> {
         println!(
             "[PlaylistCache] save_meta playlist_id={} title={}",
@@ -171,8 +219,8 @@ impl PlaylistCache {
         );
         self.conn.execute(
             "INSERT OR REPLACE INTO playlist_meta
-             (playlist_id, title, author_name, author_id, track_count, thumbnail_url, is_complete, cached_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, 0, ?7)",
+             (playlist_id, title, author_name, author_id, track_count, thumbnail_url, is_owned_by_user, is_editable, is_special, is_complete, cached_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, 0, ?10)",
             params![
                 playlist_id,
                 title,
@@ -180,6 +228,9 @@ impl PlaylistCache {
                 author_id,
                 track_count,
                 thumbnail_url,
+                if is_owned_by_user { 1 } else { 0 },
+                if is_editable { 1 } else { 0 },
+                if is_special { 1 } else { 0 },
                 now_timestamp(),
             ],
         )?;
@@ -206,6 +257,7 @@ impl PlaylistCache {
         start_pos: usize,
         tracks: &[(
             String,
+            Option<String>,
             String,
             String,
             Option<String>,
@@ -214,28 +266,29 @@ impl PlaylistCache {
             f64,
             Option<String>,
         )],
-        // Fields: (video_id, title, artists_json, album_name, album_id, duration, duration_secs, thumbnail_url)
+        // Fields: (video_id, set_video_id, title, artists_json, album_name, album_id, duration, duration_secs, thumbnail_url)
     ) -> SqlResult<usize> {
         let tx = self.conn.unchecked_transaction()?;
         let mut count = 0;
         {
             let mut stmt = tx.prepare_cached(
                 "INSERT OR REPLACE INTO playlist_tracks
-                 (playlist_id, position, video_id, title, artists_json, album_name, album_id, duration, duration_secs, thumbnail_url)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+                 (playlist_id, position, video_id, set_video_id, title, artists_json, album_name, album_id, duration, duration_secs, thumbnail_url)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
             )?;
             for (i, t) in tracks.iter().enumerate() {
                 stmt.execute(params![
                     playlist_id,
                     start_pos + i,
                     t.0, // video_id
-                    t.1, // title
-                    t.2, // artists_json
-                    t.3, // album_name
-                    t.4, // album_id
-                    t.5, // duration
-                    t.6, // duration_secs
-                    t.7, // thumbnail_url
+                    t.1, // set_video_id
+                    t.2, // title
+                    t.3, // artists_json
+                    t.4, // album_name
+                    t.5, // album_id
+                    t.6, // duration
+                    t.7, // duration_secs
+                    t.8, // thumbnail_url
                 ])?;
                 count += 1;
             }
@@ -274,7 +327,7 @@ impl PlaylistCache {
     /// Get cached playlist metadata if present.
     pub fn get_meta(&self, playlist_id: &str) -> SqlResult<Option<CachedPlaylistMeta>> {
         let mut stmt = self.conn.prepare(
-            "SELECT playlist_id, title, author_name, author_id, track_count, thumbnail_url, is_complete
+            "SELECT playlist_id, title, author_name, author_id, track_count, thumbnail_url, is_owned_by_user, is_editable, is_special, is_complete
              FROM playlist_meta
              WHERE playlist_id = ?1",
         )?;
@@ -292,7 +345,10 @@ impl PlaylistCache {
             author_id: row.get(3)?,
             track_count: row.get(4)?,
             thumbnail_url: row.get(5)?,
-            is_complete: row.get::<_, i32>(6)? == 1,
+            is_owned_by_user: row.get::<_, i32>(6)? == 1,
+            is_editable: row.get::<_, i32>(7)? == 1,
+            is_special: row.get::<_, i32>(8)? == 1,
+            is_complete: row.get::<_, i32>(9)? == 1,
         };
 
         println!(
@@ -369,6 +425,7 @@ impl PlaylistCache {
         start_pos: usize,
         tracks: &[(
             String,
+            Option<String>,
             String,
             String,
             Option<String>,
@@ -383,8 +440,8 @@ impl PlaylistCache {
         {
             let mut stmt = tx.prepare_cached(
                 "INSERT OR REPLACE INTO collection_tracks
-                 (collection_type, collection_id, position, video_id, title, artists_json, album_name, album_id, duration, duration_secs, thumbnail_url)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+                 (collection_type, collection_id, position, video_id, set_video_id, title, artists_json, album_name, album_id, duration, duration_secs, thumbnail_url)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
             )?;
             for (i, t) in tracks.iter().enumerate() {
                 stmt.execute(params![
@@ -399,6 +456,7 @@ impl PlaylistCache {
                     t.5,
                     t.6,
                     t.7,
+                    t.8,
                 ])?;
                 count += 1;
             }
@@ -480,7 +538,7 @@ impl PlaylistCache {
         limit: usize,
     ) -> SqlResult<Vec<CachedCollectionWindowItem>> {
         let mut stmt = self.conn.prepare(
-            "SELECT position, video_id, title, artists_json, album_name, album_id, duration, duration_secs, thumbnail_url
+            "SELECT position, video_id, set_video_id, title, artists_json, album_name, album_id, duration, duration_secs, thumbnail_url
              FROM collection_tracks
              WHERE collection_type = ?1 AND collection_id = ?2
              ORDER BY position
@@ -489,25 +547,26 @@ impl PlaylistCache {
 
         let items: Vec<CachedCollectionWindowItem> = stmt
             .query_map(params![collection_type, collection_id, limit, offset], |row| {
-                let artists_json: String = row.get(3)?;
+                let artists_json: String = row.get(4)?;
                 let artists: Vec<CachedArtist> =
                     serde_json::from_str(&artists_json).unwrap_or_default();
-                let album_name: Option<String> = row.get(4)?;
-                let album_id: Option<String> = row.get(5)?;
-                let thumb_url: Option<String> = row.get(8)?;
+                let album_name: Option<String> = row.get(5)?;
+                let album_id: Option<String> = row.get(6)?;
+                let thumb_url: Option<String> = row.get(9)?;
 
                 Ok(CachedCollectionWindowItem {
                     position: row.get(0)?,
                     track: CachedTrack {
                         video_id: row.get(1)?,
-                        title: row.get(2)?,
+                        set_video_id: row.get(2)?,
+                        title: row.get(3)?,
                         artists,
                         album: album_name.map(|name| CachedAlbum {
                             id: album_id.unwrap_or_default(),
                             name,
                         }),
-                        duration: row.get::<_, Option<String>>(6)?.unwrap_or_default(),
-                        duration_seconds: row.get(7)?,
+                        duration: row.get::<_, Option<String>>(7)?.unwrap_or_default(),
+                        duration_seconds: row.get(8)?,
                         thumbnails: thumb_url
                             .map(|url| vec![CachedThumbnail { url, width: 226, height: 226 }])
                             .unwrap_or_default(),
@@ -561,7 +620,7 @@ impl PlaylistCache {
     /// Get all cached tracks for a playlist, ordered by position.
     pub fn get_tracks_for_playlist(&self, playlist_id: &str) -> SqlResult<Vec<CachedTrack>> {
         let mut stmt = self.conn.prepare(
-            "SELECT video_id, title, artists_json, album_name, album_id, duration, duration_secs, thumbnail_url
+            "SELECT video_id, set_video_id, title, artists_json, album_name, album_id, duration, duration_secs, thumbnail_url
              FROM playlist_tracks
              WHERE playlist_id = ?1
              ORDER BY position",
@@ -569,23 +628,24 @@ impl PlaylistCache {
 
         let tracks: Vec<CachedTrack> = stmt
             .query_map(params![playlist_id], |row| {
-                let artists_json: String = row.get(2)?;
+                let artists_json: String = row.get(3)?;
                 let artists: Vec<CachedArtist> =
                     serde_json::from_str(&artists_json).unwrap_or_default();
-                let album_name: Option<String> = row.get(3)?;
-                let album_id: Option<String> = row.get(4)?;
-                let thumb_url: Option<String> = row.get(7)?;
+                let album_name: Option<String> = row.get(4)?;
+                let album_id: Option<String> = row.get(5)?;
+                let thumb_url: Option<String> = row.get(8)?;
 
                 Ok(CachedTrack {
                     video_id: row.get(0)?,
-                    title: row.get(1)?,
+                    set_video_id: row.get(1)?,
+                    title: row.get(2)?,
                     artists,
                     album: album_name.map(|name| CachedAlbum {
                         id: album_id.unwrap_or_default(),
                         name,
                     }),
-                    duration: row.get::<_, Option<String>>(5)?.unwrap_or_default(),
-                    duration_seconds: row.get(6)?,
+                    duration: row.get::<_, Option<String>>(6)?.unwrap_or_default(),
+                    duration_seconds: row.get(7)?,
                     thumbnails: thumb_url
                         .map(|url| vec![CachedThumbnail { url, width: 226, height: 226 }])
                         .unwrap_or_default(),
@@ -617,7 +677,7 @@ impl PlaylistCache {
         limit: usize,
     ) -> SqlResult<Vec<CachedPlaylistWindowItem>> {
         let mut stmt = self.conn.prepare(
-            "SELECT position, video_id, title, artists_json, album_name, album_id, duration, duration_secs, thumbnail_url
+            "SELECT position, video_id, set_video_id, title, artists_json, album_name, album_id, duration, duration_secs, thumbnail_url
              FROM playlist_tracks
              WHERE playlist_id = ?1
              ORDER BY position
@@ -626,25 +686,26 @@ impl PlaylistCache {
 
         let items: Vec<CachedPlaylistWindowItem> = stmt
             .query_map(params![playlist_id, limit, offset], |row| {
-                let artists_json: String = row.get(3)?;
+                let artists_json: String = row.get(4)?;
                 let artists: Vec<CachedArtist> =
                     serde_json::from_str(&artists_json).unwrap_or_default();
-                let album_name: Option<String> = row.get(4)?;
-                let album_id: Option<String> = row.get(5)?;
-                let thumb_url: Option<String> = row.get(8)?;
+                let album_name: Option<String> = row.get(5)?;
+                let album_id: Option<String> = row.get(6)?;
+                let thumb_url: Option<String> = row.get(9)?;
 
                 Ok(CachedPlaylistWindowItem {
                     position: row.get(0)?,
                     track: CachedTrack {
                         video_id: row.get(1)?,
-                        title: row.get(2)?,
+                        set_video_id: row.get(2)?,
+                        title: row.get(3)?,
                         artists,
                         album: album_name.map(|name| CachedAlbum {
                             id: album_id.unwrap_or_default(),
                             name,
                         }),
-                        duration: row.get::<_, Option<String>>(6)?.unwrap_or_default(),
-                        duration_seconds: row.get(7)?,
+                        duration: row.get::<_, Option<String>>(7)?.unwrap_or_default(),
+                        duration_seconds: row.get(8)?,
                         thumbnails: thumb_url
                             .map(|url| vec![CachedThumbnail { url, width: 226, height: 226 }])
                             .unwrap_or_default(),
@@ -714,7 +775,7 @@ impl PlaylistCache {
 
         let placeholders: String = video_ids.iter().map(|_| "?").collect::<Vec<_>>().join(",");
         let sql = format!(
-            "SELECT video_id, title, artists_json, album_name, album_id, duration, duration_secs, thumbnail_url
+            "SELECT video_id, set_video_id, title, artists_json, album_name, album_id, duration, duration_secs, thumbnail_url
              FROM {table_name} WHERE video_id IN ({placeholders}) GROUP BY video_id"
         );
         let mut stmt = self.conn.prepare(&sql)?;
@@ -727,23 +788,24 @@ impl PlaylistCache {
 
         let tracks: Vec<CachedTrack> = stmt
             .query_map(param_refs.as_slice(), |row| {
-                let artists_json: String = row.get(2)?;
+                let artists_json: String = row.get(3)?;
                 let artists: Vec<CachedArtist> =
                     serde_json::from_str(&artists_json).unwrap_or_default();
-                let album_name: Option<String> = row.get(3)?;
-                let album_id: Option<String> = row.get(4)?;
-                let thumb_url: Option<String> = row.get(7)?;
+                let album_name: Option<String> = row.get(4)?;
+                let album_id: Option<String> = row.get(5)?;
+                let thumb_url: Option<String> = row.get(8)?;
 
                 Ok(CachedTrack {
                     video_id: row.get(0)?,
-                    title: row.get(1)?,
+                    set_video_id: row.get(1)?,
+                    title: row.get(2)?,
                     artists,
                     album: album_name.map(|name| CachedAlbum {
                         id: album_id.unwrap_or_default(),
                         name,
                     }),
-                    duration: row.get::<_, Option<String>>(5)?.unwrap_or_default(),
-                    duration_seconds: row.get(6)?,
+                    duration: row.get::<_, Option<String>>(6)?.unwrap_or_default(),
+                    duration_seconds: row.get(7)?,
                     thumbnails: thumb_url
                         .map(|url| vec![CachedThumbnail { url, width: 226, height: 226 }])
                         .unwrap_or_default(),
@@ -796,6 +858,7 @@ pub fn playlist_tracks_to_rows(
     tracks: &[ytmusic_api::types::playlist::PlaylistTrack],
 ) -> Vec<(
     String,
+    Option<String>,
     String,
     String,
     Option<String>,
@@ -816,6 +879,7 @@ pub fn playlist_tracks_to_rows(
             let dur_secs = parse_duration(t.duration.as_deref());
             (
                 t.video_id.clone(),
+                t.set_video_id.clone(),
                 t.title.clone(),
                 artists_json,
                 album_name,
@@ -860,6 +924,7 @@ pub fn playlist_tracks_to_cached(
                 .unwrap_or_default();
             CachedTrack {
                 video_id: t.video_id.clone(),
+                set_video_id: t.set_video_id.clone(),
                 title: t.title.clone(),
                 artists,
                 album,
@@ -875,6 +940,7 @@ pub fn cached_tracks_to_rows(
     tracks: &[CachedTrack],
 ) -> Vec<(
     String,
+    Option<String>,
     String,
     String,
     Option<String>,
@@ -894,6 +960,7 @@ pub fn cached_tracks_to_rows(
             let thumb_url = t.thumbnails.first().map(|th| th.url.clone());
             (
                 t.video_id.clone(),
+                t.set_video_id.clone(),
                 t.title.clone(),
                 artists_json,
                 album_name,

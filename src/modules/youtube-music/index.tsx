@@ -16,9 +16,11 @@ import { AlbumPage } from "./components/pages/album-page";
 import { PlaylistPage } from "./components/pages/playlist-page";
 import { QueueSheet } from "./components/queue/queue-sheet";
 import { SearchResultsPage } from "./components/search/search-results-page";
+import { AddToPlaylistDialog } from "./components/shared/add-to-playlist-dialog";
 import { useNavigation } from "./hooks/use-navigation";
 import { usePlayerStore } from "./stores/player-store";
 import { useQueueStore } from "./stores/queue-store";
+import { usePlaylistLibraryStore } from "./stores/playlist-library-store";
 import { useTrackCacheStore } from "./stores/track-cache-store";
 import { useTrackLikeStore } from "./stores/track-like-store";
 import { ytGetCachedTracks, type QueueSnapshot } from "./services/yt-api";
@@ -34,6 +36,7 @@ export default function YouTubeMusicModule() {
   const [authState, setAuthState] = useState<AuthState>("loading");
   const [activeTab, setActiveTab] = useState("home");
   const [queueOpen, setQueueOpen] = useState(false);
+  const [playlistDialogTrack, setPlaylistDialogTrack] = useState<Track | null>(null);
   const queueOpenRef = useRef(queueOpen);
   const nav = useNavigation();
 
@@ -44,6 +47,8 @@ export default function YouTubeMusicModule() {
   const queueCleanup = useQueueStore((s) => s.cleanup);
   const queueHydrate = useQueueStore((s) => s.hydrate);
   const queueSyncSnapshot = useQueueStore((s) => s.syncSnapshot);
+  const playlistLibraryHydrate = usePlaylistLibraryStore((s) => s.hydrate);
+  const playlistLibraryClear = usePlaylistLibraryStore((s) => s.clear);
   const trackCachePut = useTrackCacheStore((s) => s.putTracks);
   const trackCacheClear = useTrackCacheStore((s) => s.clear);
   const trackLikesHydrate = useTrackLikeStore((s) => s.hydrate);
@@ -82,29 +87,32 @@ export default function YouTubeMusicModule() {
       console.log("[YouTubeMusicModule] unmounting — cleaning up stores");
       playerCleanup();
       void queueCleanup();
+      playlistLibraryClear();
       trackCacheClear();
       trackLikesClear();
     };
-  }, [playerCleanup, queueCleanup, queueHydrate, trackCacheClear, trackLikesClear]);
+  }, [playerCleanup, playlistLibraryClear, queueCleanup, queueHydrate, trackCacheClear, trackLikesClear]);
 
   useEffect(() => {
     if (authState !== "authenticated") return;
 
     void trackLikesHydrate(true, "auth-ready");
+    void playlistLibraryHydrate(true, "auth-ready");
 
-    const refreshLikes = () => {
+    const refreshSessionData = () => {
       if (document.visibilityState === "hidden") return;
       void trackLikesHydrate(false, "window-focus");
+      void playlistLibraryHydrate(false, "window-focus");
     };
 
-    window.addEventListener("focus", refreshLikes);
-    document.addEventListener("visibilitychange", refreshLikes);
+    window.addEventListener("focus", refreshSessionData);
+    document.addEventListener("visibilitychange", refreshSessionData);
 
     return () => {
-      window.removeEventListener("focus", refreshLikes);
-      document.removeEventListener("visibilitychange", refreshLikes);
+      window.removeEventListener("focus", refreshSessionData);
+      document.removeEventListener("visibilitychange", refreshSessionData);
     };
-  }, [authState, trackLikesHydrate]);
+  }, [authState, playlistLibraryHydrate, trackLikesHydrate]);
 
   useEffect(() => {
     let cancelled = false;
@@ -271,6 +279,14 @@ export default function YouTubeMusicModule() {
     await queueAddNext(track.videoId);
   }, [queueAddNext, trackCachePut]);
 
+  const handleAddToPlaylist = useCallback((track: Track) => {
+    console.log("[YouTubeMusicModule] handleAddToPlaylist", {
+      title: track.title,
+      videoId: track.videoId,
+    });
+    setPlaylistDialogTrack(track);
+  }, []);
+
   const handleOpenQueue = useCallback(() => setQueueOpen(true), []);
 
   const handleGoToArtist = useCallback((id: string) => {
@@ -301,6 +317,14 @@ export default function YouTubeMusicModule() {
     }
   }, [nav]);
 
+  const handlePlaylistDeleted = useCallback((playlistId: string) => {
+    console.log("[YouTubeMusicModule] handlePlaylistDeleted", { playlistId });
+    if (nav.currentPage?.type === "playlist" && nav.currentPage.playlistId === playlistId) {
+      nav.clear();
+      setActiveTab("library");
+    }
+  }, [nav]);
+
   const renderContent = () => {
     if (nav.currentPage) {
       switch (nav.currentPage.type) {
@@ -312,6 +336,7 @@ export default function YouTubeMusicModule() {
               onPlayTrack={handlePlayTrack}
               onPlayAll={handlePlayAll}
               onAddToQueue={handleAddToQueue}
+              onAddToPlaylist={handleAddToPlaylist}
             />
           );
         case "artist-songs":
@@ -322,6 +347,7 @@ export default function YouTubeMusicModule() {
               onPlayTrack={handlePlayTrack}
               onPlayAll={handlePlayAll}
               onAddToQueue={handleAddToQueue}
+              onAddToPlaylist={handleAddToPlaylist}
             />
           );
         case "album":
@@ -331,6 +357,7 @@ export default function YouTubeMusicModule() {
               onNavigate={nav.push}
               onPlayTrack={handlePlayTrack}
               onAddToQueue={handleAddToQueue}
+              onAddToPlaylist={handleAddToPlaylist}
               onPlayAll={handlePlayAll}
             />
           );
@@ -341,6 +368,8 @@ export default function YouTubeMusicModule() {
               onNavigate={nav.push}
               onPlayTrack={handlePlayTrack}
               onAddToQueue={handleAddToQueue}
+              onAddToPlaylist={handleAddToPlaylist}
+              onPlaylistDeleted={handlePlaylistDeleted}
               onPlayAll={handlePlayAll}
             />
           );
@@ -352,6 +381,7 @@ export default function YouTubeMusicModule() {
               onPlayTrack={handlePlayTrack}
               onPlayAll={handlePlayAll}
               onAddToQueue={handleAddToQueue}
+              onAddToPlaylist={handleAddToPlaylist}
             />
           );
         case "mood":
@@ -447,6 +477,7 @@ export default function YouTubeMusicModule() {
             activeView={activeTab}
             onViewChange={handleViewChange}
             onSelectPlaylist={handleSelectPlaylist}
+            onPlaylistDeleted={handlePlaylistDeleted}
           />
           <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
             {renderContent()}
@@ -462,6 +493,14 @@ export default function YouTubeMusicModule() {
         <QueueSheet
           open={queueOpen}
           onOpenChange={setQueueOpen}
+        />
+
+        <AddToPlaylistDialog
+          open={playlistDialogTrack !== null}
+          onOpenChange={(open) => {
+            if (!open) setPlaylistDialogTrack(null);
+          }}
+          track={playlistDialogTrack}
         />
       </div>
     </TooltipProvider>

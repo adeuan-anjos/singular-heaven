@@ -337,6 +337,10 @@ export function mapLibraryPlaylists(playlists: ApiLibraryPlaylist[]): Playlist[]
     title: p.title,
     author: { id: null, name: "" },
     thumbnails: mapThumbnails(p.thumbnails),
+    isOwnedByUser: p.isOwnedByUser,
+    isEditable: p.isEditable,
+    isSpecial: p.isSpecial,
+    isSaved: !p.isSpecial,
   }));
 }
 
@@ -360,6 +364,7 @@ export function mapLibrarySongs(songs: ApiLibrarySong[]): Track[] {
 export function mapPlaylistTrack(track: ApiPlaylistTrack): Track {
   return {
     videoId: track.videoId,
+    setVideoId: track.setVideoId,
     title: track.title,
     artists: track.artists.map(mapArtistRef),
     album: track.album ? { id: track.album.id ?? "", name: track.album.name } : null,
@@ -376,6 +381,9 @@ export function mapPlaylistPage(page: ApiPlaylistPage): Playlist {
     author: page.author ? mapArtistRef(page.author) : { id: null, name: "" },
     trackCount: page.trackCount ? parseInt(page.trackCount, 10) : undefined,
     thumbnails: mapThumbnails(page.thumbnails),
+    isOwnedByUser: page.isOwnedByUser,
+    isEditable: page.isEditable,
+    isSpecial: page.isSpecial,
     tracks: page.tracks.map(mapPlaylistTrack),
   };
 }

@@ -13,7 +13,7 @@ Documentar a arquitetura atual de reprodução do módulo YouTube Music, com foc
 
 Para o coração de músicas, ver também:
 
-- [YouTube Music Track Likes](./docs/youtube-music-track-likes.md)
+- [YouTube Music Track Likes](./docs/explanation/youtube-music-track-likes.md)
 
 Esta documentação existe para evitar que mudanças futuras corrijam apenas uma página e deixem o restante do app para trás.
 
@@ -405,8 +405,8 @@ Se uma nova tela tiver lista reproduzível, ela deve:
 
 ## Relação com a documentação anterior
 
-Existe uma doc anterior focada em coleções reproduzíveis em:
+Existe uma doc complementar focada em coleções reproduzíveis em:
 
-- `doc/youtube-music-track-collections.md`
+- [YouTube Music Track Collections](./docs/explanation/youtube-music-track-collections.md)
 
-Esta nova doc em `/docs/` complementa a anterior com o comportamento global de playback, queue, shuffle e repeat.
+Esta doc complementa a de coleções com o comportamento global de playback, queue, shuffle e repeat.

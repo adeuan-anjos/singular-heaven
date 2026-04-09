@@ -1,11 +1,13 @@
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { Loader2 } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { MediaGrid } from "../shared/media-grid";
 import { MediaCard } from "../shared/media-card";
-import { ytGetLibraryPlaylists, ytGetLibrarySongs, ytGetLikedTrackIds } from "../../services/yt-api";
-import { mapLibraryPlaylists, mapLibrarySongs } from "../../services/mappers";
-import type { Playlist, Track, StackPage, Thumbnail } from "../../types/music";
+import { ytGetLibrarySongs } from "../../services/yt-api";
+import { mapLibrarySongs } from "../../services/mappers";
+import { usePlaylistLibraryStore } from "../../stores/playlist-library-store";
+import { useTrackLikeStore } from "../../stores/track-like-store";
+import type { Playlist, StackPage, Track } from "../../types/music";
 import { useRenderTracker } from "@/lib/debug";
 
 interface LibraryViewProps {
@@ -17,10 +19,17 @@ export const LibraryView = React.memo(function LibraryView({
 }: LibraryViewProps) {
   useRenderTracker("LibraryView", { onNavigate });
 
-  const [playlists, setPlaylists] = useState<Playlist[]>([]);
+  const playlists = usePlaylistLibraryStore((s) => s.playlists);
+  const hydratePlaylists = usePlaylistLibraryStore((s) => s.hydrate);
+  const playlistsHydrated = usePlaylistLibraryStore((s) => s.hydrated);
+  const playlistsHydrating = usePlaylistLibraryStore((s) => s.hydrating);
+  const hydrateLikes = useTrackLikeStore((s) => s.hydrate);
+  const likedEntryCount = useTrackLikeStore((s) => s.likedEntryCount);
+  const likedUniqueCount = useTrackLikeStore((s) => s.likedUniqueCount);
+  const visiblePlaylists = playlists.filter((playlist) => !playlist.isSpecial);
+
   const [likedSongs, setLikedSongs] = useState<Track[]>([]);
-  const [likedSongCount, setLikedSongCount] = useState(0);
-  const [loading, setLoading] = useState(true);
+  const [loadingSongs, setLoadingSongs] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -28,51 +37,50 @@ export const LibraryView = React.memo(function LibraryView({
 
     async function fetchLibrary() {
       console.log("[LibraryView] Fetching library data...");
-      setLoading(true);
       setError(null);
+      setLoadingSongs(true);
       try {
-        const [apiPlaylists, apiSongs, likedIds] = await Promise.all([
-          ytGetLibraryPlaylists(),
+        const [apiSongs] = await Promise.all([
           ytGetLibrarySongs(),
-          ytGetLikedTrackIds(),
+          hydratePlaylists(false, "library-view"),
+          hydrateLikes(false, "library-view"),
         ]);
         if (cancelled) return;
-        const mappedPlaylists = mapLibraryPlaylists(apiPlaylists);
         const mappedSongs = mapLibrarySongs(apiSongs);
-        console.log("[LibraryView] Loaded library:", {
-          playlistCount: mappedPlaylists.length,
-          likedSongCount: likedIds.length,
-        });
-        console.log(
-          `[LibraryView] liked count resolved ${JSON.stringify({
-            likedPlaylistEntryCount: likedIds.length,
-            likedUniqueVideoIdCount: new Set(likedIds).size,
-            sample: likedIds.slice(0, 5),
-          })}`
-        );
-        setPlaylists(mappedPlaylists);
         setLikedSongs(mappedSongs);
-        setLikedSongCount(likedIds.length);
       } catch (err) {
         if (cancelled) return;
         const msg = err instanceof Error ? err.message : String(err);
         console.error("[LibraryView] Failed to load library:", msg);
         setError(msg);
       } finally {
-        if (!cancelled) setLoading(false);
+        if (!cancelled) setLoadingSongs(false);
       }
     }
 
-    fetchLibrary();
-    return () => { cancelled = true; };
-  }, []);
+    void fetchLibrary();
+    return () => {
+      cancelled = true;
+    };
+  }, [hydrateLikes, hydratePlaylists]);
+
+  useEffect(() => {
+    console.log(
+        `[LibraryView] liked count resolved ${JSON.stringify({
+          playlistEntryCount: likedEntryCount,
+          uniqueVideoIdCount: likedUniqueCount,
+          playlistCount: visiblePlaylists.length,
+        })}`
+    );
+  }, [likedEntryCount, likedUniqueCount, visiblePlaylists.length]);
 
   console.log("[LibraryView] render", {
-    playlistCount: playlists.length,
-    likedSongCount,
+    playlistCount: visiblePlaylists.length,
+    likedEntryCount,
+    likedUniqueCount,
   });
 
-  if (loading) {
+  if ((loadingSongs && !playlistsHydrated) || playlistsHydrating) {
     return (
       <div className="flex h-full items-center justify-center">
         <Loader2 className="size-6 animate-spin text-muted-foreground" />
@@ -96,21 +104,21 @@ export const LibraryView = React.memo(function LibraryView({
           <MediaCard
             title="Curtidas"
             typeLabel="Playlist"
-            artistName={`${likedSongCount} músicas`}
-            thumbnails={likedSongs[0]?.thumbnails as Thumbnail[]}
+            artistName={`${likedEntryCount} músicas`}
+            thumbnails={likedSongs[0]?.thumbnails ?? []}
             onClick={() => onNavigate({ type: "playlist", playlistId: "liked" })}
             onPlay={() => onNavigate({ type: "playlist", playlistId: "liked" })}
           />
 
-          {playlists.map((pl) => (
+          {visiblePlaylists.map((playlist: Playlist) => (
             <MediaCard
-              key={pl.playlistId}
-              title={pl.title}
+              key={playlist.playlistId}
+              title={playlist.title}
               typeLabel="Playlist"
-              artistName={`${pl.author.name} • ${pl.trackCount ?? 0} músicas`}
-              thumbnails={pl.thumbnails as Thumbnail[]}
-              onClick={() => onNavigate({ type: "playlist", playlistId: pl.playlistId })}
-              onPlay={() => onNavigate({ type: "playlist", playlistId: pl.playlistId })}
+              artistName={`${playlist.author.name} • ${playlist.trackCount ?? 0} músicas`}
+              thumbnails={playlist.thumbnails ?? []}
+              onClick={() => onNavigate({ type: "playlist", playlistId: playlist.playlistId })}
+              onPlay={() => onNavigate({ type: "playlist", playlistId: playlist.playlistId })}
             />
           ))}
         </MediaGrid>

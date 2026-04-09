@@ -11,6 +11,7 @@ export interface ArtistBasic {
 
 export interface Track {
   videoId: string;
+  setVideoId?: string | null;
   title: string;
   artists: ArtistBasic[];
   album: { id: string; name: string } | null;
@@ -55,6 +56,10 @@ export interface Playlist {
   trackCount?: number;
   thumbnails: Thumbnail[];
   tracks?: Track[];
+  isOwnedByUser?: boolean;
+  isEditable?: boolean;
+  isSpecial?: boolean;
+  isSaved?: boolean;
 }
 
 export interface HomeSection {

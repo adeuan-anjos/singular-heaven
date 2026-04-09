@@ -29,6 +29,7 @@ interface SearchResultsPageProps {
     options?: PlayAllOptions
   ) => void;
   onAddToQueue: (track: Track) => void;
+  onAddToPlaylist: (track: Track) => void;
 }
 
 type FilterTab = "all" | "songs" | "videos" | "albums" | "artists" | "community_playlists" | "featured_playlists";
@@ -49,6 +50,7 @@ export function SearchResultsPage({
   onPlayTrack,
   onPlayAll,
   onAddToQueue,
+  onAddToPlaylist,
 }: SearchResultsPageProps) {
   const [results, setResults] = useState<SearchResults | null>(null);
   const [songEntries, setSongEntries] = useState<TrackCollectionEntry[]>([]);
@@ -170,6 +172,7 @@ export function SearchResultsPage({
           isPlaying={track.videoId === currentTrackId}
           onPlay={handlePlaySearchTrack}
           onAddToQueue={onAddToQueue}
+          onAddToPlaylist={onAddToPlaylist}
           onGoToArtist={handleGoToArtist}
           onGoToAlbum={handleGoToAlbum}
         />
@@ -245,6 +248,7 @@ export function SearchResultsPage({
           onNavigate={onNavigate}
           onPlayTrack={handlePlaySearchTrack}
           onAddToQueue={onAddToQueue}
+          onAddToPlaylist={onAddToPlaylist}
           onGoToArtist={handleGoToArtist}
           onGoToAlbum={handleGoToAlbum}
         />

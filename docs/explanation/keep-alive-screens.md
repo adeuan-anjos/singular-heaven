@@ -8,7 +8,7 @@ Todos os módulos são **desmontados** quando inativos. Nenhum módulo mantém e
 
 1. Módulos são carregados via `React.lazy()` e montados com `<Suspense>`
 2. Cada módulo recebe uma `key` única no `ModuleHost` — trocar de módulo força unmount completo
-3. O `useEffect` cleanup de cada módulo DEVE liberar todos os recursos (ver `docs/memory-optimization.md` seção 3)
+3. O `useEffect` cleanup de cada módulo DEVE liberar todos os recursos (ver `docs/explanation/memory-optimization.md` seção 3)
 
 ## Quando NÃO desmontar
 

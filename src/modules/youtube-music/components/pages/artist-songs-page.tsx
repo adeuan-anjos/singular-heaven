@@ -32,6 +32,7 @@ interface ArtistSongsPageProps {
     options?: PlayAllOptions
   ) => void;
   onAddToQueue: (track: Track) => void;
+  onAddToPlaylist: (track: Track) => void;
 }
 
 export function ArtistSongsPage({
@@ -40,6 +41,7 @@ export function ArtistSongsPage({
   onPlayTrack,
   onPlayAll,
   onAddToQueue,
+  onAddToPlaylist,
 }: ArtistSongsPageProps) {
   const [artist, setArtist] = useState<Artist | null>(null);
   const [collectionTracks, setCollectionTracks] = useState<TrackCollectionEntry[]>([]);
@@ -49,7 +51,6 @@ export function ArtistSongsPage({
   const currentTrackId = usePlayerStore((s) => s.currentTrackId);
   const isPlaying = usePlayerStore((s) => s.isPlaying);
   const [subscribed, setSubscribed] = useState(false);
-  const [liked, setLiked] = useState(false);
   const [filter, setFilter] = useState("");
 
   useEffect(() => {
@@ -171,8 +172,6 @@ export function ArtistSongsPage({
           thumbnailUrl={imgUrl || undefined}
           infoLines={infoLines}
           actions={buildArtistActions()}
-          liked={liked}
-          onLikeToggle={() => setLiked(!liked)}
         />
 
         {/* Filter */}
@@ -211,6 +210,7 @@ export function ArtistSongsPage({
             }
           }}
           onAddToQueue={onAddToQueue}
+          onAddToPlaylist={onAddToPlaylist}
           onGoToArtist={(id) => onNavigate({ type: "artist", artistId: id })}
           onGoToAlbum={(id) => onNavigate({ type: "album", albumId: id })}
         />

@@ -53,6 +53,47 @@ pub struct TrackLikeStatusResponse {
     pub like_status: LikeStatus,
 }
 
+#[derive(Deserialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum PlaylistLikeStatusInput {
+    Like,
+    Dislike,
+    Indifferent,
+}
+
+impl From<PlaylistLikeStatusInput> for LikeStatus {
+    fn from(value: PlaylistLikeStatusInput) -> Self {
+        match value {
+            PlaylistLikeStatusInput::Like => LikeStatus::Like,
+            PlaylistLikeStatusInput::Dislike => LikeStatus::Dislike,
+            PlaylistLikeStatusInput::Indifferent => LikeStatus::Indifferent,
+        }
+    }
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PlaylistLikeStatusResponse {
+    pub playlist_id: String,
+    pub like_status: LikeStatus,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CreatePlaylistInput {
+    pub title: String,
+    pub description: Option<String>,
+    pub privacy_status: Option<String>,
+    pub video_ids: Option<Vec<String>>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PlaylistItemRemoveInput {
+    pub video_id: String,
+    pub set_video_id: String,
+}
+
 // ---------------------------------------------------------------------------
 // Cookie extraction helpers
 // ---------------------------------------------------------------------------
@@ -249,6 +290,21 @@ pub async fn yt_get_library_playlists(
 }
 
 #[tauri::command]
+pub async fn yt_get_sidebar_playlists(
+    state: State<'_, Arc<Mutex<YtMusicState>>>,
+) -> Result<String, String> {
+    println!("[yt_get_sidebar_playlists]");
+    let state = state.lock().await;
+    let result = state
+        .client
+        .get_sidebar_playlists()
+        .await
+        .map_err(|e| format!("[yt_get_sidebar_playlists] {e}"))?;
+    serde_json::to_string(&result)
+        .map_err(|e| format!("[yt_get_sidebar_playlists] serialization: {e}"))
+}
+
+#[tauri::command]
 pub async fn yt_get_library_songs(
     state: State<'_, Arc<Mutex<YtMusicState>>>,
 ) -> Result<String, String> {
@@ -292,6 +348,29 @@ pub async fn yt_rate_song(
         .map_err(|e| format!("[yt_rate_song] {e}"))?;
     Ok(TrackLikeStatusResponse {
         video_id,
+        like_status,
+    })
+}
+
+#[tauri::command]
+pub async fn yt_rate_playlist(
+    playlist_id: String,
+    rating: PlaylistLikeStatusInput,
+    state: State<'_, Arc<Mutex<YtMusicState>>>,
+) -> Result<PlaylistLikeStatusResponse, String> {
+    let like_status: LikeStatus = rating.into();
+    println!(
+        "[yt_rate_playlist] playlist_id={} like_status={:?}",
+        playlist_id, like_status
+    );
+    let state = state.lock().await;
+    state
+        .client
+        .rate_playlist(&playlist_id, like_status.clone())
+        .await
+        .map_err(|e| format!("[yt_rate_playlist] {e}"))?;
+    Ok(PlaylistLikeStatusResponse {
+        playlist_id,
         like_status,
     })
 }
@@ -622,6 +701,9 @@ fn build_cached_playlist_response(
         })),
         "trackCount": meta.track_count,
         "thumbnails": thumbnails,
+        "isOwnedByUser": meta.is_owned_by_user,
+        "isEditable": meta.is_editable,
+        "isSpecial": meta.is_special,
         "tracks": tracks,
         "trackIds": track_ids,
         "isComplete": meta.is_complete,
@@ -763,6 +845,9 @@ pub async fn yt_load_playlist(
             page.author.as_ref().and_then(|a| a.id.as_deref()),
             page.track_count.as_deref(),
             page.thumbnails.first().map(|t| t.url.as_str()),
+            page.is_owned_by_user,
+            page.is_editable,
+            page.is_special,
         )
         .map_err(|e| format!("[yt_load_playlist] save_meta: {e}"))?;
 
@@ -934,6 +1019,9 @@ pub async fn yt_load_playlist(
         "author": page.author,
         "trackCount": page.track_count,
         "thumbnails": page.thumbnails,
+        "isOwnedByUser": page.is_owned_by_user,
+        "isEditable": page.is_editable,
+        "isSpecial": page.is_special,
         "tracks": cached_tracks,
         "trackIds": initial_track_ids,
         "isComplete": is_complete,
@@ -1106,6 +1194,96 @@ pub async fn yt_get_collection_track_ids(
         track_ids,
         is_complete,
     })
+}
+
+#[tauri::command]
+pub async fn yt_create_playlist(
+    input: CreatePlaylistInput,
+    state: State<'_, Arc<Mutex<YtMusicState>>>,
+) -> Result<String, String> {
+    println!(
+        "[yt_create_playlist] title=\"{}\" privacy={:?} video_ids={}",
+        input.title,
+        input.privacy_status,
+        input.video_ids.as_ref().map(|ids| ids.len()).unwrap_or(0)
+    );
+    let state = state.lock().await;
+    let response = state
+        .client
+        .create_playlist(
+            &input.title,
+            input.description.as_deref().unwrap_or(""),
+            input.privacy_status.as_deref().unwrap_or("PRIVATE"),
+            input.video_ids.as_deref().unwrap_or(&[]),
+        )
+        .await
+        .map_err(|e| format!("[yt_create_playlist] {e}"))?;
+    serde_json::to_string(&response)
+        .map_err(|e| format!("[yt_create_playlist] serialization: {e}"))
+}
+
+#[tauri::command]
+pub async fn yt_delete_playlist(
+    playlist_id: String,
+    state: State<'_, Arc<Mutex<YtMusicState>>>,
+) -> Result<String, String> {
+    println!("[yt_delete_playlist] playlist_id={}", playlist_id);
+    let state = state.lock().await;
+    let response = state
+        .client
+        .delete_playlist(&playlist_id)
+        .await
+        .map_err(|e| format!("[yt_delete_playlist] {e}"))?;
+    serde_json::to_string(&response)
+        .map_err(|e| format!("[yt_delete_playlist] serialization: {e}"))
+}
+
+#[tauri::command]
+pub async fn yt_add_playlist_items(
+    playlist_id: String,
+    video_ids: Vec<String>,
+    source_playlist_id: Option<String>,
+    state: State<'_, Arc<Mutex<YtMusicState>>>,
+) -> Result<String, String> {
+    println!(
+        "[yt_add_playlist_items] playlist_id={} video_ids={} source_playlist_id={:?}",
+        playlist_id,
+        video_ids.len(),
+        source_playlist_id
+    );
+    let state = state.lock().await;
+    let response = state
+        .client
+        .add_playlist_items(&playlist_id, &video_ids, source_playlist_id.as_deref())
+        .await
+        .map_err(|e| format!("[yt_add_playlist_items] {e}"))?;
+    serde_json::to_string(&response)
+        .map_err(|e| format!("[yt_add_playlist_items] serialization: {e}"))
+}
+
+#[tauri::command]
+pub async fn yt_remove_playlist_items(
+    playlist_id: String,
+    items: Vec<PlaylistItemRemoveInput>,
+    state: State<'_, Arc<Mutex<YtMusicState>>>,
+) -> Result<String, String> {
+    println!(
+        "[yt_remove_playlist_items] playlist_id={} items={}",
+        playlist_id,
+        items.len()
+    );
+    let items: Vec<(String, String)> = items
+        .into_iter()
+        .map(|item| (item.video_id, item.set_video_id))
+        .collect();
+    let state = state.lock().await;
+    let response = state
+        .client
+        .remove_playlist_items(&playlist_id, &items)
+        .await
+        .map_err(|e| format!("[yt_remove_playlist_items] {e}"))?;
+    serde_json::to_string(&response)
+        .map_err(|e| format!("[yt_remove_playlist_items] serialization: {e}"))
 }
 
 #[tauri::command]

@@ -12,6 +12,9 @@ pub struct PlaylistPage {
     pub track_count: Option<String>,
     pub duration: Option<String>,
     pub thumbnails: Vec<Thumbnail>,
+    pub is_owned_by_user: bool,
+    pub is_editable: bool,
+    pub is_special: bool,
     pub tracks: Vec<PlaylistTrack>,
 }
 
@@ -20,6 +23,7 @@ pub struct PlaylistPage {
 pub struct PlaylistTrack {
     pub title: String,
     pub video_id: String,
+    pub set_video_id: Option<String>,
     pub artists: Vec<ArtistRef>,
     pub album: Option<AlbumRef>,
     pub duration: Option<String>,

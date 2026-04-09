@@ -121,6 +121,38 @@ pub fn parse_playlist_response(response: &Value, playlist_id: &str) -> Result<Pl
         .map(|s| s.to_string());
 
     let thumbnails = h.map(parse_thumbnails).unwrap_or_default();
+    let is_special = matches!(playlist_id, "LM" | "SE");
+    let menu_items = if is_single_col {
+        nav_array(response, &[
+            "contents", "singleColumnBrowseResultsRenderer", "tabs", "0",
+            "tabRenderer", "content", "sectionListRenderer", "contents", "0",
+            "musicShelfRenderer", "menu", "menuRenderer", "items",
+        ])
+    } else {
+        let direct = nav_array(response, &[
+            "contents", "twoColumnBrowseResultsRenderer", "tabs", "0",
+            "tabRenderer", "content", "sectionListRenderer", "contents", "0",
+            "musicEditablePlaylistDetailHeaderRenderer", "editHeader", "musicPlaylistEditHeaderRenderer",
+            "menu", "menuRenderer", "items",
+        ]);
+        if !direct.is_empty() {
+            direct
+        } else {
+            nav_array(response, &[
+                "header", "musicDetailHeaderRenderer", "menu", "menuRenderer", "items",
+            ])
+        }
+    };
+    let is_owned_by_user = menu_items.iter().any(|item| {
+        let text = item
+            .get("menuNavigationItemRenderer")
+            .and_then(|r| r.get("text"))
+            .and_then(get_text)
+            .unwrap_or_default()
+            .to_lowercase();
+        text.contains("editar playlist") || text.contains("excluir playlist")
+    });
+    let is_editable = is_owned_by_user && !is_special;
 
     // Tracks: two-column layout uses secondaryContents; single-column (liked songs)
     // puts the shelf inside the primary tab content instead.
@@ -173,6 +205,9 @@ pub fn parse_playlist_response(response: &Value, playlist_id: &str) -> Result<Pl
         track_count,
         duration,
         thumbnails,
+        is_owned_by_user,
+        is_editable,
+        is_special,
         tracks,
     })
 }
@@ -182,7 +217,8 @@ fn parse_playlist_track(renderer: &Value) -> Option<PlaylistTrack> {
     let col0_runs = get_flex_column_runs(cols, 0)?;
     let title = col0_runs.first()?.get("text")?.as_str()?.to_string();
 
-    let video_id = renderer.get("playlistItemData")
+    let playlist_item_data = renderer.get("playlistItemData");
+    let video_id = playlist_item_data
         .and_then(|p| p.get("videoId"))
         .and_then(|v| v.as_str())
         .map(|s| s.to_string())
@@ -191,6 +227,10 @@ fn parse_playlist_track(renderer: &Value) -> Option<PlaylistTrack> {
                 .and_then(|r| nav_str(r, &["navigationEndpoint", "watchEndpoint", "videoId"]))
         })
         .unwrap_or_default();
+    let set_video_id = playlist_item_data
+        .and_then(|p| p.get("setVideoId"))
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string());
 
     // Duration from fixedColumns
     let duration = renderer.get("fixedColumns")
@@ -210,7 +250,7 @@ fn parse_playlist_track(renderer: &Value) -> Option<PlaylistTrack> {
 
     let thumbnails = parse_thumbnails(renderer);
 
-    Some(PlaylistTrack { title, video_id, artists, album, duration, thumbnails })
+    Some(PlaylistTrack { title, video_id, set_video_id, artists, album, duration, thumbnails })
 }
 
 // ---------------------------------------------------------------------------

@@ -19,6 +19,7 @@ interface AlbumPageProps {
   onNavigate: (page: StackPage) => void;
   onPlayTrack: (track: Track) => void;
   onAddToQueue: (track: Track) => void;
+  onAddToPlaylist: (track: Track) => void;
   onPlayAll: (
     tracks: Track[],
     startIndex?: number,
@@ -33,6 +34,7 @@ export function AlbumPage({
   onNavigate,
   onPlayTrack,
   onAddToQueue,
+  onAddToPlaylist,
   onPlayAll,
 }: AlbumPageProps) {
   const [album, setAlbum] = useState<Album | null>(null);
@@ -181,6 +183,7 @@ export function AlbumPage({
             }
           }}
           onAddToQueue={onAddToQueue}
+          onAddToPlaylist={onAddToPlaylist}
           onGoToArtist={(id) => onNavigate({ type: "artist", artistId: id })}
           onGoToAlbum={(id) => onNavigate({ type: "album", albumId: id })}
         />

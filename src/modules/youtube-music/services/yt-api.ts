@@ -229,6 +229,9 @@ export interface ApiLibraryPlaylist {
   playlistId: string;
   subtitle: string | null;
   thumbnails: ApiThumbnail[];
+  isOwnedByUser: boolean;
+  isEditable: boolean;
+  isSpecial: boolean;
 }
 
 export interface ApiLibrarySong {
@@ -250,12 +253,16 @@ export interface ApiPlaylistPage {
   trackCount: string | null;
   duration: string | null;
   thumbnails: ApiThumbnail[];
+  isOwnedByUser: boolean;
+  isEditable: boolean;
+  isSpecial: boolean;
   tracks: ApiPlaylistTrack[];
 }
 
 export interface ApiPlaylistTrack {
   title: string;
   videoId: string;
+  setVideoId: string | null;
   artists: ApiArtistRef[];
   album: ApiAlbumRef | null;
   duration: string | null;
@@ -365,16 +372,43 @@ export async function ytGetLibraryPlaylists(): Promise<ApiLibraryPlaylist[]> {
   return parseJson(json);
 }
 
+export async function ytGetSidebarPlaylists(): Promise<ApiLibraryPlaylist[]> {
+  const json = await invoke<string>("yt_get_sidebar_playlists");
+  return parseJson(json);
+}
+
 export async function ytGetLibrarySongs(): Promise<ApiLibrarySong[]> {
   const json = await invoke<string>("yt_get_library_songs");
   return parseJson(json);
 }
 
 export type TrackLikeStatus = "LIKE" | "DISLIKE" | "INDIFFERENT";
+export type PlaylistLikeStatus = "LIKE" | "DISLIKE" | "INDIFFERENT";
 
 export interface TrackLikeStatusResponse {
   videoId: string;
   likeStatus: TrackLikeStatus;
+}
+
+export interface PlaylistLikeStatusResponse {
+  playlistId: string;
+  likeStatus: PlaylistLikeStatus;
+}
+
+export interface CreatePlaylistInput {
+  title: string;
+  description?: string | null;
+  privacyStatus?: "PUBLIC" | "PRIVATE" | "UNLISTED" | null;
+  videoIds?: string[] | null;
+}
+
+export interface CreatePlaylistResponse {
+  playlistId?: string;
+}
+
+export interface PlaylistItemRemoveInput {
+  videoId: string;
+  setVideoId: string;
 }
 
 export async function ytGetLikedTrackIds(): Promise<string[]> {
@@ -386,6 +420,52 @@ export async function ytRateSong(
   rating: TrackLikeStatus
 ): Promise<TrackLikeStatusResponse> {
   return invoke<TrackLikeStatusResponse>("yt_rate_song", { videoId, rating });
+}
+
+export async function ytRatePlaylist(
+  playlistId: string,
+  rating: PlaylistLikeStatus
+): Promise<PlaylistLikeStatusResponse> {
+  return invoke<PlaylistLikeStatusResponse>("yt_rate_playlist", {
+    playlistId,
+    rating,
+  });
+}
+
+export async function ytCreatePlaylist(
+  input: CreatePlaylistInput
+): Promise<CreatePlaylistResponse> {
+  const json = await invoke<string>("yt_create_playlist", { input });
+  return parseJson<CreatePlaylistResponse>(json);
+}
+
+export async function ytDeletePlaylist(playlistId: string): Promise<unknown> {
+  const json = await invoke<string>("yt_delete_playlist", { playlistId });
+  return parseJson<unknown>(json);
+}
+
+export async function ytAddPlaylistItems(
+  playlistId: string,
+  videoIds: string[],
+  sourcePlaylistId?: string | null
+): Promise<unknown> {
+  const json = await invoke<string>("yt_add_playlist_items", {
+    playlistId,
+    videoIds,
+    sourcePlaylistId: sourcePlaylistId ?? null,
+  });
+  return parseJson<unknown>(json);
+}
+
+export async function ytRemovePlaylistItems(
+  playlistId: string,
+  items: PlaylistItemRemoveInput[]
+): Promise<unknown> {
+  const json = await invoke<string>("yt_remove_playlist_items", {
+    playlistId,
+    items,
+  });
+  return parseJson<unknown>(json);
 }
 
 export async function ytGetWatchPlaylist(videoId: string): Promise<ApiWatchPlaylist> {
@@ -437,6 +517,9 @@ export interface LoadPlaylistResponse {
   author: { name: string; id: string | null } | null;
   trackCount: string | null;
   thumbnails: { url: string; width: number; height: number }[];
+  isOwnedByUser: boolean;
+  isEditable: boolean;
+  isSpecial: boolean;
   tracks: Track[];
   trackIds: string[];
   isComplete: boolean;

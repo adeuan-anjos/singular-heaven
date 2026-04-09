@@ -1,11 +1,20 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { CollectionHeader } from "../shared/collection-header";
+import { PlaylistDestructiveDialog } from "../shared/playlist-destructive-dialog";
 import { TrackTable } from "../shared/track-table";
-import { ytLoadPlaylist, ytGetPlaylistTrackIds, ytGetPlaylistWindow } from "../../services/yt-api";
+import {
+  ytLoadPlaylist,
+  ytGetPlaylistTrackIds,
+  ytGetPlaylistWindow,
+  ytRemovePlaylistItems,
+} from "../../services/yt-api";
 import { usePlayerStore } from "../../stores/player-store";
 import { useTrackLikeStore } from "../../stores/track-like-store";
-import { Play, Shuffle, Search, Loader2 } from "lucide-react";
+import { usePlaylistLibraryStore } from "../../stores/playlist-library-store";
+import { Play, Shuffle, Search, Loader2, Bookmark, Trash2 } from "lucide-react";
 import type { PlayAllOptions, Playlist, Track, StackPage } from "../../types/music";
 import type { LoadPlaylistResponse, PlaylistWindowItem } from "../../services/yt-api";
 
@@ -60,6 +69,8 @@ interface PlaylistPageProps {
   onNavigate: (page: StackPage) => void;
   onPlayTrack: (track: Track) => void;
   onAddToQueue: (track: Track) => void;
+  onAddToPlaylist: (track: Track) => void;
+  onPlaylistDeleted?: (playlistId: string) => void;
   onPlayAll: (
     tracks: Track[],
     startIndex?: number,
@@ -74,25 +85,39 @@ export function PlaylistPage({
   onNavigate,
   onPlayTrack,
   onAddToQueue,
+  onAddToPlaylist,
+  onPlaylistDeleted,
   onPlayAll,
 }: PlaylistPageProps) {
   const [playlist, setPlaylist] = useState<Playlist | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [filter, setFilter] = useState("");
+  const [destructiveAction, setDestructiveAction] = useState<"delete" | "remove" | null>(null);
+  const [destructiveLoading, setDestructiveLoading] = useState(false);
   const trackIdsRef = useRef<string[]>([]);
   const isCompleteRef = useRef(false);
   const loadingMoreRef = useRef(false);
+
   const currentTrackId = usePlayerStore((s) => s.currentTrackId);
   const isPlaying = usePlayerStore((s) => s.isPlaying);
   const hydrateLikes = useTrackLikeStore((s) => s.hydrate);
   const likesHydrated = useTrackLikeStore((s) => s.hydrated);
   const likeStatuses = useTrackLikeStore((s) => s.likeStatuses);
-  const [filter, setFilter] = useState("");
+  const hydrateLibraryPlaylists = usePlaylistLibraryStore((s) => s.hydrate);
+  const isSavedPlaylist = usePlaylistLibraryStore((s) => s.isSaved);
+  const toggleSavedPlaylist = usePlaylistLibraryStore((s) => s.toggleSavedPlaylist);
+  const deletePlaylist = usePlaylistLibraryStore((s) => s.deletePlaylist);
+  const playlistPendingMap = usePlaylistLibraryStore((s) => s.pending);
 
   useEffect(() => {
     if (playlistId !== "liked") return;
     void hydrateLikes(false, "liked-playlist-open");
   }, [hydrateLikes, playlistId]);
+
+  useEffect(() => {
+    void hydrateLibraryPlaylists(false, "playlist-page-open");
+  }, [hydrateLibraryPlaylists]);
 
   const resolvePlaybackSnapshot = useCallback(async () => {
     console.log("[PlaylistPage] resolving playback snapshot", {
@@ -132,35 +157,45 @@ export function PlaylistPage({
       pendingPlaylistLoads.set(playlistId, request);
     }
 
-    request.then((data) => {
-      if (cancelled) return;
-      console.log("[PlaylistPage] loaded from cache", {
-        title: data.title,
-        tracks: data.tracks.length,
-        totalIds: data.trackIds.length,
-        isComplete: data.isComplete,
+    request
+      .then((data) => {
+        if (cancelled) return;
+        console.log("[PlaylistPage] loaded from cache", {
+          title: data.title,
+          tracks: data.tracks.length,
+          totalIds: data.trackIds.length,
+          isComplete: data.isComplete,
+          isOwnedByUser: data.isOwnedByUser,
+          isEditable: data.isEditable,
+          isSpecial: data.isSpecial,
+        });
+        setPlaylist({
+          playlistId: data.playlistId,
+          title: data.title,
+          author: data.author ?? { id: null, name: "" },
+          trackCount: data.trackCount ? parseInt(data.trackCount, 10) : undefined,
+          thumbnails: data.thumbnails,
+          isOwnedByUser: data.isOwnedByUser,
+          isEditable: data.isEditable,
+          isSpecial: data.isSpecial,
+          tracks: data.tracks.map((track, index) =>
+            toPlaylistTrackEntry(data.playlistId, track, index)
+          ),
+        });
+        trackIdsRef.current = data.trackIds;
+        isCompleteRef.current = data.isComplete;
+        setLoading(false);
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        console.error("[PlaylistPage] load error", err);
+        setError(String(err));
+        setLoading(false);
       });
-      setPlaylist({
-        playlistId: data.playlistId,
-        title: data.title,
-        author: data.author ?? { id: null, name: "" },
-        trackCount: data.trackCount ? parseInt(data.trackCount) : undefined,
-        thumbnails: data.thumbnails,
-        tracks: data.tracks.map((track, index) =>
-          toPlaylistTrackEntry(data.playlistId, track, index)
-        ),
-      });
-      trackIdsRef.current = data.trackIds;
-      isCompleteRef.current = data.isComplete;
-      setLoading(false);
-    }).catch((err) => {
-      if (cancelled) return;
-      console.error("[PlaylistPage] load error", err);
-      setError(String(err));
-      setLoading(false);
-    });
 
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [playlistId]);
 
   const loadMore = useCallback(async () => {
@@ -176,7 +211,6 @@ export function PlaylistPage({
 
       if (response.items.length === 0) {
         isCompleteRef.current = response.isComplete;
-        loadingMoreRef.current = false;
         return;
       }
 
@@ -187,18 +221,6 @@ export function PlaylistPage({
           received: response.items.length,
           totalLoaded: response.totalLoaded,
           isComplete: response.isComplete,
-          first: response.items[0]
-            ? {
-                position: response.items[0].position,
-                videoId: response.items[0].videoId,
-              }
-            : null,
-          last: response.items[response.items.length - 1]
-            ? {
-                position: response.items[response.items.length - 1].position,
-                videoId: response.items[response.items.length - 1].videoId,
-              }
-            : null,
         })}`
       );
 
@@ -256,6 +278,7 @@ export function PlaylistPage({
       })}`
     );
   }
+
   const filteredTracks = filter
     ? tracksInView.filter((t) => {
         const q = filter.toLowerCase();
@@ -267,19 +290,23 @@ export function PlaylistPage({
       })
     : tracksInView;
 
+  const saved = isSavedPlaylist(playlistId);
+  const playlistPending = Boolean(playlistPendingMap[playlistId]);
+
   const headerContent = (
     <div className="space-y-6 p-4">
       <CollectionHeader
         title={playlist.title}
         subtitle={playlist.author.name}
         infoLines={[
-          [
-            playlist.trackCount !== undefined ? `${playlist.trackCount} músicas` : "",
-          ]
+          [playlist.trackCount !== undefined ? `${playlist.trackCount} músicas` : ""]
             .filter(Boolean)
             .join(" • "),
         ]}
-        thumbnailUrl={playlist.thumbnails[playlist.thumbnails.length - 1]?.url ?? playlist.thumbnails[0]?.url}
+        thumbnailUrl={
+          playlist.thumbnails[playlist.thumbnails.length - 1]?.url ??
+          playlist.thumbnails[0]?.url
+        }
         actions={[
           {
             label: "Reproduzir",
@@ -306,12 +333,14 @@ export function PlaylistPage({
             onClick: async () => {
               const playback = await resolvePlaybackSnapshot();
               const currentTracks = playlist.tracks ?? [];
-              console.log("[PlaylistPage] shuffle play using playback tracks", {
-                playlistId,
-                tracks: currentTracks.length,
-                queueTrackIds: playback.trackIds.length,
-                isComplete: playback.isComplete,
-              });
+              console.log(
+                `[PlaylistPage] shuffle play using playback tracks ${JSON.stringify({
+                  playlistId,
+                  tracks: currentTracks.length,
+                  queueTrackIds: playback.trackIds.length,
+                  isComplete: playback.isComplete,
+                })}`
+              );
               onPlayAll(currentTracks, 0, playlistId, playback.isComplete, {
                 queueTrackIds: playback.trackIds,
                 shuffle: true,
@@ -319,7 +348,42 @@ export function PlaylistPage({
             },
           },
         ]}
-        onGoToAuthor={playlist.author.id ? () => onNavigate({ type: "artist", artistId: playlist.author.id! }) : undefined}
+        onGoToAuthor={
+          playlist.author.id
+            ? () => onNavigate({ type: "artist", artistId: playlist.author.id! })
+            : undefined
+        }
+        trailingActions={
+          !playlist.isSpecial && !playlist.isOwnedByUser ? (
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => void toggleSavedPlaylist(playlist)}
+              disabled={playlistPending}
+            >
+              <Bookmark className={`h-5 w-5 ${saved ? "fill-current" : ""}`} />
+            </Button>
+          ) : undefined
+        }
+        menuContent={
+          playlist.isSpecial ? undefined : playlist.isOwnedByUser ? (
+            <DropdownMenuItem
+              onClick={() => setDestructiveAction("delete")}
+              className="text-destructive focus:text-destructive"
+            >
+              <Trash2 className="mr-2 h-4 w-4" />
+              Excluir playlist
+            </DropdownMenuItem>
+          ) : saved ? (
+            <DropdownMenuItem
+              onClick={() => setDestructiveAction("remove")}
+              className="text-destructive focus:text-destructive"
+            >
+              <Trash2 className="mr-2 h-4 w-4" />
+              Remover playlist
+            </DropdownMenuItem>
+          ) : undefined
+        }
       />
 
       <div className="relative">
@@ -334,56 +398,141 @@ export function PlaylistPage({
     </div>
   );
 
+  const destructiveTitle =
+    destructiveAction === "delete" ? "Excluir playlist" : "Remover playlist";
+  const destructiveDescription =
+    destructiveAction === "delete"
+      ? "Quer mesmo excluir esta playlist? Essa ação remove a playlist da sua conta."
+      : "Quer mesmo remover esta playlist da biblioteca?";
+  const emptyMessage = filter
+    ? `Nenhuma música encontrada para "${filter}".`
+    : "Esta playlist ainda não tem músicas.";
+
   return (
-    // flex-1 min-h-0 is correct for a flex child that must fill available height.
-    // h-full works in most cases but can misresolve when the parent height comes from flex.
     <div className="flex min-h-0 flex-1 flex-col">
-      <TrackTable
-        tracks={filteredTracks}
-        currentTrackId={currentTrackId ?? undefined}
-        isPlaying={isPlaying}
-        enableVirtualization
-        getTrackKey={(track) =>
-          (track as PlaylistTrackEntry).playlistRowKey ?? track.videoId
-        }
-        headerContent={headerContent}
-        onEndReached={loadMore}
-        onPlay={(track) => {
-          const currentTracks = ((playlist?.tracks as PlaylistTrackEntry[] | undefined) ?? []);
-          const playlistTrack = track as PlaylistTrackEntry;
-          const index =
-            typeof playlistTrack.playlistPosition === "number"
-              ? playlistTrack.playlistPosition
-              : currentTracks.findIndex((t) => t.videoId === track.videoId);
-          if (index >= 0) {
-            resolvePlaybackSnapshot()
-              .then((playback) => {
-                console.log(
-                  `[PlaylistPage] row play using playback tracks ${JSON.stringify({
-                    playlistId,
-                    requestedIndex: index,
-                    resolvedIndex: index,
-                    videoId: track.videoId,
-                    isComplete: playback.isComplete,
-                  })}`
-                );
-                onPlayAll(currentTracks, index, playlistId, playback.isComplete, {
-                  queueTrackIds: playback.trackIds,
+      {filteredTracks.length > 0 ? (
+        <TrackTable
+          tracks={filteredTracks}
+          currentTrackId={currentTrackId ?? undefined}
+          isPlaying={isPlaying}
+          enableVirtualization
+          getTrackKey={(track) =>
+            (track as PlaylistTrackEntry).playlistRowKey ?? track.videoId
+          }
+          headerContent={headerContent}
+          onEndReached={loadMore}
+          onPlay={(track) => {
+            const currentTracks = ((playlist.tracks as PlaylistTrackEntry[] | undefined) ?? []);
+            const playlistTrack = track as PlaylistTrackEntry;
+            const index =
+              typeof playlistTrack.playlistPosition === "number"
+                ? playlistTrack.playlistPosition
+                : currentTracks.findIndex((candidate) => candidate.videoId === track.videoId);
+            if (index >= 0) {
+              resolvePlaybackSnapshot()
+                .then((playback) => {
+                  console.log(
+                    `[PlaylistPage] row play using playback tracks ${JSON.stringify({
+                      playlistId,
+                      requestedIndex: index,
+                      resolvedIndex: index,
+                      videoId: track.videoId,
+                      isComplete: playback.isComplete,
+                    })}`
+                  );
+                  onPlayAll(currentTracks, index, playlistId, playback.isComplete, {
+                    queueTrackIds: playback.trackIds,
+                  });
+                })
+                .catch((error) => {
+                  console.error("[PlaylistPage] row playback resolution failed", error);
+                  onPlayAll(currentTracks, index, playlistId, isCompleteRef.current);
                 });
-              })
-              .catch((error) => {
-                console.error("[PlaylistPage] row playback resolution failed", error);
-                onPlayAll(currentTracks, index, playlistId, isCompleteRef.current);
-              });
-          } else {
-            onPlayTrack(track);
+            } else {
+              onPlayTrack(track);
+            }
+          }}
+          onAddToQueue={onAddToQueue}
+          onAddToPlaylist={onAddToPlaylist}
+          onRemoveFromPlaylist={
+            playlist.isEditable
+              ? async (track) => {
+                  if (!track.setVideoId) return;
+                  console.log(
+                    `[PlaylistPage] remove from playlist ${JSON.stringify({
+                      playlistId,
+                      videoId: track.videoId,
+                      setVideoId: track.setVideoId,
+                    })}`
+                  );
+                  await ytRemovePlaylistItems(playlistId, [
+                    {
+                      videoId: track.videoId,
+                      setVideoId: track.setVideoId,
+                    },
+                  ]);
+
+                  const targetPosition = (track as PlaylistTrackEntry).playlistPosition;
+                  setPlaylist((prev) => {
+                    if (!prev?.tracks) return prev;
+                    const nextTracks = (prev.tracks as PlaylistTrackEntry[])
+                      .filter((candidate) => candidate.playlistPosition !== targetPosition)
+                      .map((candidate, position) => ({
+                        ...candidate,
+                        playlistPosition: position,
+                        playlistRowKey: `${playlistId}:${position}`,
+                      }));
+                    return {
+                      ...prev,
+                      trackCount: nextTracks.length,
+                      tracks: nextTracks,
+                    };
+                  });
+                  trackIdsRef.current = trackIdsRef.current.filter(
+                    (_candidateId, index) => index !== targetPosition
+                  );
+                }
+              : undefined
+          }
+          onGoToArtist={(id) => onNavigate({ type: "artist", artistId: id })}
+          onGoToAlbum={(id) => onNavigate({ type: "album", albumId: id })}
+        />
+      ) : (
+        <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+          {headerContent}
+          <div className="flex flex-1 items-center justify-center px-4 py-12">
+            <p className="text-sm text-muted-foreground">{emptyMessage}</p>
+          </div>
+        </div>
+      )}
+
+      <PlaylistDestructiveDialog
+        open={destructiveAction !== null}
+        onOpenChange={(open) => {
+          if (!open) setDestructiveAction(null);
+        }}
+        title={destructiveTitle}
+        description={destructiveDescription}
+        confirmLabel={
+          destructiveAction === "delete" ? "Excluir playlist" : "Remover playlist"
+        }
+        loading={destructiveLoading}
+        onConfirm={async () => {
+          if (!destructiveAction) return;
+          setDestructiveLoading(true);
+          try {
+            if (destructiveAction === "delete") {
+              await deletePlaylist(playlistId);
+              onPlaylistDeleted?.(playlistId);
+            } else {
+              await toggleSavedPlaylist(playlist);
+            }
+            setDestructiveAction(null);
+          } finally {
+            setDestructiveLoading(false);
           }
         }}
-        onAddToQueue={onAddToQueue}
-        onGoToArtist={(id) => onNavigate({ type: "artist", artistId: id })}
-        onGoToAlbum={(id) => onNavigate({ type: "album", albumId: id })}
       />
-
     </div>
   );
 }

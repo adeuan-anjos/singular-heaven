@@ -55,4 +55,117 @@ impl YtMusicClient {
 
         Ok((tracks, next_token))
     }
+
+    /// Create a playlist in the user's account.
+    pub async fn create_playlist(
+        &self,
+        title: &str,
+        description: &str,
+        privacy_status: &str,
+        video_ids: &[String],
+    ) -> Result<serde_json::Value> {
+        println!(
+            "[ytmusic-api] create_playlist title=\"{}\" privacy_status={} video_ids={}",
+            title,
+            privacy_status,
+            video_ids.len()
+        );
+
+        self.post_innertube(
+            ENDPOINT_PLAYLIST_CREATE,
+            json!({
+                "title": title,
+                "description": description,
+                "privacyStatus": privacy_status,
+                "videoIds": video_ids,
+            }),
+        )
+        .await
+    }
+
+    /// Delete a playlist owned by the user.
+    pub async fn delete_playlist(&self, playlist_id: &str) -> Result<serde_json::Value> {
+        println!("[ytmusic-api] delete_playlist playlist_id={}", playlist_id);
+        self.post_innertube(
+            ENDPOINT_PLAYLIST_DELETE,
+            json!({
+                "playlistId": playlist_id,
+            }),
+        )
+        .await
+    }
+
+    /// Add tracks or another playlist into a playlist owned by the user.
+    pub async fn add_playlist_items(
+        &self,
+        playlist_id: &str,
+        video_ids: &[String],
+        source_playlist_id: Option<&str>,
+    ) -> Result<serde_json::Value> {
+        let mut actions: Vec<serde_json::Value> = video_ids
+            .iter()
+            .map(|video_id| {
+                json!({
+                    "action": "ACTION_ADD_VIDEO",
+                    "addedVideoId": video_id,
+                })
+            })
+            .collect();
+
+        if let Some(source_playlist_id) = source_playlist_id {
+            actions.push(json!({
+                "action": "ACTION_ADD_PLAYLIST",
+                "addedFullListId": source_playlist_id,
+            }));
+        }
+
+        println!(
+            "[ytmusic-api] add_playlist_items playlist_id={} video_ids={} source_playlist_id={:?}",
+            playlist_id,
+            video_ids.len(),
+            source_playlist_id
+        );
+
+        self.post_innertube(
+            ENDPOINT_PLAYLIST_EDIT,
+            json!({
+                "playlistId": playlist_id,
+                "actions": actions,
+            }),
+        )
+        .await
+    }
+
+    /// Remove specific playlist entries from a playlist owned by the user.
+    pub async fn remove_playlist_items(
+        &self,
+        playlist_id: &str,
+        items: &[(String, String)],
+    ) -> Result<serde_json::Value> {
+        let actions: Vec<serde_json::Value> = items
+            .iter()
+            .map(|(video_id, set_video_id)| {
+                json!({
+                    "action": "ACTION_REMOVE_VIDEO",
+                    "setVideoId": set_video_id,
+                    "removedVideoId": video_id,
+                })
+            })
+            .collect();
+
+        println!(
+            "[ytmusic-api] remove_playlist_items playlist_id={} items={}",
+            playlist_id,
+            items.len()
+        );
+
+        self.post_innertube(
+            ENDPOINT_PLAYLIST_EDIT,
+            json!({
+                "playlistId": playlist_id,
+                "actions": actions,
+            }),
+        )
+        .await
+    }
 }

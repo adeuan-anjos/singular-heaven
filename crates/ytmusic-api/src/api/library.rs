@@ -1,4 +1,5 @@
 use serde_json::json;
+use std::collections::HashMap;
 
 use crate::client::YtMusicClient;
 use crate::constants::*;
@@ -6,11 +7,46 @@ use crate::error::Result;
 use crate::parsers::library::{
     get_library_playlists_continuation, parse_library_playlists_continuation_response,
     parse_library_playlists_response, parse_library_songs_response,
+    parse_sidebar_playlists_response,
 };
 use crate::types::common::LikeStatus;
 use crate::types::library::{LibraryPlaylist, LibrarySong};
 
 impl YtMusicClient {
+    /// Get playlists in the same order shown in the YouTube Music guide/sidebar.
+    pub async fn get_sidebar_playlists(&self) -> Result<Vec<LibraryPlaylist>> {
+        println!("[ytmusic-api] get_sidebar_playlists()");
+
+        let response = self.post_innertube("guide", json!({})).await?;
+        let mut playlists = parse_sidebar_playlists_response(&response)?;
+        let library_meta = self.get_library_playlists().await?;
+        let library_by_id: HashMap<String, LibraryPlaylist> = library_meta
+            .into_iter()
+            .map(|playlist| (playlist.playlist_id.clone(), playlist))
+            .collect();
+
+        for playlist in &mut playlists {
+            if let Some(meta) = library_by_id.get(&playlist.playlist_id) {
+                playlist.is_owned_by_user = meta.is_owned_by_user;
+                playlist.is_editable = meta.is_editable;
+                playlist.is_special = meta.is_special;
+                if playlist.subtitle.is_none() {
+                    playlist.subtitle = meta.subtitle.clone();
+                }
+                if playlist.thumbnails.is_empty() {
+                    playlist.thumbnails = meta.thumbnails.clone();
+                }
+            }
+        }
+
+        println!(
+            "[ytmusic-api] get_sidebar_playlists returned {} playlists total",
+            playlists.len()
+        );
+
+        Ok(playlists)
+    }
+
     /// Get the user's library playlists, following continuation tokens to load all pages.
     pub async fn get_library_playlists(&self) -> Result<Vec<LibraryPlaylist>> {
         println!("[ytmusic-api] get_library_playlists()");
@@ -113,5 +149,29 @@ impl YtMusicClient {
         .await?;
 
         Ok(())
+    }
+
+    /// Save or remove a playlist from the user's library.
+    pub async fn rate_playlist(&self, playlist_id: &str, rating: LikeStatus) -> Result<serde_json::Value> {
+        let endpoint = match rating {
+            LikeStatus::Like => "like/like",
+            LikeStatus::Dislike => "like/dislike",
+            LikeStatus::Indifferent => "like/removelike",
+        };
+
+        println!(
+            "[ytmusic-api] rate_playlist playlist_id={} rating={:?} endpoint={}",
+            playlist_id, rating, endpoint
+        );
+
+        self.post_innertube(
+            endpoint,
+            json!({
+                "target": {
+                    "playlistId": playlist_id,
+                }
+            }),
+        )
+        .await
     }
 }

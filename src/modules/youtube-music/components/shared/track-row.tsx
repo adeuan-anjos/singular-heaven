@@ -8,7 +8,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Ellipsis, Play, Pause, ListPlus, User, Disc3, Heart } from "lucide-react";
+import { Ellipsis, Play, Pause, ListPlus, User, Disc3, Heart, PlusSquare, Trash2 } from "lucide-react";
 import type { Track } from "../../types/music";
 import { useTrackLikeStore } from "../../stores/track-like-store";
 
@@ -18,11 +18,13 @@ interface TrackRowProps {
   isPlaying?: boolean;
   onPlay?: (track: Track) => void;
   onAddToQueue?: (track: Track) => void;
+  onAddToPlaylist?: (track: Track) => void;
+  onRemoveFromPlaylist?: (track: Track) => void;
   onGoToArtist?: (artistId: string) => void;
   onGoToAlbum?: (albumId: string) => void;
 }
 
-export function TrackRow({ track, index, isPlaying, onPlay, onAddToQueue, onGoToArtist, onGoToAlbum }: TrackRowProps) {
+export function TrackRow({ track, index, isPlaying, onPlay, onAddToQueue, onAddToPlaylist, onRemoveFromPlaylist, onGoToArtist, onGoToAlbum }: TrackRowProps) {
   const liked = useTrackLikeStore((s) =>
     (s.likeStatuses[track.videoId] ?? track.likeStatus ?? "INDIFFERENT") === "LIKE"
   );
@@ -127,6 +129,18 @@ export function TrackRow({ track, index, isPlaying, onPlay, onAddToQueue, onGoTo
             <ListPlus className="mr-2 h-4 w-4" />
             Tocar em seguida
           </DropdownMenuItem>
+          {onAddToPlaylist ? (
+            <DropdownMenuItem onClick={() => onAddToPlaylist(track)}>
+              <PlusSquare className="mr-2 h-4 w-4" />
+              Adicionar à playlist
+            </DropdownMenuItem>
+          ) : null}
+          {onRemoveFromPlaylist && track.setVideoId ? (
+            <DropdownMenuItem onClick={() => onRemoveFromPlaylist(track)}>
+              <Trash2 className="mr-2 h-4 w-4" />
+              Remover da playlist
+            </DropdownMenuItem>
+          ) : null}
           <DropdownMenuSeparator />
           {track.artists[0]?.id && (
             <DropdownMenuItem onClick={() => onGoToArtist?.(track.artists[0].id!)}>

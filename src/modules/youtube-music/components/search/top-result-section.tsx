@@ -14,6 +14,7 @@ interface TopResultSectionProps {
   onNavigate: (page: StackPage) => void;
   onPlayTrack: (track: Track) => void;
   onAddToQueue: (track: Track) => void;
+  onAddToPlaylist?: (track: Track) => void;
   onGoToArtist: (artistId: string) => void;
   onGoToAlbum: (albumId: string) => void;
 }
@@ -82,6 +83,7 @@ export function TopResultSection({
   onNavigate,
   onPlayTrack,
   onAddToQueue,
+  onAddToPlaylist,
   onGoToArtist,
   onGoToAlbum,
 }: TopResultSectionProps) {
@@ -116,6 +118,7 @@ export function TopResultSection({
               isPlaying={track.videoId === currentTrackId}
               onPlay={onPlayTrack}
               onAddToQueue={onAddToQueue}
+              onAddToPlaylist={onAddToPlaylist}
               onGoToArtist={onGoToArtist}
               onGoToAlbum={onGoToAlbum}
             />

@@ -9,7 +9,7 @@ interface MediaCardProps {
   typeLabel?: string;
   artistName?: string;
   albumName?: string;
-  thumbnails: Thumbnail[];
+  thumbnails?: Thumbnail[];
   onClick?: () => void;
   onPlay?: () => void;
   onGoToArtist?: () => void;
@@ -21,7 +21,7 @@ export function MediaCard({
   typeLabel,
   artistName,
   albumName,
-  thumbnails,
+  thumbnails = [],
   onClick,
   onPlay,
   onGoToArtist,

@@ -35,9 +35,17 @@ interface ArtistPageProps {
     options?: PlayAllOptions
   ) => void;
   onAddToQueue: (track: Track) => void;
+  onAddToPlaylist: (track: Track) => void;
 }
 
-export function ArtistPage({ artistId, onNavigate, onPlayTrack, onPlayAll, onAddToQueue }: ArtistPageProps) {
+export function ArtistPage({
+  artistId,
+  onNavigate,
+  onPlayTrack,
+  onPlayAll,
+  onAddToQueue,
+  onAddToPlaylist,
+}: ArtistPageProps) {
   const [artist, setArtist] = useState<Artist | null>(null);
   const [collectionTracks, setCollectionTracks] = useState<TrackCollectionEntry[]>([]);
   const [loading, setLoading] = useState(true);
@@ -46,7 +54,6 @@ export function ArtistPage({ artistId, onNavigate, onPlayTrack, onPlayAll, onAdd
   const currentTrackId = usePlayerStore((s) => s.currentTrackId);
   const isPlaying = usePlayerStore((s) => s.isPlaying);
   const [subscribed, setSubscribed] = useState(false);
-  const [liked, setLiked] = useState(false);
   const [bioExpanded, setBioExpanded] = useState(false);
 
   useEffect(() => {
@@ -139,8 +146,6 @@ export function ArtistPage({ artistId, onNavigate, onPlayTrack, onPlayAll, onAdd
           thumbnailUrl={imgUrl || undefined}
           infoLines={infoLines}
           actions={actions}
-          liked={liked}
-          onLikeToggle={() => setLiked(!liked)}
         />
 
         {/* Top songs */}
@@ -169,6 +174,7 @@ export function ArtistPage({ artistId, onNavigate, onPlayTrack, onPlayAll, onAdd
                 }
               }}
               onAddToQueue={onAddToQueue}
+              onAddToPlaylist={onAddToPlaylist}
               onGoToArtist={(id) => onNavigate({ type: "artist", artistId: id })}
               onGoToAlbum={(id) => onNavigate({ type: "album", albumId: id })}
             />

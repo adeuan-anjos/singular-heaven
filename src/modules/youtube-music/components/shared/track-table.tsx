@@ -19,6 +19,8 @@ import {
   User,
   Disc3,
   Heart,
+  PlusSquare,
+  Trash2,
 } from "lucide-react";
 import type { Track } from "../../types/music";
 import { thumbUrl } from "../../utils/thumb-url";
@@ -37,6 +39,8 @@ interface TrackTableProps {
   onEndReached?: () => void;
   onPlay?: (track: Track) => void;
   onAddToQueue?: (track: Track) => void;
+  onAddToPlaylist?: (track: Track) => void;
+  onRemoveFromPlaylist?: (track: Track) => void;
   onGoToArtist?: (artistId: string) => void;
   onGoToAlbum?: (albumId: string) => void;
 }
@@ -97,6 +101,8 @@ interface TrackTableRowProps {
   showDuration?: boolean;
   onPlay?: (track: Track) => void;
   onAddToQueue?: (track: Track) => void;
+  onAddToPlaylist?: (track: Track) => void;
+  onRemoveFromPlaylist?: (track: Track) => void;
   onGoToArtist?: (artistId: string) => void;
   onGoToAlbum?: (albumId: string) => void;
 }
@@ -110,6 +116,8 @@ const TrackTableRow = React.memo(function TrackTableRow({
   showDuration = true,
   onPlay,
   onAddToQueue,
+  onAddToPlaylist,
+  onRemoveFromPlaylist,
   onGoToArtist,
   onGoToAlbum,
 }: TrackTableRowProps) {
@@ -132,6 +140,8 @@ const TrackTableRow = React.memo(function TrackTableRow({
       track={track}
       onPlay={onPlay}
       onAddToQueue={onAddToQueue}
+      onAddToPlaylist={onAddToPlaylist}
+      onRemoveFromPlaylist={onRemoveFromPlaylist}
       onGoToArtist={onGoToArtist}
       onGoToAlbum={onGoToAlbum}
     >
@@ -238,6 +248,18 @@ const TrackTableRow = React.memo(function TrackTableRow({
                 <ListPlus className="mr-2 h-4 w-4" />
                 Adicionar à fila
               </DropdownMenuItem>
+              {onAddToPlaylist ? (
+                <DropdownMenuItem onClick={() => onAddToPlaylist(track)}>
+                  <PlusSquare className="mr-2 h-4 w-4" />
+                  Adicionar à playlist
+                </DropdownMenuItem>
+              ) : null}
+              {onRemoveFromPlaylist && track.setVideoId ? (
+                <DropdownMenuItem onClick={() => onRemoveFromPlaylist(track)}>
+                  <Trash2 className="mr-2 h-4 w-4" />
+                  Remover da playlist
+                </DropdownMenuItem>
+              ) : null}
               <DropdownMenuSeparator />
               {track.artists[0]?.id && (
                 <DropdownMenuItem
@@ -323,6 +345,8 @@ export function TrackTable({
   onEndReached,
   onPlay,
   onAddToQueue,
+  onAddToPlaylist,
+  onRemoveFromPlaylist,
   onGoToArtist,
   onGoToAlbum,
 }: TrackTableProps) {
@@ -347,6 +371,8 @@ export function TrackTable({
               showDuration={showDuration}
               onPlay={onPlay}
               onAddToQueue={onAddToQueue}
+              onAddToPlaylist={onAddToPlaylist}
+              onRemoveFromPlaylist={onRemoveFromPlaylist}
               onGoToArtist={onGoToArtist}
               onGoToAlbum={onGoToAlbum}
             />
@@ -369,6 +395,8 @@ export function TrackTable({
       onEndReached={onEndReached}
       onPlay={onPlay}
       onAddToQueue={onAddToQueue}
+      onAddToPlaylist={onAddToPlaylist}
+      onRemoveFromPlaylist={onRemoveFromPlaylist}
       onGoToArtist={onGoToArtist}
       onGoToAlbum={onGoToAlbum}
     />
@@ -387,6 +415,8 @@ function VirtualizedTrackTable({
   onEndReached,
   onPlay,
   onAddToQueue,
+  onAddToPlaylist,
+  onRemoveFromPlaylist,
   onGoToArtist,
   onGoToAlbum,
 }: {
@@ -400,6 +430,8 @@ function VirtualizedTrackTable({
   onEndReached?: () => void;
   onPlay?: (track: Track) => void;
   onAddToQueue?: (track: Track) => void;
+  onAddToPlaylist?: (track: Track) => void;
+  onRemoveFromPlaylist?: (track: Track) => void;
   onGoToArtist?: (artistId: string) => void;
   onGoToAlbum?: (albumId: string) => void;
 }) {
@@ -513,6 +545,8 @@ function VirtualizedTrackTable({
                   showDuration={showDuration}
                   onPlay={onPlay}
                   onAddToQueue={onAddToQueue}
+                  onAddToPlaylist={onAddToPlaylist}
+                  onRemoveFromPlaylist={onRemoveFromPlaylist}
                   onGoToArtist={onGoToArtist}
                   onGoToAlbum={onGoToAlbum}
                 />
