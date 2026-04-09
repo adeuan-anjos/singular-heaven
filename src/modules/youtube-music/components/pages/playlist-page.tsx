@@ -4,6 +4,7 @@ import { CollectionHeader } from "../shared/collection-header";
 import { TrackTable } from "../shared/track-table";
 import { ytLoadPlaylist, ytGetPlaylistTrackIds, ytGetPlaylistWindow } from "../../services/yt-api";
 import { usePlayerStore } from "../../stores/player-store";
+import { useTrackLikeStore } from "../../stores/track-like-store";
 import { Play, Shuffle, Search, Loader2 } from "lucide-react";
 import type { PlayAllOptions, Playlist, Track, StackPage } from "../../types/music";
 import type { LoadPlaylistResponse, PlaylistWindowItem } from "../../services/yt-api";
@@ -83,7 +84,15 @@ export function PlaylistPage({
   const loadingMoreRef = useRef(false);
   const currentTrackId = usePlayerStore((s) => s.currentTrackId);
   const isPlaying = usePlayerStore((s) => s.isPlaying);
+  const hydrateLikes = useTrackLikeStore((s) => s.hydrate);
+  const likesHydrated = useTrackLikeStore((s) => s.hydrated);
+  const likeStatuses = useTrackLikeStore((s) => s.likeStatuses);
   const [filter, setFilter] = useState("");
+
+  useEffect(() => {
+    if (playlistId !== "liked") return;
+    void hydrateLikes(false, "liked-playlist-open");
+  }, [hydrateLikes, playlistId]);
 
   const resolvePlaybackSnapshot = useCallback(async () => {
     console.log("[PlaylistPage] resolving playback snapshot", {
@@ -231,8 +240,24 @@ export function PlaylistPage({
   if (!playlist) return null;
 
   const tracks = ((playlist.tracks as PlaylistTrackEntry[] | undefined) ?? []);
+  const tracksInView =
+    playlistId === "liked" && likesHydrated
+      ? tracks.filter(
+          (track) =>
+            (likeStatuses[track.videoId] ?? track.likeStatus ?? "INDIFFERENT") === "LIKE"
+        )
+      : tracks;
+  if (playlistId === "liked") {
+    console.log(
+      `[PlaylistPage] liked filter applied ${JSON.stringify({
+        likesHydrated,
+        totalTracks: tracks.length,
+        visibleTracks: tracksInView.length,
+      })}`
+    );
+  }
   const filteredTracks = filter
-    ? tracks.filter((t) => {
+    ? tracksInView.filter((t) => {
         const q = filter.toLowerCase();
         return (
           t.title.toLowerCase().includes(q) ||
@@ -240,7 +265,7 @@ export function PlaylistPage({
           (t.album?.name.toLowerCase().includes(q) ?? false)
         );
       })
-    : tracks;
+    : tracksInView;
 
   const headerContent = (
     <div className="space-y-6 p-4">

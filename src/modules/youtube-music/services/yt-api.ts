@@ -237,6 +237,7 @@ export interface ApiLibrarySong {
   artists: ApiArtistRef[];
   duration: string | null;
   thumbnails: ApiThumbnail[];
+  likeStatus?: "LIKE" | "DISLIKE" | "INDIFFERENT";
 }
 
 // Playlist
@@ -367,6 +368,24 @@ export async function ytGetLibraryPlaylists(): Promise<ApiLibraryPlaylist[]> {
 export async function ytGetLibrarySongs(): Promise<ApiLibrarySong[]> {
   const json = await invoke<string>("yt_get_library_songs");
   return parseJson(json);
+}
+
+export type TrackLikeStatus = "LIKE" | "DISLIKE" | "INDIFFERENT";
+
+export interface TrackLikeStatusResponse {
+  videoId: string;
+  likeStatus: TrackLikeStatus;
+}
+
+export async function ytGetLikedTrackIds(): Promise<string[]> {
+  return invoke<string[]>("yt_get_liked_track_ids");
+}
+
+export async function ytRateSong(
+  videoId: string,
+  rating: TrackLikeStatus
+): Promise<TrackLikeStatusResponse> {
+  return invoke<TrackLikeStatusResponse>("yt_rate_song", { videoId, rating });
 }
 
 export async function ytGetWatchPlaylist(videoId: string): Promise<ApiWatchPlaylist> {

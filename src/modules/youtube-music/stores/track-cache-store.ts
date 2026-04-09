@@ -12,6 +12,7 @@ interface TrackCacheState {
 interface TrackCacheActions {
   putTracks: (tracks: Track[]) => void;
   putTrack: (track: Track) => void;
+  updateLikeStatus: (videoId: string, likeStatus: Track["likeStatus"]) => void;
   getTrack: (videoId: string) => Track | undefined;
   hydrateTracks: (videoIds: string[]) => Promise<void>;
   removeTracks: (videoIds: string[]) => void;
@@ -64,6 +65,23 @@ export const useTrackCacheStore = create<TrackCacheStore>()((set, get) => ({
         }
       }
       return { tracks: next };
+    });
+  },
+
+  updateLikeStatus: (videoId, likeStatus) => {
+    if (!videoId) return;
+    set((state) => {
+      const current = state.tracks[videoId];
+      if (!current || current.likeStatus === likeStatus) return state;
+      return {
+        tracks: {
+          ...state.tracks,
+          [videoId]: {
+            ...current,
+            likeStatus,
+          },
+        },
+      };
     });
   },
 

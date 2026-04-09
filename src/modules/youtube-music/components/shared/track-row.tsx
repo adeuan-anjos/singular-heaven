@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { thumbUrl } from "../../utils/thumb-url";
 
@@ -11,6 +10,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Ellipsis, Play, Pause, ListPlus, User, Disc3, Heart } from "lucide-react";
 import type { Track } from "../../types/music";
+import { useTrackLikeStore } from "../../stores/track-like-store";
 
 interface TrackRowProps {
   track: Track;
@@ -23,7 +23,11 @@ interface TrackRowProps {
 }
 
 export function TrackRow({ track, index, isPlaying, onPlay, onAddToQueue, onGoToArtist, onGoToAlbum }: TrackRowProps) {
-  const [liked, setLiked] = useState(false);
+  const liked = useTrackLikeStore((s) =>
+    (s.likeStatuses[track.videoId] ?? track.likeStatus ?? "INDIFFERENT") === "LIKE"
+  );
+  const likePending = useTrackLikeStore((s) => Boolean(s.pending[track.videoId]));
+  const toggleTrackLike = useTrackLikeStore((s) => s.toggleTrackLike);
   // Use the largest available thumbnail (last in the array = highest resolution)
   const imgUrl = track.thumbnails[0]?.url ?? "";
   const artistName = track.artists.map((a) => a.name).join(", ");
@@ -92,8 +96,18 @@ export function TrackRow({ track, index, isPlaying, onPlay, onAddToQueue, onGoTo
         variant="ghost"
         size="icon"
         className="h-8 w-8 opacity-0 group-hover:opacity-100"
-        onClick={() => setLiked(!liked)}
+        onClick={() => {
+          console.log(
+            `[TrackRow] like click ${JSON.stringify({
+              videoId: track.videoId,
+              from: liked ? "LIKE" : "INDIFFERENT",
+              to: liked ? "INDIFFERENT" : "LIKE",
+            })}`
+          );
+          void toggleTrackLike(track.videoId, track.likeStatus);
+        }}
         aria-label="Curtir"
+        disabled={likePending}
       >
         <Heart className={`h-4 w-4 ${liked ? "fill-red-500 text-red-500" : ""}`} />
       </Button>

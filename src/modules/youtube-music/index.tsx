@@ -20,6 +20,7 @@ import { useNavigation } from "./hooks/use-navigation";
 import { usePlayerStore } from "./stores/player-store";
 import { useQueueStore } from "./stores/queue-store";
 import { useTrackCacheStore } from "./stores/track-cache-store";
+import { useTrackLikeStore } from "./stores/track-like-store";
 import { ytGetCachedTracks, type QueueSnapshot } from "./services/yt-api";
 import type { PlayAllOptions, Track } from "./types/music";
 import { useRenderTracker, useLeakDetector, startMemoryMonitor } from "@/lib/debug";
@@ -45,6 +46,8 @@ export default function YouTubeMusicModule() {
   const queueSyncSnapshot = useQueueStore((s) => s.syncSnapshot);
   const trackCachePut = useTrackCacheStore((s) => s.putTracks);
   const trackCacheClear = useTrackCacheStore((s) => s.clear);
+  const trackLikesHydrate = useTrackLikeStore((s) => s.hydrate);
+  const trackLikesClear = useTrackLikeStore((s) => s.clear);
 
   console.log("[YouTubeMusicModule] render", { authState, activeTab, page: nav.currentPage?.type });
 
@@ -80,8 +83,28 @@ export default function YouTubeMusicModule() {
       playerCleanup();
       void queueCleanup();
       trackCacheClear();
+      trackLikesClear();
     };
-  }, [playerCleanup, queueCleanup, queueHydrate, trackCacheClear]);
+  }, [playerCleanup, queueCleanup, queueHydrate, trackCacheClear, trackLikesClear]);
+
+  useEffect(() => {
+    if (authState !== "authenticated") return;
+
+    void trackLikesHydrate(true, "auth-ready");
+
+    const refreshLikes = () => {
+      if (document.visibilityState === "hidden") return;
+      void trackLikesHydrate(false, "window-focus");
+    };
+
+    window.addEventListener("focus", refreshLikes);
+    document.addEventListener("visibilitychange", refreshLikes);
+
+    return () => {
+      window.removeEventListener("focus", refreshLikes);
+      document.removeEventListener("visibilitychange", refreshLikes);
+    };
+  }, [authState, trackLikesHydrate]);
 
   useEffect(() => {
     let cancelled = false;

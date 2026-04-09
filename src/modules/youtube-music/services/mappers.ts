@@ -349,6 +349,7 @@ export function mapLibrarySongs(songs: ApiLibrarySong[]): Track[] {
     duration: s.duration ?? "0:00",
     durationSeconds: parseDuration(s.duration),
     thumbnails: mapThumbnails(s.thumbnails),
+    likeStatus: s.likeStatus ?? "LIKE",
   }));
 }
 

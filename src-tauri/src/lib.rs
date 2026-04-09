@@ -349,6 +349,8 @@ pub fn run() {
             youtube_music::commands::yt_get_mood_categories,
             youtube_music::commands::yt_get_library_playlists,
             youtube_music::commands::yt_get_library_songs,
+            youtube_music::commands::yt_get_liked_track_ids,
+            youtube_music::commands::yt_rate_song,
             youtube_music::commands::yt_get_playlist,
             youtube_music::commands::yt_get_playlist_continuation,
             youtube_music::commands::yt_get_watch_playlist,

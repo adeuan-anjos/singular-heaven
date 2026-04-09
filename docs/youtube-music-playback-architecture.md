@@ -6,9 +6,14 @@ Documentar a arquitetura atual de reprodução do módulo YouTube Music, com foc
 
 - coleções reproduzíveis
 - fila global
+- likes de track como estado backend-first adjacente ao playback
 - semântica de `shuffle`
 - semântica de `repeat`
 - responsabilidades entre backend Rust e frontend React
+
+Para o coração de músicas, ver também:
+
+- [YouTube Music Track Likes](./docs/youtube-music-track-likes.md)
 
 Esta documentação existe para evitar que mudanças futuras corrijam apenas uma página e deixem o restante do app para trás.
 

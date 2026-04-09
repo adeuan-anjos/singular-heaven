@@ -4,6 +4,7 @@ use std::sync::Arc;
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, Manager, State};
 use tokio::sync::Mutex;
+use ytmusic_api::types::common::LikeStatus;
 
 use super::client::YtMusicState;
 use crate::playback_queue::{PlaybackQueue, QueueCommandResponse, QueueSnapshot, QueueWindowResponse};
@@ -25,6 +26,31 @@ pub struct BrowserInfo {
     pub has_cookies: bool,
     #[serde(rename = "cookieCount")]
     pub cookie_count: usize,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum TrackLikeStatusInput {
+    Like,
+    Dislike,
+    Indifferent,
+}
+
+impl From<TrackLikeStatusInput> for LikeStatus {
+    fn from(value: TrackLikeStatusInput) -> Self {
+        match value {
+            TrackLikeStatusInput::Like => LikeStatus::Like,
+            TrackLikeStatusInput::Dislike => LikeStatus::Dislike,
+            TrackLikeStatusInput::Indifferent => LikeStatus::Indifferent,
+        }
+    }
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TrackLikeStatusResponse {
+    pub video_id: String,
+    pub like_status: LikeStatus,
 }
 
 // ---------------------------------------------------------------------------
@@ -234,18 +260,66 @@ pub async fn yt_get_library_songs(
         .map_err(|e| format!("[yt_get_library_songs] serialization: {e}"))
 }
 
+#[tauri::command]
+pub async fn yt_get_liked_track_ids(
+    state: State<'_, Arc<Mutex<YtMusicState>>>,
+) -> Result<Vec<String>, String> {
+    println!("[yt_get_liked_track_ids]");
+    let state = state.lock().await;
+    state
+        .client
+        .get_liked_track_ids()
+        .await
+        .map_err(|e| format!("[yt_get_liked_track_ids] {e}"))
+}
+
+#[tauri::command]
+pub async fn yt_rate_song(
+    video_id: String,
+    rating: TrackLikeStatusInput,
+    state: State<'_, Arc<Mutex<YtMusicState>>>,
+) -> Result<TrackLikeStatusResponse, String> {
+    let like_status: LikeStatus = rating.into();
+    println!(
+        "[yt_rate_song] video_id={} like_status={:?}",
+        video_id, like_status
+    );
+    let state = state.lock().await;
+    state
+        .client
+        .rate_song(&video_id, like_status.clone())
+        .await
+        .map_err(|e| format!("[yt_rate_song] {e}"))?;
+    Ok(TrackLikeStatusResponse {
+        video_id,
+        like_status,
+    })
+}
+
 // ---------------------------------------------------------------------------
 // Playlist
 // ---------------------------------------------------------------------------
+
+fn resolve_remote_playlist_id(playlist_id: &str) -> &str {
+    if playlist_id == "liked" {
+        "LM"
+    } else {
+        playlist_id
+    }
+}
 
 #[tauri::command]
 pub async fn yt_get_playlist(
     playlist_id: String,
     state: State<'_, Arc<Mutex<YtMusicState>>>,
 ) -> Result<String, String> {
-    println!("[yt_get_playlist] playlist_id={playlist_id}");
+    let remote_playlist_id = resolve_remote_playlist_id(&playlist_id).to_string();
+    println!(
+        "[yt_get_playlist] playlist_id={} remote_playlist_id={}",
+        playlist_id, remote_playlist_id
+    );
     let state = state.lock().await;
-    let (playlist, continuation) = state.client.get_playlist(&playlist_id).await
+    let (playlist, continuation) = state.client.get_playlist(&remote_playlist_id).await
         .map_err(|e| format!("[yt_get_playlist] {e}"))?;
     let response = serde_json::json!({
         "playlist": serde_json::to_value(&playlist).unwrap_or_default(),
@@ -619,7 +693,11 @@ pub async fn yt_load_playlist(
     playlist_loads: State<'_, Arc<tokio::sync::Mutex<HashSet<String>>>>,
     app: AppHandle,
 ) -> Result<String, String> {
-    println!("[yt_load_playlist] playlist_id={playlist_id}");
+    let remote_playlist_id = resolve_remote_playlist_id(&playlist_id).to_string();
+    println!(
+        "[yt_load_playlist] playlist_id={} remote_playlist_id={}",
+        playlist_id, remote_playlist_id
+    );
 
     let already_loading = {
         let loads = playlist_loads.lock().await;
@@ -660,7 +738,7 @@ pub async fn yt_load_playlist(
     // 1. Fetch first page from InnerTube
     let (page, continuation) = {
         let st = state.lock().await;
-        st.client.get_playlist(&playlist_id).await
+        st.client.get_playlist(&remote_playlist_id).await
             .map_err(|e| format!("[yt_load_playlist] API error: {e}"))?
     };
 

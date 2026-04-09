@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import type { Track } from "../../types/music";
 import { thumbUrl } from "../../utils/thumb-url";
+import { useTrackLikeStore } from "../../stores/track-like-store";
 
 
 interface TrackTableProps {
@@ -112,7 +113,11 @@ const TrackTableRow = React.memo(function TrackTableRow({
   onGoToArtist,
   onGoToAlbum,
 }: TrackTableRowProps) {
-  const [liked, setLiked] = useState(track.likeStatus === "LIKE");
+  const liked = useTrackLikeStore((s) =>
+    (s.likeStatuses[track.videoId] ?? track.likeStatus ?? "INDIFFERENT") === "LIKE"
+  );
+  const likePending = useTrackLikeStore((s) => Boolean(s.pending[track.videoId]));
+  const toggleTrackLike = useTrackLikeStore((s) => s.toggleTrackLike);
   // Use the SMALLEST thumbnail (60x60) for track rows — displayed at 40x40px.
   // Using the 544x544 version wastes ~1.18MB per image in Chromium's decode cache.
   const imgUrl = track.thumbnails[0]?.url ?? "";
@@ -191,9 +196,17 @@ const TrackTableRow = React.memo(function TrackTableRow({
             className="h-7 w-7 shrink-0 opacity-50 group-hover:opacity-100"
             onClick={(e) => {
               e.stopPropagation();
-              setLiked(!liked);
+              console.log(
+                `[TrackTableRow] like click ${JSON.stringify({
+                  videoId: track.videoId,
+                  from: liked ? "LIKE" : "INDIFFERENT",
+                  to: liked ? "INDIFFERENT" : "LIKE",
+                })}`
+              );
+              void toggleTrackLike(track.videoId, track.likeStatus);
             }}
             aria-label="Curtir"
+            disabled={likePending}
           >
             <Heart
               className={`h-4 w-4 ${liked ? "fill-red-500 text-red-500" : ""}`}
@@ -400,7 +413,6 @@ function VirtualizedTrackTable({
     if (!el) return;
     const observer = new ResizeObserver((entries) => {
       const height = entries[0].contentRect.height;
-      console.log("[TrackTable:Virtual] ResizeObserver — containerHeight:", Math.round(height));
       setContainerHeight(height);
     });
     observer.observe(el);

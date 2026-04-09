@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React from "react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -20,6 +20,7 @@ import {
 import { usePlayerStore } from "../../stores/player-store";
 import { useQueueStore } from "../../stores/queue-store";
 import { useTrack } from "../../stores/track-cache-store";
+import { useTrackLikeStore } from "../../stores/track-like-store";
 import { useRenderTracker } from "@/lib/debug";
 import { ProgressBar } from "./progress-bar";
 import { thumbUrl } from "../../utils/thumb-url";
@@ -32,10 +33,18 @@ interface PlayerBarProps {
 
 export const PlayerBar = React.memo(function PlayerBar({ onOpenQueue, onGoToArtist, onGoToAlbum }: PlayerBarProps) {
   useRenderTracker("PlayerBar", { onOpenQueue, onGoToArtist, onGoToAlbum });
-  const [liked, setLiked] = useState(false);
 
   const currentTrackId = usePlayerStore((s) => s.currentTrackId);
   const track = useTrack(currentTrackId ?? undefined);
+  const liked = useTrackLikeStore((s) =>
+    currentTrackId
+      ? (s.likeStatuses[currentTrackId] ?? track?.likeStatus ?? "INDIFFERENT") === "LIKE"
+      : false
+  );
+  const likePending = useTrackLikeStore((s) =>
+    currentTrackId ? Boolean(s.pending[currentTrackId]) : false
+  );
+  const toggleTrackLike = useTrackLikeStore((s) => s.toggleTrackLike);
   const isPlaying = usePlayerStore((s) => s.isPlaying);
   const volume = usePlayerStore((s) => s.volume);
   const shuffleOn = useQueueStore((s) => s.shuffle);
@@ -116,9 +125,20 @@ export const PlayerBar = React.memo(function PlayerBar({ onOpenQueue, onGoToArti
         <Button
           variant="ghost"
           size="icon"
-          onClick={() => setLiked(!liked)}
+          onClick={() => {
+            if (!currentTrackId) return;
+            console.log(
+              `[PlayerBar] like click ${JSON.stringify({
+                videoId: currentTrackId,
+                from: liked ? "LIKE" : "INDIFFERENT",
+                to: liked ? "INDIFFERENT" : "LIKE",
+              })}`
+            );
+            void toggleTrackLike(currentTrackId, track?.likeStatus);
+          }}
           aria-label="Curtir"
           className="h-8 w-8 shrink-0"
+          disabled={!currentTrackId || likePending}
         >
           <Heart className={`h-4 w-4 ${liked ? "fill-red-500 text-red-500" : ""}`} />
         </Button>
