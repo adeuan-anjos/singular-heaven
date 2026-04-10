@@ -154,6 +154,125 @@ Dependência importante:
 
 - exige `setVideoId`
 
+## Matriz de ações de playlist
+
+Esta seção registra o estado atual das ações de playlist no app e a estratégia recomendada para as próximas.
+
+### Já suportadas
+
+- `Excluir playlist`
+- `Remover playlist` da biblioteca
+- `Criar playlist`
+- `Adicionar música à playlist`
+- `Remover música da playlist`
+- `Salvar/remover playlist` da biblioteca
+- `Compartilhar`
+- `Salvar na playlist`
+- `Aleatório`
+- `Tocar a seguir`
+- `Adicionar à fila`
+
+### Suportadas e semântica adotada
+
+#### Aleatório
+
+Semântica:
+
+- abre a playlist na queue global com `shuffle=true`
+
+Estratégia:
+
+- não requer endpoint novo do YouTube Music
+- usa os `trackIds` da coleção atual e a semântica global já existente de queue/playback
+
+#### Salvar na playlist
+
+Semântica:
+
+- copia todas as músicas da playlist atual para outra playlist escolhida pelo usuário
+
+Estratégia:
+
+- usar `yt_add_playlist_items`
+- usar dialog shadcn com busca/lista das playlists de destino
+- perguntar sempre a política de duplicatas no destino
+- quando `permitir duplicatas`, o app pode copiar direto da playlist de origem
+- quando `evitar novas duplicatas`, o app resolve `trackIds` completos de origem e destino antes de adicionar
+
+#### Compartilhar
+
+Semântica:
+
+- copiar ou exibir o link público da playlist
+
+Estratégia:
+
+- não requer endpoint
+- o app pode montar a URL localmente:
+  - `https://music.youtube.com/playlist?list=<playlistId>`
+
+#### Tocar a seguir
+
+Semântica:
+
+- inserir a playlist inteira logo após a faixa atual na queue global
+
+Estratégia:
+
+- isso não é mutação de playlist do YouTube Music; é mutação da nossa fila
+- usa `yt_queue_add_collection_next(trackIds)`
+- preserva a ordem original da playlist
+- cria bloco de `priority future`
+- esse bloco continua preservado mesmo se o usuário ligar `shuffle` depois
+
+#### Adicionar à fila
+
+Semântica:
+
+- anexar a playlist inteira ao final da queue global
+
+Estratégia:
+
+- também é mutação da nossa fila
+- usa `yt_queue_append_collection(trackIds)`
+- insere a playlist inteira no fim da fila lógica
+- quando `shuffle=true`, os itens entram no `regular future` e participam do embaralhamento do futuro
+
+### Dependem de spike de endpoint / pesquisa dedicada
+
+#### Iniciar rádio
+
+Semântica:
+
+- iniciar uma fila de rádio derivada da playlist atual
+
+Situação:
+
+- o projeto hoje só implementa rádio baseado em `videoId` individual
+- o `ytmusicapi` documenta `get_watch_playlist(..., playlistId=..., radio=True)`
+- isso merece um spike próprio porque a semântica e o payload são diferentes do fluxo atual de playlist management
+
+#### Fixar em "Ouvir de novo"
+
+Semântica:
+
+- adicionar a playlist ao carrossel personalizado da Home
+
+Situação:
+
+- a referência documenta `pinnedToListenAgain`, `listenAgainFeedbackTokens` e `edit_song_library_status(feedbackTokens)`
+- isso parece fazer parte do feed personalizado do usuário, não da gestão comum de playlists
+- merece investigação separada sobre os tokens vindos de `get_home()` e o impacto real no app
+
+### Fora de escopo por enquanto
+
+#### Baixar
+
+Situação:
+
+- não deve ser tratada como ação oportunista de menu
+- merece uma feature dedicada com semântica, UI e camada de storage próprias
+
 ## `setVideoId`
 
 `videoId` sozinho não é suficiente para remover um item de playlist com segurança.
@@ -178,7 +297,9 @@ Por isso a playlist editável precisa carregar esse dado no parser e mantê-lo n
 - playlist usa bookmark/ações de biblioteca
 - ações destrutivas usam `AlertDialog` shadcn
 - clique direito em playlist usa `ContextMenu` shadcn
+- botão `...` em playlist usa `DropdownMenu` shadcn
 - sidebar usa composição shadcn-first, não painel manual genérico
+- blur e highlight do item alvo fazem parte do comportamento oficial da sidebar virtualizada
 
 ## Invariantes
 
@@ -187,9 +308,20 @@ Por isso a playlist editável precisa carregar esse dado no parser e mantê-lo n
 - `Remover playlist` só aparece para playlist salva de terceiros
 - `Adicionar à playlist` sempre passa pelo backend
 - `Remover da playlist` só aparece em playlist editável
+- `Aleatório` em playlist usa a queue global com `shuffle=true`
+- `Tocar a seguir` e `Adicionar à fila` pertencem à queue global, não à API de playlist do YouTube Music
+- `Iniciar rádio` e `Fixar em "Ouvir de novo"` não devem ser improvisados na UI sem spike de endpoint
 
 ## Doc relacionada
 
 Para a arquitetura visual e estrutural da sidebar:
 
 - [YouTube Music Sidebar Architecture](./docs/explanation/youtube-music-sidebar-architecture.md)
+
+Para regras de composição de menus, blur e spacing:
+
+- [Shadcn Menu Composition](./docs/reference/shadcn-menu-composition.md)
+
+Para a arquitetura global da queue e do playback:
+
+- [YouTube Music Playback Architecture](./docs/explanation/youtube-music-playback-architecture.md)

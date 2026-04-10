@@ -4,23 +4,16 @@ import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Separator } from "@/components/ui/separator";
 import { TrackContextMenu } from "./track-context-menu";
+import { TrackActionsMenu } from "./track-actions-menu";
 import {
   Ellipsis,
   Play,
   Pause,
-  ListPlus,
-  ListEnd,
-  User,
-  Disc3,
   Heart,
-  PlusSquare,
-  Trash2,
 } from "lucide-react";
 import type { Track } from "../../types/music";
 import { thumbUrl } from "../../utils/thumb-url";
@@ -235,48 +228,17 @@ const TrackTableRow = React.memo(function TrackTableRow({
             >
               <Ellipsis className="h-4 w-4" />
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => onPlay?.(track)}>
-                <Play className="mr-2 h-4 w-4" />
-                Tocar
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => onAddToQueue?.(track)}>
-                <ListEnd className="mr-2 h-4 w-4" />
-                Tocar em seguida
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => onAddToQueue?.(track)}>
-                <ListPlus className="mr-2 h-4 w-4" />
-                Adicionar à fila
-              </DropdownMenuItem>
-              {onAddToPlaylist ? (
-                <DropdownMenuItem onClick={() => onAddToPlaylist(track)}>
-                  <PlusSquare className="mr-2 h-4 w-4" />
-                  Adicionar à playlist
-                </DropdownMenuItem>
-              ) : null}
-              {onRemoveFromPlaylist && track.setVideoId ? (
-                <DropdownMenuItem onClick={() => onRemoveFromPlaylist(track)}>
-                  <Trash2 className="mr-2 h-4 w-4" />
-                  Remover da playlist
-                </DropdownMenuItem>
-              ) : null}
-              <DropdownMenuSeparator />
-              {track.artists[0]?.id && (
-                <DropdownMenuItem
-                  onClick={() => onGoToArtist?.(track.artists[0].id!)}
-                >
-                  <User className="mr-2 h-4 w-4" />
-                  Ir para o artista
-                </DropdownMenuItem>
-              )}
-              {track.album && (
-                <DropdownMenuItem
-                  onClick={() => onGoToAlbum?.(track.album!.id)}
-                >
-                  <Disc3 className="mr-2 h-4 w-4" />
-                  Ir para o álbum
-                </DropdownMenuItem>
-              )}
+            <DropdownMenuContent align="end" className="w-56">
+              <TrackActionsMenu
+                kind="dropdown"
+                track={track}
+                onPlay={onPlay}
+                onAddToQueue={onAddToQueue}
+                onAddToPlaylist={onAddToPlaylist}
+                onRemoveFromPlaylist={onRemoveFromPlaylist}
+                onGoToArtist={onGoToArtist}
+                onGoToAlbum={onGoToAlbum}
+              />
             </DropdownMenuContent>
           </DropdownMenu>
         </div>

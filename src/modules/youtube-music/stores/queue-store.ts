@@ -4,6 +4,8 @@ import {
   type QueueSnapshot,
   type QueueWindowItem,
   ytQueueAddNext,
+  ytQueueAddCollectionNext,
+  ytQueueAppendCollection,
   ytQueueClear,
   ytQueueCycleRepeat,
   ytQueueGetState,
@@ -58,6 +60,8 @@ interface QueueActions {
   previous: () => Promise<string | null>;
   handleTrackEnd: () => Promise<string | null>;
   addNext: (trackId: string) => Promise<void>;
+  addCollectionNext: (trackIds: string[]) => Promise<string | null>;
+  appendCollection: (trackIds: string[]) => Promise<string | null>;
   removeFromQueue: (index: number) => Promise<void>;
   toggleShuffle: () => Promise<void>;
   cycleRepeat: () => Promise<void>;
@@ -380,6 +384,46 @@ export const useQueueStore = create<QueueStore>()((set, get) => ({
       pages: emptyPages(),
       pagesVersion: state.pagesVersion + 1,
     }));
+  },
+
+  addCollectionNext: async (trackIds) => {
+    const response = await ytQueueAddCollectionNext(trackIds);
+    console.log(
+      `[QueueStore] addCollectionNext ${JSON.stringify({
+        count: trackIds.length,
+        firstTrackId: trackIds[0] ?? null,
+        lastTrackId: trackIds[trackIds.length - 1] ?? null,
+        totalLoaded: response.snapshot.totalLoaded,
+        shuffle: response.snapshot.shuffle,
+      })}`
+    );
+    set((state) => ({
+      ...applySnapshot(response.snapshot),
+      revealedCount: deriveRevealedCount(state.revealedCount, response.snapshot, false),
+      pages: emptyPages(),
+      pagesVersion: state.pagesVersion + 1,
+    }));
+    return response.trackId;
+  },
+
+  appendCollection: async (trackIds) => {
+    const response = await ytQueueAppendCollection(trackIds);
+    console.log(
+      `[QueueStore] appendCollection ${JSON.stringify({
+        count: trackIds.length,
+        firstTrackId: trackIds[0] ?? null,
+        lastTrackId: trackIds[trackIds.length - 1] ?? null,
+        totalLoaded: response.snapshot.totalLoaded,
+        shuffle: response.snapshot.shuffle,
+      })}`
+    );
+    set((state) => ({
+      ...applySnapshot(response.snapshot),
+      revealedCount: deriveRevealedCount(state.revealedCount, response.snapshot, false),
+      pages: emptyPages(),
+      pagesVersion: state.pagesVersion + 1,
+    }));
+    return response.trackId;
   },
 
   removeFromQueue: async (index) => {

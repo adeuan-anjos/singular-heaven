@@ -27,6 +27,7 @@ export interface CollectionHeaderProps {
   actions: CollectionHeaderAction[];
   trailingActions?: ReactNode;
   menuContent?: ReactNode;
+  menuContentClassName?: string;
 }
 
 export function CollectionHeader({
@@ -39,6 +40,7 @@ export function CollectionHeader({
   actions,
   trailingActions,
   menuContent,
+  menuContentClassName,
 }: CollectionHeaderProps) {
   return (
     <div className="space-y-4">
@@ -93,7 +95,7 @@ export function CollectionHeader({
             <DropdownMenuTrigger render={<Button variant="ghost" size="icon" />}>
               <Ellipsis className="h-5 w-5" />
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
+            <DropdownMenuContent align="end" className={menuContentClassName}>
               {menuContent}
             </DropdownMenuContent>
           </DropdownMenu>

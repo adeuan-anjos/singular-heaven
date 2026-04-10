@@ -33,6 +33,7 @@ Documentação viva do projeto.
 - [Stores and Source of Truth](./docs/reference/stores-and-source-of-truth.md)
 - [Playlist Special Cases](./docs/reference/playlist-special-cases.md)
 - [UI Invariants](./docs/reference/ui-invariants.md)
+- [Shadcn Menu Composition](./docs/reference/shadcn-menu-composition.md)
 
 ## How-To
 

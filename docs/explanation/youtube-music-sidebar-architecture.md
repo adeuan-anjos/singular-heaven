@@ -185,6 +185,70 @@ Ela não deve afetar:
 - a linha clicada deve continuar resolvendo o `playlistId` correto
 - context menu deve funcionar para o item certo mesmo fora da primeira janela
 
+## Menus, blur e highlight
+
+### Regra
+
+A sidebar usa dois gestos diferentes:
+
+- `ContextMenu` para `right click` na playlist
+- `DropdownMenu` para o botão `...`
+
+Os dois compartilham:
+
+- o mesmo conteúdo de ações
+- blur no resto da tela
+- highlight do item alvo
+
+### O que aprendemos
+
+#### 1. `DropdownMenu` e `ContextMenu` não devem ser forçados a parecer a mesma coisa
+
+O `ContextMenu` segue o ponteiro.  
+O `DropdownMenu` segue o trigger explícito.
+
+Então a relação visual com a row vem de:
+
+- highlight do item
+- ancoragem correta do popup
+
+Não de tentar converter um primitive no outro.
+
+#### 2. A row virtualizada não consegue sempre “subir” acima do blur sozinha
+
+Como a lista usa virtualização, a row vive sob `transform`.  
+Isso cria `stacking context` e impede soluções simplistas com `z-index`.
+
+Por isso a sidebar adota highlight overlay temporário para o item alvo.
+
+#### 3. No dropdown da row, o botão `...` é acionador, não âncora semântica
+
+O menu pertence à playlist, não ao ícone.
+
+Implementação adotada:
+
+- o botão `...` abre o menu
+- o `DropdownMenuContent` ancora na row real
+- o highlight reforça a associação visual
+
+#### 4. O highlight não deve ser uma cópia comprimida da row
+
+Quando o título for longo, o highlight pode expandir além da largura original da sidebar para melhorar clareza.
+
+### Regra para mudanças futuras
+
+Não fazer:
+
+- reintroduzir trigger invisível destacado para ancorar dropdown da sidebar
+- mover correções de menu para CSS local dos itens
+- remover o highlight da sidebar mantendo blur global
+
+Fazer:
+
+- tratar blur, popup e highlight como um mesmo sistema visual
+- manter a row real como referência do highlight
+- corrigir largura/posição no nível de `Content` e `anchor`
+
 ## Stores e fluxo
 
 ### Store principal
@@ -227,4 +291,5 @@ Fazer:
 
 - [Playlist Management](./docs/explanation/youtube-music-playlist-management.md)
 - [UI Invariants](./docs/reference/ui-invariants.md)
+- [Shadcn Menu Composition](./docs/reference/shadcn-menu-composition.md)
 - [ADR-003: Sidebar Uses Guide](./docs/adr/ADR-003-sidebar-uses-guide.md)

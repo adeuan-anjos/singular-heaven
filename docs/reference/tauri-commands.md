@@ -9,6 +9,7 @@ Referência curta dos comandos mais importantes do módulo YouTube Music.
 - `yt_get_collection_window`
 - `yt_load_playlist`
 - `yt_get_playlist_track_ids`
+- `yt_get_playlist_track_ids_complete`
 - `yt_get_playlist_window`
 
 ## Queue
@@ -21,6 +22,8 @@ Referência curta dos comandos mais importantes do módulo YouTube Music.
 - `yt_queue_previous`
 - `yt_queue_handle_track_end`
 - `yt_queue_add_next`
+- `yt_queue_add_collection_next`
+- `yt_queue_append_collection`
 - `yt_queue_remove`
 - `yt_queue_toggle_shuffle`
 - `yt_queue_cycle_repeat`

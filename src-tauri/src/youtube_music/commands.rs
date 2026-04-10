@@ -713,6 +713,137 @@ fn build_cached_playlist_response(
         .map_err(|e| format!("[yt_load_playlist] cached serialization: {e}"))
 }
 
+async fn ensure_playlist_track_ids_complete(
+    playlist_id: &str,
+    state: &Arc<Mutex<YtMusicState>>,
+    cache: &Arc<tokio::sync::Mutex<PlaylistCache>>,
+) -> Result<(Vec<String>, bool), String> {
+    {
+        let db = cache.lock().await;
+        let track_ids = db
+            .get_track_ids(playlist_id)
+            .map_err(|e| format!("[yt_get_playlist_track_ids_complete] get_track_ids: {e}"))?;
+        let is_complete = db
+            .is_complete(playlist_id)
+            .map_err(|e| format!("[yt_get_playlist_track_ids_complete] is_complete: {e}"))?;
+        if is_complete {
+            println!(
+                "[yt_get_playlist_track_ids_complete] cache-hit playlist_id={} count={}",
+                playlist_id,
+                track_ids.len()
+            );
+            return Ok((track_ids, true));
+        }
+        println!(
+            "[yt_get_playlist_track_ids_complete] cache-partial playlist_id={} cached_count={}",
+            playlist_id,
+            track_ids.len()
+        );
+    }
+
+    let remote_playlist_id = resolve_remote_playlist_id(playlist_id).to_string();
+    println!(
+        "[yt_get_playlist_track_ids_complete] fetching full playlist playlist_id={} remote_playlist_id={}",
+        playlist_id, remote_playlist_id
+    );
+
+    let (page, mut continuation) = {
+        let st = state.lock().await;
+        st.client
+            .get_playlist(&remote_playlist_id)
+            .await
+            .map_err(|e| format!("[yt_get_playlist_track_ids_complete] API error: {e}"))?
+    };
+
+    let mut all_track_ids: Vec<String> = page.tracks.iter().map(|t| t.video_id.clone()).collect();
+    let track_rows = playlist_cache::playlist_tracks_to_rows(&page.tracks);
+
+    {
+        let db = cache.lock().await;
+        db.clear_playlist_tracks(playlist_id)
+            .map_err(|e| format!("[yt_get_playlist_track_ids_complete] clear_playlist_tracks: {e}"))?;
+        db.save_meta(
+            playlist_id,
+            &page.title,
+            page.author.as_ref().map(|a| a.name.as_str()),
+            page.author.as_ref().and_then(|a| a.id.as_deref()),
+            page.track_count.as_deref(),
+            page.thumbnails.first().map(|t| t.url.as_str()),
+            page.is_owned_by_user,
+            page.is_editable,
+            page.is_special,
+        )
+        .map_err(|e| format!("[yt_get_playlist_track_ids_complete] save_meta: {e}"))?;
+        db.save_tracks(playlist_id, 0, &track_rows)
+            .map_err(|e| format!("[yt_get_playlist_track_ids_complete] save_tracks: {e}"))?;
+        db.save_collection_meta(
+            "playlist",
+            playlist_id,
+            &page.title,
+            page.author.as_ref().map(|a| a.name.as_str()),
+            page.thumbnails.first().map(|t| t.url.as_str()),
+            continuation.is_none(),
+        )
+        .map_err(|e| format!("[yt_get_playlist_track_ids_complete] save_collection_meta: {e}"))?;
+        db.save_collection_tracks("playlist", playlist_id, 0, &track_rows)
+            .map_err(|e| format!("[yt_get_playlist_track_ids_complete] save_collection_tracks: {e}"))?;
+        if continuation.is_none() {
+            db.mark_complete(playlist_id)
+                .map_err(|e| format!("[yt_get_playlist_track_ids_complete] mark_complete: {e}"))?;
+        }
+    }
+
+    let mut offset = page.tracks.len();
+
+    while let Some(token) = continuation {
+        let (tracks, next_token) = {
+            let st = state.lock().await;
+            st.client
+                .get_playlist_continuation(&token)
+                .await
+                .map_err(|e| format!("[yt_get_playlist_track_ids_complete] continuation: {e}"))?
+        };
+
+        println!(
+            "[yt_get_playlist_track_ids_complete] continuation playlist_id={} offset={} received={} has_more={}",
+            playlist_id,
+            offset,
+            tracks.len(),
+            next_token.is_some()
+        );
+
+        let ids: Vec<String> = tracks.iter().map(|t| t.video_id.clone()).collect();
+        let rows = playlist_cache::playlist_tracks_to_rows(&tracks);
+
+        {
+            let db = cache.lock().await;
+            db.save_tracks(playlist_id, offset, &rows)
+                .map_err(|e| format!("[yt_get_playlist_track_ids_complete] save_tracks: {e}"))?;
+            db.save_collection_tracks("playlist", playlist_id, offset, &rows)
+                .map_err(|e| format!("[yt_get_playlist_track_ids_complete] save_collection_tracks: {e}"))?;
+            if next_token.is_none() {
+                db.mark_complete(playlist_id)
+                    .map_err(|e| format!("[yt_get_playlist_track_ids_complete] mark_complete: {e}"))?;
+                db.save_collection_meta(
+                    "playlist",
+                    playlist_id,
+                    &page.title,
+                    page.author.as_ref().map(|a| a.name.as_str()),
+                    page.thumbnails.first().map(|t| t.url.as_str()),
+                    true,
+                )
+                .map_err(|e| format!("[yt_get_playlist_track_ids_complete] save_collection_meta: {e}"))?;
+            }
+        }
+
+        all_track_ids.extend(ids);
+        offset += tracks.len();
+        continuation = next_token;
+    }
+
+    Ok((all_track_ids, true))
+}
+
 fn emit_queue_state_updated(app: &AppHandle, snapshot: &QueueSnapshot) {
     if let Err(error) = app.emit("queue-state-updated", snapshot) {
         eprintln!("[queue-state-updated] emit error: {error}");
@@ -1090,6 +1221,31 @@ pub async fn yt_get_playlist_track_ids(
 
     serde_json::to_string(&response)
         .map_err(|e| format!("[yt_get_playlist_track_ids] serialization: {e}"))
+}
+
+#[tauri::command]
+pub async fn yt_get_playlist_track_ids_complete(
+    playlist_id: String,
+    state: State<'_, Arc<Mutex<YtMusicState>>>,
+    cache: State<'_, Arc<tokio::sync::Mutex<PlaylistCache>>>,
+) -> Result<String, String> {
+    println!("[yt_get_playlist_track_ids_complete] playlist_id={playlist_id}");
+
+    let (track_ids, is_complete) =
+        ensure_playlist_track_ids_complete(&playlist_id, state.inner(), cache.inner()).await?;
+
+    println!(
+        "[yt_get_playlist_track_ids_complete] Found {} track IDs, isComplete={is_complete}",
+        track_ids.len()
+    );
+
+    let response = serde_json::json!({
+        "trackIds": track_ids,
+        "isComplete": is_complete,
+    });
+
+    serde_json::to_string(&response)
+        .map_err(|e| format!("[yt_get_playlist_track_ids_complete] serialization: {e}"))
 }
 
 /// Get a paginated window of cached playlist tracks, ordered by playlist position.
@@ -1471,6 +1627,46 @@ pub async fn yt_queue_add_next(
     let response = {
         let mut queue = queue.lock().await;
         queue.add_next(video_id)
+    };
+    emit_queue_state_updated(&app, &response.snapshot);
+    Ok(response)
+}
+
+#[tauri::command]
+pub async fn yt_queue_add_collection_next(
+    track_ids: Vec<String>,
+    queue: State<'_, Arc<tokio::sync::Mutex<PlaybackQueue>>>,
+    app: AppHandle,
+) -> Result<QueueCommandResponse, String> {
+    println!(
+        "[yt_queue_add_collection_next] count={} sample={}",
+        track_ids.len(),
+        serde_json::to_string(&track_ids.iter().take(5).cloned().collect::<Vec<_>>())
+            .unwrap_or_else(|_| "[]".to_string())
+    );
+    let response = {
+        let mut queue = queue.lock().await;
+        queue.add_collection_next(track_ids)
+    };
+    emit_queue_state_updated(&app, &response.snapshot);
+    Ok(response)
+}
+
+#[tauri::command]
+pub async fn yt_queue_append_collection(
+    track_ids: Vec<String>,
+    queue: State<'_, Arc<tokio::sync::Mutex<PlaybackQueue>>>,
+    app: AppHandle,
+) -> Result<QueueCommandResponse, String> {
+    println!(
+        "[yt_queue_append_collection] count={} sample={}",
+        track_ids.len(),
+        serde_json::to_string(&track_ids.iter().take(5).cloned().collect::<Vec<_>>())
+            .unwrap_or_else(|_| "[]".to_string())
+    );
+    let response = {
+        let mut queue = queue.lock().await;
+        queue.append_collection(track_ids)
     };
     emit_queue_state_updated(&app, &response.snapshot);
     Ok(response)

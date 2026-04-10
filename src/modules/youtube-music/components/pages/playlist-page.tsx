@@ -1,9 +1,10 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
+import { toast } from "sonner";
 import { CollectionHeader } from "../shared/collection-header";
 import { PlaylistDestructiveDialog } from "../shared/playlist-destructive-dialog";
+import { PlaylistActionsMenu } from "../shared/playlist-actions-menu";
 import { TrackTable } from "../shared/track-table";
 import {
   ytLoadPlaylist,
@@ -14,7 +15,13 @@ import {
 import { usePlayerStore } from "../../stores/player-store";
 import { useTrackLikeStore } from "../../stores/track-like-store";
 import { usePlaylistLibraryStore } from "../../stores/playlist-library-store";
-import { Play, Shuffle, Search, Loader2, Bookmark, Trash2 } from "lucide-react";
+import {
+  Play,
+  Shuffle,
+  Search,
+  Loader2,
+  Bookmark,
+} from "lucide-react";
 import type { PlayAllOptions, Playlist, Track, StackPage } from "../../types/music";
 import type { LoadPlaylistResponse, PlaylistWindowItem } from "../../services/yt-api";
 
@@ -70,6 +77,9 @@ interface PlaylistPageProps {
   onPlayTrack: (track: Track) => void;
   onAddToQueue: (track: Track) => void;
   onAddToPlaylist: (track: Track) => void;
+  onSavePlaylist: (playlistId: string, title: string) => void;
+  onAddPlaylistNext: (tracks: Track[], queueTrackIds: string[]) => Promise<void>;
+  onAppendPlaylistToQueue: (tracks: Track[], queueTrackIds: string[]) => Promise<void>;
   onPlaylistDeleted?: (playlistId: string) => void;
   onPlayAll: (
     tracks: Track[],
@@ -86,6 +96,9 @@ export function PlaylistPage({
   onPlayTrack,
   onAddToQueue,
   onAddToPlaylist,
+  onSavePlaylist,
+  onAddPlaylistNext,
+  onAppendPlaylistToQueue,
   onPlaylistDeleted,
   onPlayAll,
 }: PlaylistPageProps) {
@@ -139,6 +152,93 @@ export function PlaylistPage({
     });
     return snapshot;
   }, [playlist?.tracks?.length, playlistId]);
+
+  const handleSharePlaylist = useCallback(async () => {
+    const url = `https://music.youtube.com/playlist?list=${playlistId}`;
+    console.log(
+      `[PlaylistPage] share playlist click ${JSON.stringify({
+        playlistId,
+        url,
+      })}`
+    );
+    try {
+      await navigator.clipboard.writeText(url);
+      toast.success("Link da playlist copiado.");
+    } catch (error) {
+      console.error("[PlaylistPage] share playlist failed", error);
+      toast.error("Não foi possível copiar o link da playlist.");
+    }
+  }, [playlistId]);
+
+  const handleAddPlaylistNextAction = useCallback(async () => {
+    console.log(
+      `[PlaylistPage] add playlist next click ${JSON.stringify({
+        playlistId,
+        loadedTracks: playlist?.tracks?.length ?? 0,
+        knownTrackIds: trackIdsRef.current.length,
+      })}`
+    );
+    try {
+      const playback = await resolvePlaybackSnapshot();
+      console.log(
+        `[PlaylistPage] add playlist next resolved ${JSON.stringify({
+          playlistId,
+          queueTrackIds: playback.trackIds.length,
+          isComplete: playback.isComplete,
+        })}`
+      );
+      await onAddPlaylistNext(playlist?.tracks ?? [], playback.trackIds);
+      toast.success("Playlist adicionada para tocar a seguir.");
+    } catch (error) {
+      console.error("[PlaylistPage] add playlist next failed", error);
+      toast.error("Não foi possível adicionar a playlist a seguir.");
+    }
+  }, [onAddPlaylistNext, playlist?.tracks, resolvePlaybackSnapshot]);
+
+  const handleShufflePlayAction = useCallback(async () => {
+    console.log(
+      `[PlaylistPage] shuffle play click ${JSON.stringify({
+        playlistId,
+        loadedTracks: playlist?.tracks?.length ?? 0,
+        knownTrackIds: trackIdsRef.current.length,
+      })}`
+    );
+    try {
+      const playback = await resolvePlaybackSnapshot();
+      onPlayAll(playlist?.tracks ?? [], 0, playlistId, playback.isComplete, {
+        queueTrackIds: playback.trackIds,
+        shuffle: true,
+      });
+    } catch (error) {
+      console.error("[PlaylistPage] shuffle play failed", error);
+      toast.error("Não foi possível iniciar a playlist no aleatório.");
+    }
+  }, [onPlayAll, playlist?.tracks, playlistId, resolvePlaybackSnapshot]);
+
+  const handleAppendPlaylistToQueueAction = useCallback(async () => {
+    console.log(
+      `[PlaylistPage] append playlist click ${JSON.stringify({
+        playlistId,
+        loadedTracks: playlist?.tracks?.length ?? 0,
+        knownTrackIds: trackIdsRef.current.length,
+      })}`
+    );
+    try {
+      const playback = await resolvePlaybackSnapshot();
+      console.log(
+        `[PlaylistPage] append playlist resolved ${JSON.stringify({
+          playlistId,
+          queueTrackIds: playback.trackIds.length,
+          isComplete: playback.isComplete,
+        })}`
+      );
+      await onAppendPlaylistToQueue(playlist?.tracks ?? [], playback.trackIds);
+      toast.success("Playlist adicionada ao fim da fila.");
+    } catch (error) {
+      console.error("[PlaylistPage] append playlist to queue failed", error);
+      toast.error("Não foi possível adicionar a playlist à fila.");
+    }
+  }, [onAppendPlaylistToQueue, playlist?.tracks, resolvePlaybackSnapshot]);
 
   useEffect(() => {
     let cancelled = false;
@@ -292,6 +392,36 @@ export function PlaylistPage({
 
   const saved = isSavedPlaylist(playlistId);
   const playlistPending = Boolean(playlistPendingMap[playlistId]);
+  const hasTracksAvailable = trackIdsRef.current.length > 0 || tracks.length > 0;
+  const destructiveLabel = playlist.isOwnedByUser
+    ? "Excluir playlist"
+    : saved
+      ? "Remover playlist"
+      : null;
+
+  const playlistMenuContent = playlist.isSpecial ? undefined : (
+    <PlaylistActionsMenu
+      kind="dropdown"
+      showShuffle={hasTracksAvailable}
+      showPlayNext
+      showAppendQueue
+      showSavePlaylist
+      showShare
+      destructiveLabel={destructiveLabel}
+      disableShuffle={!hasTracksAvailable}
+      disablePlayNext={!hasTracksAvailable}
+      disableAppendQueue={!hasTracksAvailable}
+      disableDestructive={playlistPending}
+      onShufflePlay={() => void handleShufflePlayAction()}
+      onPlayNext={() => void handleAddPlaylistNextAction()}
+      onAppendQueue={() => void handleAppendPlaylistToQueueAction()}
+      onSavePlaylist={() => onSavePlaylist(playlistId, playlist.title)}
+      onShare={() => void handleSharePlaylist()}
+      onDestructive={() =>
+        setDestructiveAction(playlist.isOwnedByUser ? "delete" : "remove")
+      }
+    />
+  );
 
   const headerContent = (
     <div className="space-y-6 p-4">
@@ -365,25 +495,8 @@ export function PlaylistPage({
             </Button>
           ) : undefined
         }
-        menuContent={
-          playlist.isSpecial ? undefined : playlist.isOwnedByUser ? (
-            <DropdownMenuItem
-              onClick={() => setDestructiveAction("delete")}
-              className="text-destructive focus:text-destructive"
-            >
-              <Trash2 className="mr-2 h-4 w-4" />
-              Excluir playlist
-            </DropdownMenuItem>
-          ) : saved ? (
-            <DropdownMenuItem
-              onClick={() => setDestructiveAction("remove")}
-              className="text-destructive focus:text-destructive"
-            >
-              <Trash2 className="mr-2 h-4 w-4" />
-              Remover playlist
-            </DropdownMenuItem>
-          ) : undefined
-        }
+        menuContent={playlistMenuContent}
+        menuContentClassName="w-56"
       />
 
       <div className="relative">

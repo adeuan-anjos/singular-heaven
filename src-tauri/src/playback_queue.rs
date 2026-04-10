@@ -415,33 +415,82 @@ impl PlaybackQueue {
             item_id: self.alloc_item_id(),
             video_id,
         };
-
-        let source_insert_at = self
-            .current_item_id()
-            .and_then(|current_item_id| self.find_source_index(current_item_id))
-            .map(|index| index + 1 + self.queued_next_item_ids.len())
-            .unwrap_or(self.source_items.len());
-
-        self.source_items
-            .insert(source_insert_at.min(self.source_items.len()), entry.clone());
-
-        self.queued_next_item_ids.push(entry.item_id);
-
-        if self.playback_items.is_empty() {
-            self.playback_items.push(entry.clone());
-            self.current_index = Some(0);
-            self.queued_next_item_ids.clear();
-        } else {
-            let playback_insert_at = self
-                .current_index
-                .map(|index| index + self.queued_next_item_ids.len())
-                .unwrap_or(self.playback_items.len());
-            self.playback_items
-                .insert(playback_insert_at.min(self.playback_items.len()), entry);
-        }
+        self.insert_entry_next(entry);
 
         println!(
             "[PlaybackQueue] add_next summary={} upcoming={}",
+            self.debug_summary(),
+            self.debug_upcoming()
+        );
+
+        QueueCommandResponse {
+            track_id: self.current_track_id(),
+            snapshot: self.snapshot(),
+        }
+    }
+
+    pub fn add_collection_next(&mut self, track_ids: Vec<String>) -> QueueCommandResponse {
+        if track_ids.is_empty() {
+            return QueueCommandResponse {
+                track_id: self.current_track_id(),
+                snapshot: self.snapshot(),
+            };
+        }
+
+        self.detach_from_playlist();
+
+        let entries = track_ids
+            .into_iter()
+            .map(|video_id| QueueEntry {
+                item_id: self.alloc_item_id(),
+                video_id,
+            })
+            .collect::<Vec<_>>();
+        self.insert_collection_next(entries);
+
+        println!(
+            "[PlaybackQueue] add_collection_next summary={} upcoming={}",
+            self.debug_summary(),
+            self.debug_upcoming()
+        );
+
+        QueueCommandResponse {
+            track_id: self.current_track_id(),
+            snapshot: self.snapshot(),
+        }
+    }
+
+    pub fn append_collection(&mut self, track_ids: Vec<String>) -> QueueCommandResponse {
+        if track_ids.is_empty() {
+            return QueueCommandResponse {
+                track_id: self.current_track_id(),
+                snapshot: self.snapshot(),
+            };
+        }
+
+        self.detach_from_playlist();
+
+        for video_id in track_ids {
+            let entry = QueueEntry {
+                item_id: self.alloc_item_id(),
+                video_id,
+            };
+            self.source_items.push(entry.clone());
+            if self.shuffle {
+                self.insert_shuffled_future_entry(entry);
+            } else {
+                self.playback_items.push(entry);
+            }
+        }
+
+        if self.current_index.is_none() && !self.playback_items.is_empty() {
+            self.current_index = Some(0);
+        }
+
+        self.prune_state();
+
+        println!(
+            "[PlaybackQueue] append_collection summary={} upcoming={}",
             self.debug_summary(),
             self.debug_upcoming()
         );
@@ -692,6 +741,75 @@ impl PlaybackQueue {
         self.playback_items.insert(insert_at, entry);
     }
 
+    fn insert_entry_next(&mut self, entry: QueueEntry) {
+        let source_insert_at = self
+            .current_item_id()
+            .and_then(|current_item_id| self.find_source_index(current_item_id))
+            .map(|index| index + 1 + self.queued_next_item_ids.len())
+            .unwrap_or(self.source_items.len());
+
+        self.source_items
+            .insert(source_insert_at.min(self.source_items.len()), entry.clone());
+
+        self.queued_next_item_ids.push(entry.item_id);
+
+        if self.playback_items.is_empty() {
+            self.playback_items.push(entry.clone());
+            self.current_index = Some(0);
+            self.queued_next_item_ids.clear();
+        } else {
+            let playback_insert_at = self
+                .current_index
+                .map(|index| index + self.queued_next_item_ids.len())
+                .unwrap_or(self.playback_items.len());
+            self.playback_items
+                .insert(playback_insert_at.min(self.playback_items.len()), entry);
+        }
+
+        self.prune_state();
+    }
+
+    fn insert_collection_next(&mut self, entries: Vec<QueueEntry>) {
+        if entries.is_empty() {
+            return;
+        }
+
+        if self.playback_items.is_empty() {
+            self.source_items.extend(entries.iter().cloned());
+            self.playback_items.extend(entries);
+            self.current_index = Some(0);
+            self.queued_next_item_ids.clear();
+            self.prune_state();
+            return;
+        }
+
+        let source_insert_at = self
+            .current_item_id()
+            .and_then(|current_item_id| self.find_source_index(current_item_id))
+            .map(|index| index + 1)
+            .unwrap_or(self.source_items.len());
+
+        let playback_insert_at = self.current_index.map(|index| index + 1).unwrap_or(0);
+
+        for (offset, entry) in entries.iter().cloned().enumerate() {
+            self.source_items
+                .insert((source_insert_at + offset).min(self.source_items.len()), entry.clone());
+            self.playback_items.insert(
+                (playback_insert_at + offset).min(self.playback_items.len()),
+                entry,
+            );
+        }
+
+        let new_item_ids = entries.iter().map(|entry| entry.item_id).collect::<Vec<_>>();
+        self.queued_next_item_ids.splice(0..0, new_item_ids);
+        self.prune_state();
+    }
+
+    fn detach_from_playlist(&mut self) {
+        self.playlist_id = None;
+        self.is_complete = true;
+    }
+
     fn move_to_index(&mut self, index: usize, push_history: bool) {
         if index >= self.playback_items.len() {
             return;
@@ -932,5 +1050,67 @@ mod tests {
         let response = queue.previous_track();
         assert_eq!(response.track_id.as_deref(), Some("c"));
         assert_eq!(queue.current_index, Some(2));
+    }
+
+    #[test]
+    fn add_collection_next_preserves_priority_after_shuffle_toggle() {
+        let mut queue = PlaybackQueue::default();
+        queue.set_queue(
+            vec!["a".into(), "b".into(), "c".into(), "d".into()],
+            0,
+            Some("p".into()),
+            true,
+            false,
+        );
+
+        queue.add_collection_next(vec!["x".into(), "y".into()]);
+        queue.toggle_shuffle();
+
+        let ids = track_ids(&queue);
+        assert_eq!(ids[0], "a");
+        assert_eq!(ids[1], "x");
+        assert_eq!(ids[2], "y");
+        assert_eq!(queue.playlist_id, None);
+        assert!(queue.is_complete);
+    }
+
+    #[test]
+    fn latest_add_collection_next_takes_priority_over_existing_priority_block() {
+        let mut queue = PlaybackQueue::default();
+        queue.set_queue(vec!["a".into(), "b".into(), "c".into()], 0, None, true, false);
+
+        queue.add_collection_next(vec!["x".into(), "y".into()]);
+        queue.add_collection_next(vec!["m".into(), "n".into()]);
+
+        let ids = track_ids(&queue);
+        assert_eq!(ids[0], "a");
+        assert_eq!(ids[1], "m");
+        assert_eq!(ids[2], "n");
+        assert_eq!(ids[3], "x");
+        assert_eq!(ids[4], "y");
+    }
+
+    #[test]
+    fn append_collection_is_regular_future_when_shuffle_is_enabled() {
+        let mut queue = PlaybackQueue::default();
+        queue.set_queue(
+            vec!["a".into(), "b".into(), "c".into(), "d".into()],
+            0,
+            Some("p".into()),
+            true,
+            false,
+        );
+
+        queue.add_collection_next(vec!["x".into()]);
+        queue.append_collection(vec!["y".into(), "z".into()]);
+        queue.toggle_shuffle();
+
+        let ids = track_ids(&queue);
+        assert_eq!(ids[0], "a");
+        assert_eq!(ids[1], "x");
+        assert!(ids[2..].contains(&"y"));
+        assert!(ids[2..].contains(&"z"));
+        assert_eq!(queue.playlist_id, None);
+        assert!(queue.is_complete);
     }
 }

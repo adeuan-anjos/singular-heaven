@@ -1,12 +1,19 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
+import { createPortal } from "react-dom";
 import { useVirtualizer } from "@tanstack/react-virtual";
+import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import {
   ContextMenu,
   ContextMenuContent,
-  ContextMenuItem,
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { toast } from "sonner";
 import {
   Sidebar,
   SidebarContent,
@@ -19,17 +26,37 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
-import { Home, Compass, Library, Loader2, Plus, Trash2 } from "lucide-react";
+import {
+  Home,
+  Compass,
+  Library,
+  Loader2,
+  Plus,
+  Ellipsis,
+} from "lucide-react";
+import { cn } from "@/lib/utils";
 import { usePlaylistLibraryStore } from "../../stores/playlist-library-store";
 import { thumbUrl } from "../../utils/thumb-url";
 import { CreatePlaylistDialog } from "../shared/create-playlist-dialog";
+import { PlaylistActionsMenu } from "../shared/playlist-actions-menu";
 import { PlaylistDestructiveDialog } from "../shared/playlist-destructive-dialog";
-import type { Playlist } from "../../types/music";
+import { ytGetPlaylistTrackIds, ytLoadPlaylist } from "../../services/yt-api";
+import type { PlayAllOptions, Playlist, Track } from "../../types/music";
 
 interface SidePanelProps {
   activeView: string;
   onViewChange: (view: string) => void;
   onSelectPlaylist: (id: string | null) => void;
+  onPlayAll: (
+    tracks: Track[],
+    startIndex?: number,
+    playlistId?: string,
+    isComplete?: boolean,
+    options?: PlayAllOptions
+  ) => void;
+  onSavePlaylist: (playlistId: string, title: string) => void;
+  onAddPlaylistNext: (tracks: Track[], queueTrackIds: string[]) => Promise<void>;
+  onAppendPlaylistToQueue: (tracks: Track[], queueTrackIds: string[]) => Promise<void>;
   onPlaylistDeleted?: (playlistId: string) => void;
 }
 
@@ -40,6 +67,13 @@ const NAV_ITEMS = [
 ] as const;
 
 const PLAYLIST_ROW_HEIGHT = 48;
+
+type PlaylistHighlightRect = {
+  top: number;
+  left: number;
+  width: number;
+  height: number;
+};
 
 function PlaylistThumbnail({ playlist }: { playlist: Playlist }) {
   const rawThumbUrl = playlist.thumbnails[0]?.url;
@@ -62,10 +96,311 @@ function PlaylistThumbnail({ playlist }: { playlist: Playlist }) {
   );
 }
 
+function buildPlaylistShareUrl(playlistId: string) {
+  return `https://music.youtube.com/playlist?list=${playlistId}`;
+}
+
+function clearPlaylistHighlight(
+  setHighlightedPlaylistId: React.Dispatch<React.SetStateAction<string | null>>,
+  setHighlightRect: React.Dispatch<React.SetStateAction<PlaylistHighlightRect | null>>
+) {
+  setHighlightedPlaylistId(null);
+  setHighlightRect(null);
+}
+
+function SidebarPlaylistRow({
+  playlist,
+  isPending,
+  onClick,
+  highlighted = false,
+  trailingAction,
+  menuAnchor,
+}: {
+  playlist: Playlist;
+  isPending: boolean;
+  onClick?: () => void;
+  highlighted?: boolean;
+  trailingAction?: React.ReactNode;
+  menuAnchor?: React.ReactNode;
+}) {
+  return (
+    <div
+      className={cn(
+        "group/sidebar-playlist-row relative h-full",
+        highlighted &&
+          "rounded-lg bg-background/95 shadow-lg ring-1 ring-border/60 backdrop-blur-sm"
+      )}
+    >
+      {menuAnchor}
+      <SidebarMenuButton
+        onClick={onClick}
+        tone="playlist"
+        size="playlist"
+        className={cn(
+          "h-full",
+          highlighted && "w-max min-w-full",
+          trailingAction ? "pr-10" : highlighted ? "pr-3" : ""
+        )}
+        disabled={isPending}
+      >
+        <PlaylistThumbnail playlist={playlist} />
+        <div className="min-w-0 flex-1">
+          <p
+            className={cn(
+              "text-sm font-medium leading-tight",
+              highlighted ? "whitespace-nowrap" : "truncate"
+            )}
+          >
+            {playlist.title}
+          </p>
+        </div>
+      </SidebarMenuButton>
+      {trailingAction ? (
+        <div className="absolute top-1/2 right-1 -translate-y-1/2">
+          {trailingAction}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function PlaylistActionMenuContent({
+  kind,
+  playlist,
+  isPending,
+  onShufflePlay,
+  onPlayNext,
+  onAppendQueue,
+  onSavePlaylist,
+  onShare,
+  onDestructive,
+}: {
+  kind: "dropdown" | "context";
+  playlist: Playlist;
+  isPending: boolean;
+  onShufflePlay: () => void;
+  onPlayNext: () => void;
+  onAppendQueue: () => void;
+  onSavePlaylist: () => void;
+  onShare: () => void;
+  onDestructive: () => void;
+}) {
+  return (
+    <PlaylistActionsMenu
+      kind={kind}
+      showShuffle
+      showPlayNext
+      showAppendQueue
+      showSavePlaylist
+      showShare
+      destructiveLabel={
+        playlist.isOwnedByUser ? "Excluir playlist" : "Remover playlist"
+      }
+      disableDestructive={isPending}
+      onShufflePlay={onShufflePlay}
+      onPlayNext={onPlayNext}
+      onAppendQueue={onAppendQueue}
+      onSavePlaylist={onSavePlaylist}
+      onShare={onShare}
+      onDestructive={onDestructive}
+    />
+  );
+}
+
+function SidebarPlaylistOverflowButton({
+  playlist,
+  disabled,
+  open,
+  onOpenChange,
+  anchor,
+  children,
+}: {
+  playlist: Playlist;
+  disabled: boolean;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  anchor: HTMLElement | null;
+  children: React.ReactNode;
+}) {
+  return (
+    <DropdownMenu open={open} onOpenChange={onOpenChange}>
+      <DropdownMenuTrigger
+        render={
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            className="opacity-0 group-hover/sidebar-playlist-row:opacity-100 focus-visible:opacity-100 aria-expanded:opacity-100"
+            disabled={disabled}
+            aria-label={`Ações da playlist ${playlist.title}`}
+            aria-expanded={open}
+          />
+        }
+        onClick={(event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          console.log(
+            `[SidePanel] overflow button click ${JSON.stringify({
+              playlistId: playlist.playlistId,
+              title: playlist.title,
+              openBefore: open,
+            })}`
+          );
+        }}
+      >
+        <Ellipsis className="h-4 w-4" />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent
+        anchor={anchor}
+        align="start"
+        side="bottom"
+        sideOffset={8}
+        className="w-56"
+      >
+        {children}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+function SidebarPlaylistMenuAnchor({
+  playlist,
+  isPending,
+  triggerRefCallback,
+  onSelect,
+  onHighlightOpen,
+  onHighlightClose,
+  onShufflePlay,
+  onPlayNext,
+  onAppendQueue,
+  onSavePlaylist,
+  onShare,
+  onDestructive,
+}: {
+  playlist: Playlist;
+  isPending: boolean;
+  triggerRefCallback: (node: HTMLDivElement | null) => void;
+  onSelect: () => void;
+  onHighlightOpen: () => void;
+  onHighlightClose: () => void;
+  onShufflePlay: () => void;
+  onPlayNext: () => void;
+  onAppendQueue: () => void;
+  onSavePlaylist: () => void;
+  onShare: () => void;
+  onDestructive: () => void;
+}) {
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+  const rowRef = useRef<HTMLDivElement | null>(null);
+
+  const setRowRef = useCallback(
+    (node: HTMLDivElement | null) => {
+      rowRef.current = node;
+      triggerRefCallback(node);
+    },
+    [triggerRefCallback]
+  );
+
+  const handleDropdownOpenChange = useCallback(
+    (open: boolean) => {
+      console.log(
+        `[SidePanel] dropdown menu open ${JSON.stringify({
+          playlistId: playlist.playlistId,
+          title: playlist.title,
+          open,
+        })}`
+      );
+      setDropdownOpen(open);
+      if (open) {
+        onHighlightOpen();
+      } else {
+        onHighlightClose();
+      }
+    },
+    [onHighlightClose, onHighlightOpen, playlist.playlistId, playlist.title]
+  );
+
+  const handleContextOpenChange = useCallback(
+    (open: boolean) => {
+      console.log(
+        `[SidePanel] context menu open ${JSON.stringify({
+          playlistId: playlist.playlistId,
+          title: playlist.title,
+          open,
+        })}`
+      );
+      if (open) {
+        setDropdownOpen(false);
+        onHighlightOpen();
+      } else {
+        onHighlightClose();
+      }
+    },
+    [onHighlightClose, onHighlightOpen, playlist.playlistId, playlist.title]
+  );
+
+  const playlistActions = (
+    <PlaylistActionMenuContent
+      kind="dropdown"
+      playlist={playlist}
+      isPending={isPending}
+      onShufflePlay={onShufflePlay}
+      onPlayNext={onPlayNext}
+      onAppendQueue={onAppendQueue}
+      onSavePlaylist={onSavePlaylist}
+      onShare={onShare}
+      onDestructive={onDestructive}
+    />
+  );
+
+  return (
+    <ContextMenu onOpenChange={handleContextOpenChange}>
+      <ContextMenuTrigger ref={setRowRef} className="block h-full">
+        <SidebarPlaylistRow
+          playlist={playlist}
+          isPending={isPending}
+          onClick={onSelect}
+          trailingAction={
+            !playlist.isSpecial ? (
+              <SidebarPlaylistOverflowButton
+                playlist={playlist}
+                disabled={isPending}
+                open={dropdownOpen}
+                onOpenChange={handleDropdownOpenChange}
+                anchor={rowRef.current}
+              >
+                {playlistActions}
+              </SidebarPlaylistOverflowButton>
+            ) : undefined
+          }
+        />
+      </ContextMenuTrigger>
+      {!playlist.isSpecial ? (
+        <ContextMenuContent className="w-56">
+          <PlaylistActionMenuContent
+            kind="context"
+            playlist={playlist}
+            isPending={isPending}
+            onShufflePlay={onShufflePlay}
+            onPlayNext={onPlayNext}
+            onAppendQueue={onAppendQueue}
+            onSavePlaylist={onSavePlaylist}
+            onShare={onShare}
+            onDestructive={onDestructive}
+          />
+        </ContextMenuContent>
+      ) : null}
+    </ContextMenu>
+  );
+}
+
 export function SidePanel({
   activeView,
   onViewChange,
   onSelectPlaylist,
+  onPlayAll,
+  onSavePlaylist,
+  onAddPlaylistNext,
+  onAppendPlaylistToQueue,
   onPlaylistDeleted,
 }: SidePanelProps) {
   const playlists = usePlaylistLibraryStore((s) => s.sidebarPlaylists);
@@ -78,9 +413,73 @@ export function SidePanel({
 
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [targetPlaylist, setTargetPlaylist] = useState<Playlist | null>(null);
+  const [highlightedPlaylistId, setHighlightedPlaylistId] = useState<string | null>(null);
+  const [highlightRect, setHighlightRect] = useState<PlaylistHighlightRect | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const triggerRefs = useRef(new Map<string, HTMLDivElement | null>());
   const lastVisibleRangeRef = useRef<string>("");
   const lastSidebarStateRef = useRef<string>("");
+
+  const resolvePlaylistPlayback = useCallback(async (playlist: Playlist) => {
+    console.log(
+      `[SidePanel] resolve playlist playback ${JSON.stringify({
+        playlistId: playlist.playlistId,
+        title: playlist.title,
+      })}`
+    );
+    const [loaded, playback] = await Promise.all([
+      ytLoadPlaylist(playlist.playlistId),
+      ytGetPlaylistTrackIds(playlist.playlistId),
+    ]);
+    console.log(
+      `[SidePanel] resolve playlist playback done ${JSON.stringify({
+        playlistId: playlist.playlistId,
+        loadedTracks: loaded.tracks.length,
+        queueTrackIds: playback.trackIds.length,
+        isComplete: playback.isComplete,
+      })}`
+    );
+    return {
+      tracks: loaded.tracks,
+      queueTrackIds: playback.trackIds,
+      isComplete: playback.isComplete,
+    };
+  }, []);
+
+  const syncHighlightForPlaylist = useCallback((playlistId: string) => {
+    const element = triggerRefs.current.get(playlistId);
+    if (!element) {
+      clearPlaylistHighlight(setHighlightedPlaylistId, setHighlightRect);
+      return;
+    }
+
+    const rect = element.getBoundingClientRect();
+    setHighlightedPlaylistId(playlistId);
+    setHighlightRect({
+      top: rect.top,
+      left: rect.left,
+      width: rect.width,
+      height: rect.height,
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!highlightedPlaylistId) return;
+
+    const sync = () => {
+      syncHighlightForPlaylist(highlightedPlaylistId);
+    };
+
+    sync();
+    window.addEventListener("resize", sync);
+    const scrollElement = scrollRef.current;
+    scrollElement?.addEventListener("scroll", sync, { passive: true });
+
+    return () => {
+      window.removeEventListener("resize", sync);
+      scrollElement?.removeEventListener("scroll", sync);
+    };
+  }, [highlightedPlaylistId, syncHighlightForPlaylist]);
 
   useEffect(() => {
     void hydrate(false, "sidebar-open");
@@ -120,6 +519,132 @@ export function SidePanel({
     lastVisibleRangeRef.current = snapshot;
     console.log(`[SidePanel] virtual range ${snapshot}`);
   }, [playlists.length, visibleEnd, visibleStart, virtualItems.length]);
+
+  const handlePlaylistShufflePlay = useCallback(
+    (playlist: Playlist) => {
+      console.log(
+        `[SidePanel] playlist action ${JSON.stringify({
+          playlistId: playlist.playlistId,
+          title: playlist.title,
+          action: "shuffle-play",
+        })}`
+      );
+      void resolvePlaylistPlayback(playlist)
+        .then((playback) => {
+          onPlayAll(playback.tracks, 0, playlist.playlistId, playback.isComplete, {
+            queueTrackIds: playback.queueTrackIds,
+            shuffle: true,
+          });
+        })
+        .catch((error) => {
+          console.error("[SidePanel] shuffle play failed", error);
+          toast.error("Não foi possível iniciar a playlist no aleatório.");
+        });
+    },
+    [onPlayAll, resolvePlaylistPlayback]
+  );
+
+  const handlePlaylistPlayNext = useCallback(
+    (playlist: Playlist) => {
+      console.log(
+        `[SidePanel] playlist action ${JSON.stringify({
+          playlistId: playlist.playlistId,
+          title: playlist.title,
+          action: "play-next",
+        })}`
+      );
+      void resolvePlaylistPlayback(playlist)
+        .then((playback) =>
+          onAddPlaylistNext(playback.tracks, playback.queueTrackIds)
+        )
+        .then(() => {
+          toast.success("Playlist adicionada para tocar a seguir.");
+        })
+        .catch((error) => {
+          console.error("[SidePanel] add playlist next failed", error);
+          toast.error("Não foi possível adicionar a playlist a seguir.");
+        });
+    },
+    [onAddPlaylistNext, resolvePlaylistPlayback]
+  );
+
+  const handlePlaylistAppendQueue = useCallback(
+    (playlist: Playlist) => {
+      console.log(
+        `[SidePanel] playlist action ${JSON.stringify({
+          playlistId: playlist.playlistId,
+          title: playlist.title,
+          action: "append-queue",
+        })}`
+      );
+      void resolvePlaylistPlayback(playlist)
+        .then((playback) =>
+          onAppendPlaylistToQueue(playback.tracks, playback.queueTrackIds)
+        )
+        .then(() => {
+          toast.success("Playlist adicionada ao fim da fila.");
+        })
+        .catch((error) => {
+          console.error("[SidePanel] append playlist to queue failed", error);
+          toast.error("Não foi possível adicionar a playlist à fila.");
+        });
+    },
+    [onAppendPlaylistToQueue, resolvePlaylistPlayback]
+  );
+
+  const handlePlaylistSave = useCallback(
+    (playlist: Playlist) => {
+      console.log(
+        `[SidePanel] playlist action ${JSON.stringify({
+          playlistId: playlist.playlistId,
+          title: playlist.title,
+          action: "save-playlist",
+        })}`
+      );
+      onSavePlaylist(playlist.playlistId, playlist.title);
+    },
+    [onSavePlaylist]
+  );
+
+  const handlePlaylistShare = useCallback((playlist: Playlist) => {
+    const url = buildPlaylistShareUrl(playlist.playlistId);
+    console.log(
+      `[SidePanel] playlist action ${JSON.stringify({
+        playlistId: playlist.playlistId,
+        title: playlist.title,
+        action: "share",
+        url,
+      })}`
+    );
+    void navigator.clipboard
+      .writeText(url)
+      .then(() => {
+        toast.success("Link da playlist copiado.");
+      })
+      .catch((error) => {
+        console.error("[SidePanel] share playlist failed", error);
+        toast.error("Não foi possível copiar o link da playlist.");
+      });
+  }, []);
+
+  const handlePlaylistDestructive = useCallback((playlist: Playlist) => {
+    console.log(
+      `[SidePanel] playlist action ${JSON.stringify({
+        playlistId: playlist.playlistId,
+        title: playlist.title,
+        action: playlist.isOwnedByUser ? "delete" : "remove",
+      })}`
+    );
+    setTargetPlaylist(playlist);
+  }, []);
+
+  const highlightedPlaylist =
+    highlightedPlaylistId != null
+      ? playlists.find((playlist) => playlist.playlistId === highlightedPlaylistId) ?? null
+      : null;
+  const highlightedPlaylistPending = highlightedPlaylist
+    ? Boolean(pending[highlightedPlaylist.playlistId])
+    : false;
 
   return (
     <>
@@ -180,7 +705,7 @@ export function SidePanel({
                 <SidebarMenu
                   style={{ height: virtualizer.getTotalSize(), position: "relative" }}
                 >
-                  {virtualizer.getVirtualItems().map((vItem) => {
+                  {virtualItems.map((vItem) => {
                     const playlist = playlists[vItem.index];
                     const isPending = Boolean(pending[playlist.playlistId]);
 
@@ -196,55 +721,46 @@ export function SidePanel({
                           transform: `translateY(${vItem.start}px)`,
                         }}
                       >
-                        <ContextMenu>
-                          <ContextMenuTrigger className="block h-full">
-                            <SidebarMenuButton
-                              onClick={() => {
-                                console.log(
-                                  `[SidePanel] playlist click ${JSON.stringify({
-                                    playlistId: playlist.playlistId,
-                                    title: playlist.title,
-                                    index: vItem.index,
-                                  })}`
-                                );
-                                onSelectPlaylist(playlist.playlistId);
-                              }}
-                              tone="playlist"
-                              size="playlist"
-                              className="h-full"
-                              disabled={isPending}
-                            >
-                              <PlaylistThumbnail playlist={playlist} />
-                              <div className="min-w-0 flex-1">
-                                <p className="truncate text-sm font-medium leading-tight">
-                                  {playlist.title}
-                                </p>
-                              </div>
-                            </SidebarMenuButton>
-                          </ContextMenuTrigger>
-                          {!playlist.isSpecial ? (
-                            <ContextMenuContent>
-                              <ContextMenuItem
-                                onClick={() => {
-                                  console.log(
-                                    `[SidePanel] context action ${JSON.stringify({
-                                      playlistId: playlist.playlistId,
-                                      title: playlist.title,
-                                      action: playlist.isOwnedByUser
-                                        ? "delete"
-                                        : "remove",
-                                    })}`
-                                  );
-                                  setTargetPlaylist(playlist);
-                                }}
-                                variant="destructive"
-                              >
-                                <Trash2 className="mr-2 h-4 w-4" />
-                                {playlist.isOwnedByUser ? "Excluir playlist" : "Remover playlist"}
-                              </ContextMenuItem>
-                            </ContextMenuContent>
-                          ) : null}
-                        </ContextMenu>
+                        <SidebarPlaylistMenuAnchor
+                          playlist={playlist}
+                          isPending={isPending}
+                          triggerRefCallback={(node) => {
+                            if (node) {
+                              triggerRefs.current.set(playlist.playlistId, node);
+                            } else {
+                              triggerRefs.current.delete(playlist.playlistId);
+                            }
+                          }}
+                          onSelect={() => {
+                            console.log(
+                              `[SidePanel] playlist click ${JSON.stringify({
+                                playlistId: playlist.playlistId,
+                                title: playlist.title,
+                                index: vItem.index,
+                              })}`
+                            );
+                            onSelectPlaylist(playlist.playlistId);
+                          }}
+                          onHighlightOpen={() =>
+                            syncHighlightForPlaylist(playlist.playlistId)
+                          }
+                          onHighlightClose={() =>
+                            clearPlaylistHighlight(
+                              setHighlightedPlaylistId,
+                              setHighlightRect
+                            )
+                          }
+                          onShufflePlay={() => handlePlaylistShufflePlay(playlist)}
+                          onPlayNext={() => handlePlaylistPlayNext(playlist)}
+                          onAppendQueue={() =>
+                            handlePlaylistAppendQueue(playlist)
+                          }
+                          onSavePlaylist={() => handlePlaylistSave(playlist)}
+                          onShare={() => handlePlaylistShare(playlist)}
+                          onDestructive={() =>
+                            handlePlaylistDestructive(playlist)
+                          }
+                        />
                       </SidebarMenuItem>
                     );
                   })}
@@ -289,6 +805,29 @@ export function SidePanel({
           setTargetPlaylist(null);
         }}
       />
+
+      {highlightedPlaylist && highlightRect && typeof document !== "undefined"
+        ? createPortal(
+            <div
+              className="pointer-events-none fixed z-[45]"
+              style={{
+                top: highlightRect.top,
+                left: highlightRect.left,
+                width: "max-content",
+                minWidth: highlightRect.width,
+                maxWidth: `calc(100vw - ${Math.round(highlightRect.left) + 16}px)`,
+                height: highlightRect.height,
+              }}
+            >
+              <SidebarPlaylistRow
+                playlist={highlightedPlaylist}
+                isPending={highlightedPlaylistPending}
+                highlighted
+              />
+            </div>,
+            document.body
+          )
+        : null}
     </>
   );
 }

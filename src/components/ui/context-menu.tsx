@@ -21,7 +21,21 @@ function ContextMenuTrigger({
   return (
     <ContextMenuPrimitive.Trigger
       data-slot="context-menu-trigger"
-      className={cn("select-none", className)}
+      className={
+        typeof className === "function"
+          ? (state) =>
+              cn(
+                "relative select-none",
+                state.open ? "z-[60]" : "z-0",
+                className(state)
+              )
+          : (state) =>
+              cn(
+                "relative select-none",
+                state.open ? "z-[60]" : "z-0",
+                className
+              )
+      }
       {...props}
     />
   )
@@ -41,6 +55,9 @@ function ContextMenuContent({
   >) {
   return (
     <ContextMenuPrimitive.Portal>
+      <ContextMenuPrimitive.Backdrop
+        className="fixed inset-0 z-40 bg-black/5 supports-backdrop-filter:backdrop-blur-xs"
+      />
       <ContextMenuPrimitive.Positioner
         className="isolate z-50 outline-none"
         align={align}
@@ -76,7 +93,7 @@ function ContextMenuLabel({
       data-slot="context-menu-label"
       data-inset={inset}
       className={cn(
-        "px-1.5 py-1 text-xs font-medium text-muted-foreground data-inset:pl-7",
+        "whitespace-nowrap px-1.5 py-1 text-xs font-medium text-muted-foreground data-inset:pl-7",
         className
       )}
       {...props}
@@ -99,7 +116,7 @@ function ContextMenuItem({
       data-inset={inset}
       data-variant={variant}
       className={cn(
-        "group/context-menu-item relative flex cursor-default items-center gap-1.5 rounded-md px-1.5 py-1 text-sm outline-hidden select-none focus:bg-accent focus:text-accent-foreground data-inset:pl-7 data-[variant=destructive]:text-destructive data-[variant=destructive]:focus:bg-destructive/10 data-[variant=destructive]:focus:text-destructive dark:data-[variant=destructive]:focus:bg-destructive/20 data-disabled:pointer-events-none data-disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 focus:*:[svg]:text-accent-foreground data-[variant=destructive]:*:[svg]:text-destructive",
+        "group/context-menu-item relative flex cursor-default items-center gap-1.5 whitespace-nowrap rounded-md px-1.5 py-1 text-sm outline-hidden select-none focus:bg-accent focus:text-accent-foreground data-inset:pl-7 data-[variant=destructive]:text-destructive data-[variant=destructive]:focus:bg-destructive/10 data-[variant=destructive]:focus:text-destructive dark:data-[variant=destructive]:focus:bg-destructive/20 data-disabled:pointer-events-none data-disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 focus:*:[svg]:text-accent-foreground data-[variant=destructive]:*:[svg]:text-destructive",
         className
       )}
       {...props}
@@ -126,7 +143,7 @@ function ContextMenuSubTrigger({
       data-slot="context-menu-sub-trigger"
       data-inset={inset}
       className={cn(
-        "flex cursor-default items-center gap-1.5 rounded-md px-1.5 py-1 text-sm outline-hidden select-none focus:bg-accent focus:text-accent-foreground data-inset:pl-7 data-open:bg-accent data-open:text-accent-foreground [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+        "flex cursor-default items-center gap-1.5 whitespace-nowrap rounded-md px-1.5 py-1 text-sm outline-hidden select-none focus:bg-accent focus:text-accent-foreground data-inset:pl-7 data-open:bg-accent data-open:text-accent-foreground [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
         className
       )}
       {...props}

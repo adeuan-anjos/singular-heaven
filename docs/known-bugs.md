@@ -18,6 +18,29 @@ Lista de bugs e dívidas técnicas já observados no projeto e deixados para cor
 - Hipótese:
   - Algum item vindo da Home está sendo enviado para `yt_cache_collection_snapshot` com shape incompatível com `Track`, provavelmente sem `videoId` válido.
 
+### Playback trava quando a queue encontra vídeo indisponível
+
+- Sintoma:
+  - No log aparece `playabilityStatus=UNPLAYABLE` seguido de `Video not playable: O vídeo não está disponível`.
+  - Exemplo real observado:
+    - `fetch_audio_bytes` inicia normalmente
+    - `get_stream_url` retorna `UNPLAYABLE`
+    - o stream falha para aquele `videoId`
+- Impacto:
+  - A reprodução pode parar no meio da queue quando encontra uma faixa indisponível.
+  - A experiência correta deveria ser resiliente: pular a faixa indisponível, avançar para a próxima e informar o usuário sem travar o player.
+- Área afetada:
+  - [client.rs](/./src-tauri/src/youtube_music/client.rs)
+  - [player-store.ts](/./src/modules/youtube-music/stores/player-store.ts)
+  - [playback_queue.rs](/./src-tauri/src/playback_queue.rs)
+  - pipeline `stream://`
+- Observação:
+  - Isso precisa de tratamento explícito para vídeos não disponíveis dentro da queue:
+    - detectar falha de stream/playability
+    - avançar automaticamente para a próxima faixa
+    - evitar loop em sequência de faixas indisponíveis
+    - idealmente mostrar feedback curto ao usuário
+
 ## Média prioridade
 
 ### CollectionHeader de artista ainda usa like local/fake
@@ -32,6 +55,24 @@ Lista de bugs e dívidas técnicas já observados no projeto e deixados para cor
   - [collection-header.tsx](/./src/modules/youtube-music/components/shared/collection-header.tsx)
 - Observação:
   - Isso é deliberadamente separado do coração de track. Precisa decidir a semântica antes de implementar.
+
+### Ações avançadas de playlist ainda não implementadas
+
+- Sintoma:
+  - O menu de playlist do YouTube Music oferece ações que o app ainda não cobre por completo.
+- Impacto:
+  - A gestão de playlists no app ainda não alcança a paridade funcional esperada.
+- Área afetada:
+  - [playlist-page.tsx](/./src/modules/youtube-music/components/pages/playlist-page.tsx)
+  - [collection-header.tsx](/./src/modules/youtube-music/components/shared/collection-header.tsx)
+  - [playback_queue.rs](/./src-tauri/src/playback_queue.rs)
+  - [watch.rs](/./crates/ytmusic-api/src/api/watch.rs)
+- Pendências conhecidas:
+  - `Iniciar rádio` a partir de playlist
+  - `Fixar em "Ouvir de novo"`
+  - `Baixar` como feature dedicada
+- Observação:
+  - `Salvar na playlist`, `Compartilhar`, `Aleatório`, `Tocar a seguir` e `Adicionar à fila` já estão no fluxo principal.
 
 ### Logs de debug ainda misturam payload útil com `Object`
 

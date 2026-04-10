@@ -12,11 +12,13 @@ O formato segue o espírito de [Keep a Changelog](https://keepachangelog.com/), 
 - Gestão backend-first de playlists: salvar/remover da biblioteca, criar/excluir playlist, adicionar/remover músicas.
 - Sidebar de playlists baseada no `guide` do YouTube Music para refletir a ordem real do produto.
 - Documentação específica da sidebar e das regras de composição com shadcn + virtualização.
+- Referência de composição de menus shadcn/Base UI com blur, highlight e ancoragem em listas virtualizadas.
 
 ### Changed
 
 - Queue e playback agora têm semântica global consistente de `shuffle`, `repeat`, `next`, `previous` e `add next`.
 - Coleções reproduzíveis deixaram de depender de arrays locais como fonte de verdade.
+- Menus de playlist foram refinados para usar blur global, highlight do item alvo e regras explícitas de `DropdownMenu` vs `ContextMenu`.
 
 ### Docs
 

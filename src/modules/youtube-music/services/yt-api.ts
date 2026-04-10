@@ -540,6 +540,13 @@ export async function ytGetPlaylistTrackIds(playlistId: string): Promise<Playlis
   return parseJson(json);
 }
 
+export async function ytGetPlaylistTrackIdsComplete(
+  playlistId: string
+): Promise<PlaylistTrackIdsResponse> {
+  const json = await invoke<string>("yt_get_playlist_track_ids_complete", { playlistId });
+  return parseJson(json);
+}
+
 export interface PlaylistWindowItem extends Track {
   position: number;
 }
@@ -701,6 +708,18 @@ export async function ytQueueHandleTrackEnd(): Promise<QueueCommandResponse> {
 
 export async function ytQueueAddNext(videoId: string): Promise<QueueCommandResponse> {
   return invoke<QueueCommandResponse>("yt_queue_add_next", { videoId });
+}
+
+export async function ytQueueAddCollectionNext(
+  trackIds: string[]
+): Promise<QueueCommandResponse> {
+  return invoke<QueueCommandResponse>("yt_queue_add_collection_next", { trackIds });
+}
+
+export async function ytQueueAppendCollection(
+  trackIds: string[]
+): Promise<QueueCommandResponse> {
+  return invoke<QueueCommandResponse>("yt_queue_append_collection", { trackIds });
 }
 
 export async function ytQueueRemove(index: number): Promise<QueueCommandResponse> {

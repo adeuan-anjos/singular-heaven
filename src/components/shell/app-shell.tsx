@@ -1,4 +1,5 @@
 import { useActiveModule } from "@/hooks/use-active-module";
+import { Toaster } from "@/components/ui/sonner";
 import { Sidebar } from "./sidebar";
 import { ModuleHost } from "./module-host";
 
@@ -13,6 +14,7 @@ export function AppShell() {
         onModuleSelect={switchModule}
       />
       <ModuleHost activeModule={activeModule} />
+      <Toaster />
     </div>
   );
 }

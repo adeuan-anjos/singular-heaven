@@ -32,6 +32,12 @@ Toda mudança relevante deve atualizar pelo menos um destes:
 - doc temática em `explanation/` ou `reference/`
 - `known-bugs.md`
 
+Mudança de design recorrente também conta como mudança relevante quando ela gera:
+
+- nova regra de composição
+- novo invariant visual
+- decisão de como usar primitives do sistema
+
 ## Quando criar ou atualizar uma ADR
 
 Crie ou atualize ADR quando houver decisão como:
@@ -77,16 +83,26 @@ Para mudanças feitas em sessões rápidas ou longas:
 - toda regra não óbvia deve ir para doc ou ADR
 - se algo ainda não ficou bom, documentar em `known-bugs.md`
 - se um fluxo virou “oficial”, documentar em `explanation/` e `reference/`
+- se uma correção de UI ensinou “o que não fazer”, registrar isso em `reference/`
 
 ## Estilo de escrita
 
 - usar frases diretas
 - evitar narrativa de conversa
-- separar claramente:
-  - o que é regra atual
-  - o que é exceção
-  - o que é pendência
+- separar claramente o que é:
+  - regra atual
+  - exceção
+  - pendência
 - preferir linkar outra doc a duplicar conteúdo
+
+## Quando criar uma doc de design/reference
+
+Criar ou atualizar doc de `reference/` quando a equipe aprender algo como:
+
+- qual primitive de shadcn/Base UI é a correta para um gesto
+- em que camada um ajuste visual deve acontecer
+- qual workaround foi descartado e por quê
+- quais invariantes de overlay, spacing, blur ou anchor precisam ser preservados
 
 ## Checklist antes de encerrar uma feature
 

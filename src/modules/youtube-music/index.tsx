@@ -17,6 +17,7 @@ import { PlaylistPage } from "./components/pages/playlist-page";
 import { QueueSheet } from "./components/queue/queue-sheet";
 import { SearchResultsPage } from "./components/search/search-results-page";
 import { AddToPlaylistDialog } from "./components/shared/add-to-playlist-dialog";
+import { SavePlaylistDialog } from "./components/shared/save-playlist-dialog";
 import { useNavigation } from "./hooks/use-navigation";
 import { usePlayerStore } from "./stores/player-store";
 import { useQueueStore } from "./stores/queue-store";
@@ -37,13 +38,20 @@ export default function YouTubeMusicModule() {
   const [activeTab, setActiveTab] = useState("home");
   const [queueOpen, setQueueOpen] = useState(false);
   const [playlistDialogTrack, setPlaylistDialogTrack] = useState<Track | null>(null);
+  const [savePlaylistDialog, setSavePlaylistDialog] = useState<{
+    playlistId: string;
+    title: string;
+  } | null>(null);
   const queueOpenRef = useRef(queueOpen);
   const nav = useNavigation();
 
   const playerPlay = usePlayerStore((s) => s.play);
+  const playerCurrentTrackId = usePlayerStore((s) => s.currentTrackId);
   const playerCleanup = usePlayerStore((s) => s.cleanup);
   const queueSetQueue = useQueueStore((s) => s.setQueue);
   const queueAddNext = useQueueStore((s) => s.addNext);
+  const queueAddCollectionNext = useQueueStore((s) => s.addCollectionNext);
+  const queueAppendCollection = useQueueStore((s) => s.appendCollection);
   const queueCleanup = useQueueStore((s) => s.cleanup);
   const queueHydrate = useQueueStore((s) => s.hydrate);
   const queueSyncSnapshot = useQueueStore((s) => s.syncSnapshot);
@@ -287,6 +295,104 @@ export default function YouTubeMusicModule() {
     setPlaylistDialogTrack(track);
   }, []);
 
+  const handleSavePlaylist = useCallback((playlistId: string, title: string) => {
+    console.log(
+      `[YouTubeMusicModule] handleSavePlaylist ${JSON.stringify({
+        playlistId,
+        title,
+      })}`
+    );
+    setSavePlaylistDialog({ playlistId, title });
+  }, []);
+
+  const handleAddPlaylistNext = useCallback(
+    async (tracks: Track[], queueTrackIds: string[]) => {
+      console.log(
+        `[YouTubeMusicModule] handleAddPlaylistNext ${JSON.stringify({
+          loadedTracks: tracks.length,
+          queueTrackIds: queueTrackIds.length,
+          firstTrackId: queueTrackIds[0] ?? null,
+          lastTrackId: queueTrackIds[queueTrackIds.length - 1] ?? null,
+        })}`
+      );
+      if (tracks.length > 0) {
+        trackCachePut(tracks);
+      }
+      const queueTrackId = await queueAddCollectionNext(queueTrackIds);
+      if (!playerCurrentTrackId) {
+        const targetTrackId = queueTrackId ?? queueTrackIds[0] ?? null;
+        if (targetTrackId) {
+          if (!useTrackCacheStore.getState().getTrack(targetTrackId)) {
+            try {
+              const resolvedTracks = await ytGetCachedTracks([targetTrackId]);
+              if (resolvedTracks.length > 0) {
+                trackCachePut(resolvedTracks);
+              }
+            } catch (error) {
+              console.error(
+                "[YouTubeMusicModule] failed to resolve track for idle add-next playback",
+                error
+              );
+            }
+          }
+
+          console.log(
+            `[YouTubeMusicModule] booting player from add-next ${JSON.stringify({
+              targetTrackId,
+              source: queueTrackId ? "queue" : "fallback",
+            })}`
+          );
+          playerPlay(targetTrackId);
+        }
+      }
+    },
+    [playerCurrentTrackId, playerPlay, queueAddCollectionNext, trackCachePut]
+  );
+
+  const handleAppendPlaylistToQueue = useCallback(
+    async (tracks: Track[], queueTrackIds: string[]) => {
+      console.log(
+        `[YouTubeMusicModule] handleAppendPlaylistToQueue ${JSON.stringify({
+          loadedTracks: tracks.length,
+          queueTrackIds: queueTrackIds.length,
+          firstTrackId: queueTrackIds[0] ?? null,
+          lastTrackId: queueTrackIds[queueTrackIds.length - 1] ?? null,
+        })}`
+      );
+      if (tracks.length > 0) {
+        trackCachePut(tracks);
+      }
+      const queueTrackId = await queueAppendCollection(queueTrackIds);
+      if (!playerCurrentTrackId) {
+        const targetTrackId = queueTrackId ?? queueTrackIds[0] ?? null;
+        if (targetTrackId) {
+          if (!useTrackCacheStore.getState().getTrack(targetTrackId)) {
+            try {
+              const resolvedTracks = await ytGetCachedTracks([targetTrackId]);
+              if (resolvedTracks.length > 0) {
+                trackCachePut(resolvedTracks);
+              }
+            } catch (error) {
+              console.error(
+                "[YouTubeMusicModule] failed to resolve track for idle append playback",
+                error
+              );
+            }
+          }
+
+          console.log(
+            `[YouTubeMusicModule] booting player from append ${JSON.stringify({
+              targetTrackId,
+              source: queueTrackId ? "queue" : "fallback",
+            })}`
+          );
+          playerPlay(targetTrackId);
+        }
+      }
+    },
+    [playerCurrentTrackId, playerPlay, queueAppendCollection, trackCachePut]
+  );
+
   const handleOpenQueue = useCallback(() => setQueueOpen(true), []);
 
   const handleGoToArtist = useCallback((id: string) => {
@@ -369,6 +475,9 @@ export default function YouTubeMusicModule() {
               onPlayTrack={handlePlayTrack}
               onAddToQueue={handleAddToQueue}
               onAddToPlaylist={handleAddToPlaylist}
+              onSavePlaylist={handleSavePlaylist}
+              onAddPlaylistNext={handleAddPlaylistNext}
+              onAppendPlaylistToQueue={handleAppendPlaylistToQueue}
               onPlaylistDeleted={handlePlaylistDeleted}
               onPlayAll={handlePlayAll}
             />
@@ -473,12 +582,16 @@ export default function YouTubeMusicModule() {
 
         {/* Main area */}
         <div className="flex min-h-0 flex-1">
-          <SidePanel
-            activeView={activeTab}
-            onViewChange={handleViewChange}
-            onSelectPlaylist={handleSelectPlaylist}
-            onPlaylistDeleted={handlePlaylistDeleted}
-          />
+        <SidePanel
+          activeView={activeTab}
+          onViewChange={handleViewChange}
+          onSelectPlaylist={handleSelectPlaylist}
+          onPlayAll={handlePlayAll}
+          onSavePlaylist={handleSavePlaylist}
+          onAddPlaylistNext={handleAddPlaylistNext}
+          onAppendPlaylistToQueue={handleAppendPlaylistToQueue}
+          onPlaylistDeleted={handlePlaylistDeleted}
+        />
           <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
             {renderContent()}
           </div>
@@ -501,6 +614,15 @@ export default function YouTubeMusicModule() {
             if (!open) setPlaylistDialogTrack(null);
           }}
           track={playlistDialogTrack}
+        />
+
+        <SavePlaylistDialog
+          open={savePlaylistDialog !== null}
+          onOpenChange={(open) => {
+            if (!open) setSavePlaylistDialog(null);
+          }}
+          sourcePlaylistId={savePlaylistDialog?.playlistId ?? null}
+          sourcePlaylistTitle={savePlaylistDialog?.title ?? null}
         />
       </div>
     </TooltipProvider>
