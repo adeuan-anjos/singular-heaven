@@ -28,6 +28,8 @@ pub const ENDPOINT_GET_QUEUE: &str = "music/get_queue";
 pub const ENDPOINT_PLAYLIST_CREATE: &str = "playlist/create";
 pub const ENDPOINT_PLAYLIST_DELETE: &str = "playlist/delete";
 pub const ENDPOINT_PLAYLIST_EDIT: &str = "browse/edit_playlist";
+pub const PLAYLIST_THUMBNAIL_UPLOAD_URL: &str =
+    "https://music.youtube.com/playlist_image_upload/playlist_custom_thumbnail";
 
 // ---------------------------------------------------------------------------
 // Android VR client — for streaming URLs (no PO token required)

@@ -25,6 +25,8 @@ pub struct CachedPlaylistMeta {
     pub title: String,
     pub author_name: Option<String>,
     pub author_id: Option<String>,
+    pub description: Option<String>,
+    pub privacy_status: Option<String>,
     pub track_count: Option<String>,
     pub thumbnail_url: Option<String>,
     pub is_owned_by_user: bool,
@@ -102,6 +104,8 @@ impl PlaylistCache {
                  title TEXT NOT NULL,
                  author_name TEXT,
                  author_id TEXT,
+                 description TEXT,
+                 privacy_status TEXT,
                  track_count TEXT,
                  thumbnail_url TEXT,
                  is_owned_by_user INTEGER DEFAULT 0,
@@ -171,6 +175,8 @@ impl PlaylistCache {
         }
 
         for (table, column, sql_type) in [
+            ("playlist_meta", "description", "TEXT"),
+            ("playlist_meta", "privacy_status", "TEXT"),
             ("playlist_meta", "is_owned_by_user", "INTEGER DEFAULT 0"),
             ("playlist_meta", "is_editable", "INTEGER DEFAULT 0"),
             ("playlist_meta", "is_special", "INTEGER DEFAULT 0"),
@@ -207,6 +213,8 @@ impl PlaylistCache {
         title: &str,
         author_name: Option<&str>,
         author_id: Option<&str>,
+        description: Option<&str>,
+        privacy_status: Option<&str>,
         track_count: Option<&str>,
         thumbnail_url: Option<&str>,
         is_owned_by_user: bool,
@@ -219,13 +227,15 @@ impl PlaylistCache {
         );
         self.conn.execute(
             "INSERT OR REPLACE INTO playlist_meta
-             (playlist_id, title, author_name, author_id, track_count, thumbnail_url, is_owned_by_user, is_editable, is_special, is_complete, cached_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, 0, ?10)",
+             (playlist_id, title, author_name, author_id, description, privacy_status, track_count, thumbnail_url, is_owned_by_user, is_editable, is_special, is_complete, cached_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, 0, ?12)",
             params![
                 playlist_id,
                 title,
                 author_name,
                 author_id,
+                description,
+                privacy_status,
                 track_count,
                 thumbnail_url,
                 if is_owned_by_user { 1 } else { 0 },
@@ -327,7 +337,7 @@ impl PlaylistCache {
     /// Get cached playlist metadata if present.
     pub fn get_meta(&self, playlist_id: &str) -> SqlResult<Option<CachedPlaylistMeta>> {
         let mut stmt = self.conn.prepare(
-            "SELECT playlist_id, title, author_name, author_id, track_count, thumbnail_url, is_owned_by_user, is_editable, is_special, is_complete
+            "SELECT playlist_id, title, author_name, author_id, description, privacy_status, track_count, thumbnail_url, is_owned_by_user, is_editable, is_special, is_complete
              FROM playlist_meta
              WHERE playlist_id = ?1",
         )?;
@@ -343,12 +353,14 @@ impl PlaylistCache {
             title: row.get(1)?,
             author_name: row.get(2)?,
             author_id: row.get(3)?,
-            track_count: row.get(4)?,
-            thumbnail_url: row.get(5)?,
-            is_owned_by_user: row.get::<_, i32>(6)? == 1,
-            is_editable: row.get::<_, i32>(7)? == 1,
-            is_special: row.get::<_, i32>(8)? == 1,
-            is_complete: row.get::<_, i32>(9)? == 1,
+            description: row.get(4)?,
+            privacy_status: row.get(5)?,
+            track_count: row.get(6)?,
+            thumbnail_url: row.get(7)?,
+            is_owned_by_user: row.get::<_, i32>(8)? == 1,
+            is_editable: row.get::<_, i32>(9)? == 1,
+            is_special: row.get::<_, i32>(10)? == 1,
+            is_complete: row.get::<_, i32>(11)? == 1,
         };
 
         println!(

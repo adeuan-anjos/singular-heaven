@@ -3,9 +3,12 @@ import type { Playlist } from "../types/music";
 import {
   ytCreatePlaylist,
   ytDeletePlaylist,
+  ytEditPlaylist,
   ytGetLibraryPlaylists,
   ytGetSidebarPlaylists,
+  type PlaylistPrivacyStatus,
   ytRatePlaylist,
+  ytSetPlaylistThumbnail,
 } from "../services/yt-api";
 import { mapLibraryPlaylists } from "../services/mappers";
 
@@ -29,7 +32,25 @@ interface PlaylistLibraryActions {
   replaceSidebarPlaylists: (playlists: Playlist[]) => void;
   isSaved: (playlistId: string | null | undefined) => boolean;
   toggleSavedPlaylist: (playlist: Playlist) => Promise<void>;
-  createPlaylist: (title: string, description?: string | null, videoIds?: string[]) => Promise<string | null>;
+  createPlaylist: (
+    title: string,
+    description?: string | null,
+    videoIds?: string[],
+    privacyStatus?: PlaylistPrivacyStatus
+  ) => Promise<string | null>;
+  editPlaylist: (
+    playlistId: string,
+    input: {
+      title?: string | null;
+      description?: string | null;
+      privacyStatus?: PlaylistPrivacyStatus | null;
+    }
+  ) => Promise<void>;
+  setPlaylistThumbnail: (
+    playlistId: string,
+    imageBytes: number[],
+    mimeType: string
+  ) => Promise<void>;
   deletePlaylist: (playlistId: string) => Promise<void>;
   clear: () => void;
 }
@@ -272,17 +293,23 @@ export const usePlaylistLibraryStore = create<PlaylistLibraryStore>()((set, get)
     }
   },
 
-  createPlaylist: async (title, description = "", videoIds = []) => {
+  createPlaylist: async (
+    title,
+    description = "",
+    videoIds = [],
+    privacyStatus = "PRIVATE"
+  ) => {
     console.log(
       `[PlaylistLibraryStore] createPlaylist ${JSON.stringify({
         title,
         videoIds: videoIds.length,
+        privacyStatus,
       })}`
     );
     const response = await ytCreatePlaylist({
       title,
       description,
-      privacyStatus: "PRIVATE",
+      privacyStatus,
       videoIds,
     });
     await Promise.all([
@@ -290,6 +317,74 @@ export const usePlaylistLibraryStore = create<PlaylistLibraryStore>()((set, get)
       get().hydrateSidebar(true, "create-playlist"),
     ]);
     return response.playlistId ?? null;
+  },
+
+  editPlaylist: async (playlistId, input) => {
+    console.log(
+      `[PlaylistLibraryStore] editPlaylist ${JSON.stringify({
+        playlistId,
+        title: input.title ?? null,
+        description: input.description ?? null,
+        privacyStatus: input.privacyStatus ?? null,
+      })}`
+    );
+    set((state) => ({
+      pending: {
+        ...state.pending,
+        [playlistId]: true,
+      },
+    }));
+    try {
+      await ytEditPlaylist({
+        playlistId,
+        title: input.title ?? null,
+        description: input.description ?? null,
+        privacyStatus: input.privacyStatus ?? null,
+      });
+      await Promise.all([
+        get().hydrate(true, "edit-playlist"),
+        get().hydrateSidebar(true, "edit-playlist"),
+      ]);
+    } finally {
+      set((state) => {
+        const pending = { ...state.pending };
+        delete pending[playlistId];
+        return { pending };
+      });
+    }
+  },
+
+  setPlaylistThumbnail: async (playlistId, imageBytes, mimeType) => {
+    console.log(
+      `[PlaylistLibraryStore] setPlaylistThumbnail ${JSON.stringify({
+        playlistId,
+        bytes: imageBytes.length,
+        mimeType,
+      })}`
+    );
+    set((state) => ({
+      pending: {
+        ...state.pending,
+        [playlistId]: true,
+      },
+    }));
+    try {
+      await ytSetPlaylistThumbnail({
+        playlistId,
+        imageBytes,
+        mimeType,
+      });
+      await Promise.all([
+        get().hydrate(true, "set-playlist-thumbnail"),
+        get().hydrateSidebar(true, "set-playlist-thumbnail"),
+      ]);
+    } finally {
+      set((state) => {
+        const pending = { ...state.pending };
+        delete pending[playlistId];
+        return { pending };
+      });
+    }
   },
 
   deletePlaylist: async (playlistId) => {

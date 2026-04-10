@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Loader2, Plus, CopyPlus } from "lucide-react";
+import { Loader2, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
@@ -11,10 +11,8 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { usePlaylistLibraryStore } from "../../stores/playlist-library-store";
-import {
-  ytAddPlaylistItems,
-  ytGetPlaylistTrackIdsComplete,
-} from "../../services/yt-api";
+import { ytAddPlaylistItems, ytGetPlaylistTrackIdsComplete } from "../../services/yt-api";
+import { CreatePlaylistDialog } from "./create-playlist-dialog";
 
 type DuplicatePolicy = "allow" | "avoid";
 
@@ -33,20 +31,17 @@ export function SavePlaylistDialog({
 }: SavePlaylistDialogProps) {
   const playlists = usePlaylistLibraryStore((s) => s.playlists);
   const hydrate = usePlaylistLibraryStore((s) => s.hydrate);
-  const createPlaylist = usePlaylistLibraryStore((s) => s.createPlaylist);
   const [query, setQuery] = useState("");
-  const [creating, setCreating] = useState(false);
-  const [createTitle, setCreateTitle] = useState("");
   const [pendingPlaylistId, setPendingPlaylistId] = useState<string | null>(null);
   const [duplicatePolicy, setDuplicatePolicy] = useState<DuplicatePolicy>("allow");
+  const [createDialogOpen, setCreateDialogOpen] = useState(false);
 
   useEffect(() => {
     if (!open) {
       setQuery("");
-      setCreating(false);
-      setCreateTitle("");
       setPendingPlaylistId(null);
       setDuplicatePolicy("allow");
+      setCreateDialogOpen(false);
       return;
     }
     console.log(
@@ -135,37 +130,10 @@ export function SavePlaylistDialog({
     }
   };
 
-  const handleCreateAndSave = async () => {
-    if (!sourcePlaylistId || !createTitle.trim()) return;
-
-    console.log(
-      `[SavePlaylistDialog] create and save click ${JSON.stringify({
-        sourcePlaylistId,
-        title: createTitle.trim(),
-        duplicatePolicy,
-      })}`
-    );
-    setPendingPlaylistId("__create__");
-    try {
-      const playlistId = await createPlaylist(createTitle.trim(), "", []);
-      if (!playlistId) {
-        throw new Error("Não foi possível criar a playlist destino.");
-      }
-      await ytAddPlaylistItems(playlistId, [], sourcePlaylistId);
-      toast.success("Playlist criada e preenchida com sucesso.");
-      onOpenChange(false);
-    } catch (error) {
-      toast.error(
-        error instanceof Error ? error.message : "Não foi possível criar a playlist."
-      );
-    } finally {
-      setPendingPlaylistId(null);
-    }
-  };
-
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+    <>
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>Salvar na playlist</DialogTitle>
           <DialogDescription>
@@ -234,40 +202,56 @@ export function SavePlaylistDialog({
           </div>
 
           <div className="rounded-md border p-3">
-            <div className="mb-2 flex items-center justify-between">
+            <div className="space-y-2">
               <p className="text-sm font-medium">Nova playlist</p>
+              <p className="text-sm text-muted-foreground">
+                Abra o card completo de criação para definir nome, descrição, privacidade e capa antes de copiar esta playlist.
+              </p>
               <Button
-                variant="ghost"
-                size="icon-sm"
-                onClick={() => setCreating((value) => !value)}
+                variant="outline"
+                onClick={() => setCreateDialogOpen(true)}
+                disabled={Boolean(pendingPlaylistId)}
               >
-                <Plus className="h-4 w-4" />
+                <Plus className="mr-2 h-4 w-4" />
+                Criar nova playlist
               </Button>
             </div>
-            {creating ? (
-              <div className="space-y-2">
-                <Input
-                  value={createTitle}
-                  onChange={(event) => setCreateTitle(event.target.value)}
-                  placeholder="Nome da playlist"
-                />
-                <Button
-                  variant="outline"
-                  onClick={() => void handleCreateAndSave()}
-                  disabled={!createTitle.trim() || pendingPlaylistId === "__create__"}
-                >
-                  {pendingPlaylistId === "__create__" ? (
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  ) : (
-                    <CopyPlus className="mr-2 h-4 w-4" />
-                  )}
-                  Criar e salvar
-                </Button>
-              </div>
-            ) : null}
           </div>
         </div>
-      </DialogContent>
-    </Dialog>
+        </DialogContent>
+      </Dialog>
+
+      <CreatePlaylistDialog
+        open={createDialogOpen}
+        onOpenChange={setCreateDialogOpen}
+        onCreated={(playlistId) => {
+          if (!playlistId || !sourcePlaylistId) return;
+          setPendingPlaylistId("__create__");
+          console.log(
+            `[SavePlaylistDialog] create and save ${JSON.stringify({
+              sourcePlaylistId,
+              targetPlaylistId: playlistId,
+              duplicatePolicy,
+            })}`
+          );
+          void ytAddPlaylistItems(playlistId, [], sourcePlaylistId)
+            .then(() => {
+              toast.success("Playlist criada e preenchida com sucesso.");
+              setCreateDialogOpen(false);
+              onOpenChange(false);
+            })
+            .catch((error) => {
+              toast.error(
+                error instanceof Error
+                  ? error.message
+                  : "Não foi possível preencher a nova playlist."
+              );
+            })
+            .finally(() => {
+              setPendingPlaylistId(null);
+            });
+        }}
+      />
+    </>
   );
 }

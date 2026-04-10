@@ -12,6 +12,7 @@ import {
   CopyPlus,
   ListEnd,
   ListPlus,
+  PencilLine,
   Share2,
   Shuffle,
   Trash2,
@@ -21,18 +22,21 @@ type MenuKind = "dropdown" | "context";
 
 interface PlaylistActionsMenuProps {
   kind: MenuKind;
+  showEdit?: boolean;
   showShuffle?: boolean;
   showPlayNext?: boolean;
   showAppendQueue?: boolean;
   showSavePlaylist?: boolean;
   showShare?: boolean;
   destructiveLabel?: string | null;
+  disableEdit?: boolean;
   disableShuffle?: boolean;
   disablePlayNext?: boolean;
   disableAppendQueue?: boolean;
   disableSavePlaylist?: boolean;
   disableShare?: boolean;
   disableDestructive?: boolean;
+  onEdit?: () => void;
   onShufflePlay?: () => void;
   onPlayNext?: () => void;
   onAppendQueue?: () => void;
@@ -43,18 +47,21 @@ interface PlaylistActionsMenuProps {
 
 export function PlaylistActionsMenu({
   kind,
+  showEdit = false,
   showShuffle = false,
   showPlayNext = true,
   showAppendQueue = true,
   showSavePlaylist = true,
   showShare = true,
   destructiveLabel = null,
+  disableEdit = false,
   disableShuffle = false,
   disablePlayNext = false,
   disableAppendQueue = false,
   disableSavePlaylist = false,
   disableShare = false,
   disableDestructive = false,
+  onEdit,
   onShufflePlay,
   onPlayNext,
   onAppendQueue,
@@ -66,11 +73,25 @@ export function PlaylistActionsMenu({
   const Item = kind === "dropdown" ? DropdownMenuItem : ContextMenuItem;
   const Separator = kind === "dropdown" ? DropdownMenuSeparator : ContextMenuSeparator;
 
+  const hasEditAction = showEdit;
   const hasPlaybackActions = showShuffle || showPlayNext || showAppendQueue;
   const hasPlaylistActions = showSavePlaylist || showShare;
 
   return (
     <>
+      {hasEditAction ? (
+        <Group>
+          <Item onClick={onEdit} disabled={disableEdit}>
+            <PencilLine />
+            Editar playlist
+          </Item>
+        </Group>
+      ) : null}
+
+      {hasEditAction && (hasPlaybackActions || hasPlaylistActions || destructiveLabel) ? (
+        <Separator />
+      ) : null}
+
       {hasPlaybackActions ? (
         <Group>
           {showShuffle ? (

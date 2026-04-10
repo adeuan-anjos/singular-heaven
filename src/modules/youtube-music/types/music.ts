@@ -53,6 +53,8 @@ export interface Playlist {
   playlistId: string;
   title: string;
   author: ArtistBasic;
+  description?: string | null;
+  privacyStatus?: "PUBLIC" | "PRIVATE" | "UNLISTED" | null;
   trackCount?: number;
   thumbnails: Thumbnail[];
   tracks?: Track[];

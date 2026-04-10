@@ -2,7 +2,7 @@ use serde_json::json;
 
 use crate::client::YtMusicClient;
 use crate::constants::*;
-use crate::error::Result;
+use crate::error::{Error, Result};
 use crate::parsers::playlist::{
     extract_initial_continuation_token, parse_playlist_continuation, parse_playlist_response,
 };
@@ -95,6 +95,55 @@ impl YtMusicClient {
         .await
     }
 
+    /// Edit playlist metadata for a playlist owned by the user.
+    pub async fn edit_playlist(
+        &self,
+        playlist_id: &str,
+        title: Option<&str>,
+        description: Option<&str>,
+        privacy_status: Option<&str>,
+    ) -> Result<serde_json::Value> {
+        let mut actions: Vec<serde_json::Value> = Vec::new();
+
+        if let Some(title) = title {
+            actions.push(json!({
+                "action": "ACTION_SET_PLAYLIST_NAME",
+                "playlistName": title,
+            }));
+        }
+
+        if let Some(description) = description {
+            actions.push(json!({
+                "action": "ACTION_SET_PLAYLIST_DESCRIPTION",
+                "playlistDescription": description,
+            }));
+        }
+
+        if let Some(privacy_status) = privacy_status {
+            actions.push(json!({
+                "action": "ACTION_SET_PLAYLIST_PRIVACY",
+                "playlistPrivacy": privacy_status,
+            }));
+        }
+
+        println!(
+            "[ytmusic-api] edit_playlist playlist_id={} title={} description={} privacy_status={:?}",
+            playlist_id,
+            title.is_some(),
+            description.is_some(),
+            privacy_status
+        );
+
+        self.post_innertube(
+            ENDPOINT_PLAYLIST_EDIT,
+            json!({
+                "playlistId": playlist_id,
+                "actions": actions,
+            }),
+        )
+        .await
+    }
+
     /// Add tracks or another playlist into a playlist owned by the user.
     pub async fn add_playlist_items(
         &self,
@@ -164,6 +213,51 @@ impl YtMusicClient {
             json!({
                 "playlistId": playlist_id,
                 "actions": actions,
+            }),
+        )
+        .await
+    }
+
+    /// Upload and apply a custom thumbnail for a playlist owned by the user.
+    pub async fn set_playlist_thumbnail(
+        &self,
+        playlist_id: &str,
+        image_bytes: &[u8],
+        mime_type: &str,
+    ) -> Result<serde_json::Value> {
+        println!(
+            "[ytmusic-api] set_playlist_thumbnail playlist_id={} bytes={} mime={}",
+            playlist_id,
+            image_bytes.len(),
+            mime_type
+        );
+
+        let upload_json = self
+            .post_binary_json(PLAYLIST_THUMBNAIL_UPLOAD_URL, image_bytes.to_vec(), mime_type)
+            .await?;
+        let encrypted_blob_id = upload_json
+            .get("encryptedBlobId")
+            .and_then(|value| value.as_str())
+            .ok_or_else(|| Error::Parse {
+                message: "encryptedBlobId missing from thumbnail upload response".to_string(),
+            })?;
+
+        self.post_innertube(
+            ENDPOINT_PLAYLIST_EDIT,
+            json!({
+                "playlistId": playlist_id,
+                "actions": [
+                    {
+                        "action": "ACTION_SET_CUSTOM_THUMBNAIL",
+                        "addedCustomThumbnail": {
+                            "imageKey": {
+                                "type": "PLAYLIST_IMAGE_TYPE_CUSTOM_THUMBNAIL",
+                                "name": "studio_square_thumbnail",
+                            },
+                            "playlistScottyEncryptedBlobId": encrypted_blob_id,
+                        }
+                    }
+                ]
             }),
         )
         .await

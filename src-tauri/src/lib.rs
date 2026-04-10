@@ -356,6 +356,8 @@ pub fn run() {
             youtube_music::commands::yt_get_playlist,
             youtube_music::commands::yt_get_playlist_continuation,
             youtube_music::commands::yt_create_playlist,
+            youtube_music::commands::yt_edit_playlist,
+            youtube_music::commands::yt_set_playlist_thumbnail,
             youtube_music::commands::yt_delete_playlist,
             youtube_music::commands::yt_add_playlist_items,
             youtube_music::commands::yt_remove_playlist_items,

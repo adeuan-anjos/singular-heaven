@@ -10,6 +10,8 @@ O formato segue o espírito de [Keep a Changelog](https://keepachangelog.com/), 
 
 - Arquitetura backend-first para likes de track, com mutação real via cookies/InnerTube.
 - Gestão backend-first de playlists: salvar/remover da biblioteca, criar/excluir playlist, adicionar/remover músicas.
+- Edição backend-first de playlist cobrindo título, descrição e privacidade para playlists próprias/editáveis.
+- Suporte backend-first para thumbnail custom de playlist via upload + `ACTION_SET_CUSTOM_THUMBNAIL`.
 - Sidebar de playlists baseada no `guide` do YouTube Music para refletir a ordem real do produto.
 - Documentação específica da sidebar e das regras de composição com shadcn + virtualização.
 - Referência de composição de menus shadcn/Base UI com blur, highlight e ancoragem em listas virtualizadas.
@@ -19,6 +21,9 @@ O formato segue o espírito de [Keep a Changelog](https://keepachangelog.com/), 
 - Queue e playback agora têm semântica global consistente de `shuffle`, `repeat`, `next`, `previous` e `add next`.
 - Coleções reproduzíveis deixaram de depender de arrays locais como fonte de verdade.
 - Menus de playlist foram refinados para usar blur global, highlight do item alvo e regras explícitas de `DropdownMenu` vs `ContextMenu`.
+- O fluxo de criação de playlist agora expõe privacidade explicitamente em vez de assumir sempre `PRIVATE`.
+- Criar e editar playlist agora compartilham o mesmo card modal com capa inline e crop 1:1 no mesmo dialog.
+- A remoção de thumbnail custom foi deixada fora da UI até o endpoint de remoção ser confirmado com segurança.
 
 ### Docs
 

@@ -37,7 +37,7 @@ pub fn extract_sapisid(cookies: &str) -> Option<String> {
 }
 
 /// Build the full set of headers needed for an authenticated InnerTube request.
-pub fn build_auth_headers(cookies: &str) -> Vec<(String, String)> {
+pub fn build_auth_headers(cookies: &str, page_id: Option<&str>) -> Vec<(String, String)> {
     let mut headers = vec![
         ("User-Agent".to_string(), USER_AGENT.to_string()),
         ("Accept".to_string(), "*/*".to_string()),
@@ -54,9 +54,12 @@ pub fn build_auth_headers(cookies: &str) -> Vec<(String, String)> {
             "Authorization".to_string(),
             format!("SAPISIDHASH {hash}"),
         ));
+    }
+
+    if let Some(page_id) = page_id {
         headers.push((
             "X-Goog-PageId".to_string(),
-            sapisid,
+            page_id.to_string(),
         ));
     }
 

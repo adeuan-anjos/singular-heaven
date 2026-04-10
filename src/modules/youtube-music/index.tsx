@@ -17,6 +17,7 @@ import { PlaylistPage } from "./components/pages/playlist-page";
 import { QueueSheet } from "./components/queue/queue-sheet";
 import { SearchResultsPage } from "./components/search/search-results-page";
 import { AddToPlaylistDialog } from "./components/shared/add-to-playlist-dialog";
+import { EditPlaylistDialog } from "./components/shared/edit-playlist-dialog";
 import { SavePlaylistDialog } from "./components/shared/save-playlist-dialog";
 import { useNavigation } from "./hooks/use-navigation";
 import { usePlayerStore } from "./stores/player-store";
@@ -25,7 +26,7 @@ import { usePlaylistLibraryStore } from "./stores/playlist-library-store";
 import { useTrackCacheStore } from "./stores/track-cache-store";
 import { useTrackLikeStore } from "./stores/track-like-store";
 import { ytGetCachedTracks, type QueueSnapshot } from "./services/yt-api";
-import type { PlayAllOptions, Track } from "./types/music";
+import type { PlayAllOptions, Playlist, Track } from "./types/music";
 import { useRenderTracker, useLeakDetector, startMemoryMonitor } from "@/lib/debug";
 
 type AuthState = "loading" | "unauthenticated" | "account-select" | "authenticated" | "skipped";
@@ -42,6 +43,14 @@ export default function YouTubeMusicModule() {
     playlistId: string;
     title: string;
   } | null>(null);
+  const [editPlaylistDialog, setEditPlaylistDialog] = useState<{
+    playlistId: string;
+    title: string;
+    description?: string | null;
+    privacyStatus?: "PUBLIC" | "PRIVATE" | "UNLISTED" | null;
+    thumbnailUrl?: string | null;
+  } | null>(null);
+  const [playlistRefreshVersion, setPlaylistRefreshVersion] = useState(0);
   const queueOpenRef = useRef(queueOpen);
   const nav = useNavigation();
 
@@ -305,6 +314,27 @@ export default function YouTubeMusicModule() {
     setSavePlaylistDialog({ playlistId, title });
   }, []);
 
+  const handleEditPlaylist = useCallback((playlist: Playlist) => {
+    console.log(
+      `[YouTubeMusicModule] handleEditPlaylist ${JSON.stringify({
+        playlistId: playlist.playlistId,
+        title: playlist.title,
+        hasDescription: Boolean(playlist.description),
+        privacyStatus: playlist.privacyStatus ?? null,
+      })}`
+    );
+    setEditPlaylistDialog({
+      playlistId: playlist.playlistId,
+      title: playlist.title,
+      description: playlist.description ?? null,
+      privacyStatus: playlist.privacyStatus ?? null,
+      thumbnailUrl:
+        playlist.thumbnails[playlist.thumbnails.length - 1]?.url ??
+        playlist.thumbnails[0]?.url ??
+        null,
+    });
+  }, []);
+
   const handleAddPlaylistNext = useCallback(
     async (tracks: Track[], queueTrackIds: string[]) => {
       console.log(
@@ -471,10 +501,12 @@ export default function YouTubeMusicModule() {
           return (
             <PlaylistPage
               playlistId={nav.currentPage.playlistId}
+              refreshVersion={playlistRefreshVersion}
               onNavigate={nav.push}
               onPlayTrack={handlePlayTrack}
               onAddToQueue={handleAddToQueue}
               onAddToPlaylist={handleAddToPlaylist}
+              onEditPlaylist={handleEditPlaylist}
               onSavePlaylist={handleSavePlaylist}
               onAddPlaylistNext={handleAddPlaylistNext}
               onAppendPlaylistToQueue={handleAppendPlaylistToQueue}
@@ -586,6 +618,7 @@ export default function YouTubeMusicModule() {
           activeView={activeTab}
           onViewChange={handleViewChange}
           onSelectPlaylist={handleSelectPlaylist}
+          onEditPlaylist={handleEditPlaylist}
           onPlayAll={handlePlayAll}
           onSavePlaylist={handleSavePlaylist}
           onAddPlaylistNext={handleAddPlaylistNext}
@@ -623,6 +656,21 @@ export default function YouTubeMusicModule() {
           }}
           sourcePlaylistId={savePlaylistDialog?.playlistId ?? null}
           sourcePlaylistTitle={savePlaylistDialog?.title ?? null}
+        />
+
+        <EditPlaylistDialog
+          open={editPlaylistDialog !== null}
+          onOpenChange={(open) => {
+            if (!open) setEditPlaylistDialog(null);
+          }}
+          playlistId={editPlaylistDialog?.playlistId ?? null}
+          initialTitle={editPlaylistDialog?.title}
+          initialDescription={editPlaylistDialog?.description}
+          initialPrivacyStatus={editPlaylistDialog?.privacyStatus ?? null}
+          initialThumbnailUrl={editPlaylistDialog?.thumbnailUrl ?? null}
+          onSaved={() => {
+            setPlaylistRefreshVersion((value) => value + 1);
+          }}
         />
       </div>
     </TooltipProvider>

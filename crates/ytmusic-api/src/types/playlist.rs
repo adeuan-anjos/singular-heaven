@@ -8,6 +8,7 @@ pub struct PlaylistPage {
     pub playlist_id: String,
     pub author: Option<ArtistRef>,
     pub description: Option<String>,
+    pub privacy_status: Option<String>,
     pub year: Option<String>,
     pub track_count: Option<String>,
     pub duration: Option<String>,

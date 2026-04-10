@@ -7,7 +7,7 @@ Documentar a arquitetura atual de gestão de playlists no módulo YouTube Music.
 Esta doc cobre:
 
 - salvar/remover playlist da biblioteca
-- criar/excluir playlist
+- criar/editar/excluir playlist
 - adicionar/remover músicas
 - distinção entre playlist própria, salva e especial
 - relação entre sidebar, biblioteca e página de playlist
@@ -35,6 +35,7 @@ Características:
 
 UI:
 
+- mostra `Editar playlist`
 - mostra `Excluir playlist`
 
 ### Playlist salva de terceiros
@@ -125,6 +126,50 @@ Comando:
 UI:
 
 - `Nova playlist` no sidebar
+- criação e edição usam o mesmo card modal
+- o card de criação expõe:
+  - título
+  - descrição
+  - privacidade
+  - capa custom opcional com crop 1:1 inline
+- a criação com capa segue a ordem backend-first:
+  - primeiro cria a playlist
+  - só depois do `playlistId` confirmado envia e aplica a thumbnail
+- o modal de criação expõe privacidade:
+  - `Pública`
+  - `Não listada`
+  - `Particular`
+- o default é `PRIVATE`
+
+### Editar playlist
+
+Comando:
+
+- `yt_edit_playlist`
+
+Disponível apenas para playlists próprias/editáveis.
+
+Escopo atual:
+
+- título
+- descrição
+- privacidade
+- capa custom com crop 1:1 inline no mesmo card
+
+Fora desta entrega:
+
+- colaboração
+- votação
+- remoção explícita de capa custom
+
+Observações de implementação:
+
+- o card unificado `PlaylistDetailsDialog` atende `create` e `edit`
+- a escolha de imagem é inline no mesmo dialog; não existe segundo modal de crop no app
+- o crop usa `react-easy-crop` embutido no card
+- o fluxo visual do crop foi mantido simples e próximo do uso recomendado da lib
+- ajustes finos do crop devem priorizar entendimento e previsibilidade do usuário, não reproduzir o cliente web do YouTube Music em detalhes arbitrários
+- a remoção de thumbnail custom continua pendente porque a shape exata do `browse/edit_playlist` ainda não foi confirmada com segurança
 
 ### Excluir playlist
 
@@ -163,6 +208,7 @@ Esta seção registra o estado atual das ações de playlist no app e a estraté
 - `Excluir playlist`
 - `Remover playlist` da biblioteca
 - `Criar playlist`
+- `Editar playlist`
 - `Adicionar música à playlist`
 - `Remover música da playlist`
 - `Salvar/remover playlist` da biblioteca
@@ -171,6 +217,32 @@ Esta seção registra o estado atual das ações de playlist no app e a estraté
 - `Aleatório`
 - `Tocar a seguir`
 - `Adicionar à fila`
+
+### Edição de playlist
+
+Semântica:
+
+- a UI só expõe `Editar playlist` quando a playlist é própria e editável
+- o modal atual cobre apenas o bloco `Geral`
+- ao salvar:
+  - a página da playlist precisa recarregar metadados
+  - sidebar e biblioteca precisam convergir para o título atualizado
+
+Estratégia:
+
+- usar `yt_edit_playlist`
+- usar `yt_set_playlist_thumbnail` quando houver nova imagem
+- persistir título, descrição e privacidade no cache backend-first
+- aplicar a capa via upload para `playlist_image_upload/playlist_custom_thumbnail`
+- finalizar com `ACTION_SET_CUSTOM_THUMBNAIL` usando `playlistScottyEncryptedBlobId`
+- reidratar biblioteca/sidebar após a mutação
+
+Limites conhecidos:
+
+- o backend já suporta aplicar nova thumbnail custom
+- o backend ainda não suporta remover a thumbnail custom existente
+- tentativas óbvias de `ACTION_REMOVE_*` retornaram `INVALID_ARGUMENT`
+- isso foi deliberadamente deixado para um spike posterior, em vez de entrar no app por adivinhação
 
 ### Suportadas e semântica adotada
 
@@ -295,6 +367,9 @@ Por isso a playlist editável precisa carregar esse dado no parser e mantê-lo n
 
 - track usa coração
 - playlist usa bookmark/ações de biblioteca
+- criar e editar playlist compartilham o mesmo card modal
+- o crop de capa acontece inline no mesmo dialog, não em um segundo modal
+- a remoção de capa custom não aparece na UI enquanto o endpoint de remoção não estiver confirmado
 - ações destrutivas usam `AlertDialog` shadcn
 - clique direito em playlist usa `ContextMenu` shadcn
 - botão `...` em playlist usa `DropdownMenu` shadcn
@@ -304,6 +379,10 @@ Por isso a playlist editável precisa carregar esse dado no parser e mantê-lo n
 ## Invariantes
 
 - `LM` não mostra bookmark, remover ou excluir
+- `LM` não mostra editar
+- `Editar playlist` só aparece para playlist própria/editável
+- na criação com capa, a thumbnail nunca é enviada antes do `playlistId` existir
+- o app nunca deve tentar remover thumbnail custom no chute; essa ação depende de endpoint confirmado
 - `Excluir playlist` só aparece para playlist própria
 - `Remover playlist` só aparece para playlist salva de terceiros
 - `Adicionar à playlist` sempre passa pelo backend

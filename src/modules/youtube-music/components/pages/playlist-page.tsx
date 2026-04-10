@@ -73,10 +73,12 @@ function mergePlaylistTracks(
 
 interface PlaylistPageProps {
   playlistId: string;
+  refreshVersion?: number;
   onNavigate: (page: StackPage) => void;
   onPlayTrack: (track: Track) => void;
   onAddToQueue: (track: Track) => void;
   onAddToPlaylist: (track: Track) => void;
+  onEditPlaylist?: (playlist: Playlist) => void;
   onSavePlaylist: (playlistId: string, title: string) => void;
   onAddPlaylistNext: (tracks: Track[], queueTrackIds: string[]) => Promise<void>;
   onAppendPlaylistToQueue: (tracks: Track[], queueTrackIds: string[]) => Promise<void>;
@@ -92,10 +94,12 @@ interface PlaylistPageProps {
 
 export function PlaylistPage({
   playlistId,
+  refreshVersion = 0,
   onNavigate,
   onPlayTrack,
   onAddToQueue,
   onAddToPlaylist,
+  onEditPlaylist,
   onSavePlaylist,
   onAddPlaylistNext,
   onAppendPlaylistToQueue,
@@ -273,6 +277,8 @@ export function PlaylistPage({
           playlistId: data.playlistId,
           title: data.title,
           author: data.author ?? { id: null, name: "" },
+          description: data.description,
+          privacyStatus: data.privacyStatus,
           trackCount: data.trackCount ? parseInt(data.trackCount, 10) : undefined,
           thumbnails: data.thumbnails,
           isOwnedByUser: data.isOwnedByUser,
@@ -296,7 +302,7 @@ export function PlaylistPage({
     return () => {
       cancelled = true;
     };
-  }, [playlistId]);
+  }, [playlistId, refreshVersion]);
 
   const loadMore = useCallback(async () => {
     if (loadingMoreRef.current || !playlist) return;
@@ -402,16 +408,21 @@ export function PlaylistPage({
   const playlistMenuContent = playlist.isSpecial ? undefined : (
     <PlaylistActionsMenu
       kind="dropdown"
+      showEdit={Boolean(onEditPlaylist && playlist.isOwnedByUser && playlist.isEditable)}
       showShuffle={hasTracksAvailable}
       showPlayNext
       showAppendQueue
       showSavePlaylist
       showShare
       destructiveLabel={destructiveLabel}
+      disableEdit={playlistPending}
       disableShuffle={!hasTracksAvailable}
       disablePlayNext={!hasTracksAvailable}
       disableAppendQueue={!hasTracksAvailable}
       disableDestructive={playlistPending}
+      onEdit={
+        onEditPlaylist ? () => onEditPlaylist(playlist) : undefined
+      }
       onShufflePlay={() => void handleShufflePlayAction()}
       onPlayNext={() => void handleAddPlaylistNextAction()}
       onAppendQueue={() => void handleAppendPlaylistToQueueAction()}
@@ -433,6 +444,7 @@ export function PlaylistPage({
             .filter(Boolean)
             .join(" • "),
         ]}
+        description={playlist.description ?? undefined}
         thumbnailUrl={
           playlist.thumbnails[playlist.thumbnails.length - 1]?.url ??
           playlist.thumbnails[0]?.url

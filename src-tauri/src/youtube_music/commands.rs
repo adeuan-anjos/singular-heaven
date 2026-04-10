@@ -89,6 +89,23 @@ pub struct CreatePlaylistInput {
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct EditPlaylistInput {
+    pub playlist_id: String,
+    pub title: Option<String>,
+    pub description: Option<String>,
+    pub privacy_status: Option<String>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SetPlaylistThumbnailInput {
+    pub playlist_id: String,
+    pub image_bytes: Vec<u8>,
+    pub mime_type: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct PlaylistItemRemoveInput {
     pub video_id: String,
     pub set_video_id: String,
@@ -699,6 +716,8 @@ fn build_cached_playlist_response(
             "name": name,
             "id": meta.author_id,
         })),
+        "description": meta.description,
+        "privacyStatus": meta.privacy_status,
         "trackCount": meta.track_count,
         "thumbnails": thumbnails,
         "isOwnedByUser": meta.is_owned_by_user,
@@ -767,6 +786,8 @@ async fn ensure_playlist_track_ids_complete(
             &page.title,
             page.author.as_ref().map(|a| a.name.as_str()),
             page.author.as_ref().and_then(|a| a.id.as_deref()),
+            page.description.as_deref(),
+            page.privacy_status.as_deref(),
             page.track_count.as_deref(),
             page.thumbnails.first().map(|t| t.url.as_str()),
             page.is_owned_by_user,
@@ -974,6 +995,8 @@ pub async fn yt_load_playlist(
             &page.title,
             page.author.as_ref().map(|a| a.name.as_str()),
             page.author.as_ref().and_then(|a| a.id.as_deref()),
+            page.description.as_deref(),
+            page.privacy_status.as_deref(),
             page.track_count.as_deref(),
             page.thumbnails.first().map(|t| t.url.as_str()),
             page.is_owned_by_user,
@@ -1148,6 +1171,8 @@ pub async fn yt_load_playlist(
         "playlistId": playlist_id,
         "title": page.title,
         "author": page.author,
+        "description": page.description,
+        "privacyStatus": page.privacy_status,
         "trackCount": page.track_count,
         "thumbnails": page.thumbnails,
         "isOwnedByUser": page.is_owned_by_user,
@@ -1392,6 +1417,146 @@ pub async fn yt_delete_playlist(
         .map_err(|e| format!("[yt_delete_playlist] {e}"))?;
     serde_json::to_string(&response)
         .map_err(|e| format!("[yt_delete_playlist] serialization: {e}"))
+}
+
+#[tauri::command]
+pub async fn yt_edit_playlist(
+    input: EditPlaylistInput,
+    state: State<'_, Arc<Mutex<YtMusicState>>>,
+    cache: State<'_, Arc<tokio::sync::Mutex<PlaylistCache>>>,
+) -> Result<String, String> {
+    println!(
+        "[yt_edit_playlist] playlist_id={} title={} description={} privacy={:?}",
+        input.playlist_id,
+        input.title.is_some(),
+        input.description.is_some(),
+        input.privacy_status
+    );
+
+    let updated_page = {
+        let state = state.lock().await;
+        state
+            .client
+            .edit_playlist(
+                &input.playlist_id,
+                input.title.as_deref(),
+                input.description.as_deref(),
+                input.privacy_status.as_deref(),
+            )
+            .await
+            .map_err(|e| format!("[yt_edit_playlist] edit: {e}"))?;
+
+        state
+            .client
+            .get_playlist(&input.playlist_id)
+            .await
+            .map_err(|e| format!("[yt_edit_playlist] refresh: {e}"))?
+            .0
+    };
+
+    {
+        let db = cache.lock().await;
+        let existing_track_ids = db
+            .get_track_ids(&input.playlist_id)
+            .map_err(|e| format!("[yt_edit_playlist] get_track_ids: {e}"))?;
+        let existing_complete = db
+            .is_complete(&input.playlist_id)
+            .map_err(|e| format!("[yt_edit_playlist] is_complete: {e}"))?;
+
+        db.save_meta(
+            &input.playlist_id,
+            &updated_page.title,
+            updated_page.author.as_ref().map(|a| a.name.as_str()),
+            updated_page.author.as_ref().and_then(|a| a.id.as_deref()),
+            updated_page.description.as_deref(),
+            updated_page.privacy_status.as_deref(),
+            updated_page.track_count.as_deref(),
+            updated_page.thumbnails.first().map(|t| t.url.as_str()),
+            updated_page.is_owned_by_user,
+            updated_page.is_editable,
+            updated_page.is_special,
+        )
+        .map_err(|e| format!("[yt_edit_playlist] save_meta: {e}"))?;
+
+        if existing_complete && !existing_track_ids.is_empty() {
+            db.mark_complete(&input.playlist_id)
+                .map_err(|e| format!("[yt_edit_playlist] mark_complete: {e}"))?;
+        }
+    }
+
+    serde_json::to_string(&serde_json::json!({
+        "playlistId": input.playlist_id,
+        "title": updated_page.title,
+        "description": updated_page.description,
+        "privacyStatus": updated_page.privacy_status,
+    }))
+    .map_err(|e| format!("[yt_edit_playlist] serialization: {e}"))
+}
+
+#[tauri::command]
+pub async fn yt_set_playlist_thumbnail(
+    input: SetPlaylistThumbnailInput,
+    state: State<'_, Arc<Mutex<YtMusicState>>>,
+    cache: State<'_, Arc<tokio::sync::Mutex<PlaylistCache>>>,
+) -> Result<String, String> {
+    println!(
+        "[yt_set_playlist_thumbnail] playlist_id={} bytes={} mime={}",
+        input.playlist_id,
+        input.image_bytes.len(),
+        input.mime_type
+    );
+
+    let updated_page = {
+        let state = state.lock().await;
+        state
+            .client
+            .set_playlist_thumbnail(&input.playlist_id, &input.image_bytes, &input.mime_type)
+            .await
+            .map_err(|e| format!("[yt_set_playlist_thumbnail] apply: {e}"))?;
+
+        state
+            .client
+            .get_playlist(&input.playlist_id)
+            .await
+            .map_err(|e| format!("[yt_set_playlist_thumbnail] refresh: {e}"))?
+            .0
+    };
+
+    {
+        let db = cache.lock().await;
+        let existing_track_ids = db
+            .get_track_ids(&input.playlist_id)
+            .map_err(|e| format!("[yt_set_playlist_thumbnail] get_track_ids: {e}"))?;
+        let existing_complete = db
+            .is_complete(&input.playlist_id)
+            .map_err(|e| format!("[yt_set_playlist_thumbnail] is_complete: {e}"))?;
+
+        db.save_meta(
+            &input.playlist_id,
+            &updated_page.title,
+            updated_page.author.as_ref().map(|a| a.name.as_str()),
+            updated_page.author.as_ref().and_then(|a| a.id.as_deref()),
+            updated_page.description.as_deref(),
+            updated_page.privacy_status.as_deref(),
+            updated_page.track_count.as_deref(),
+            updated_page.thumbnails.first().map(|t| t.url.as_str()),
+            updated_page.is_owned_by_user,
+            updated_page.is_editable,
+            updated_page.is_special,
+        )
+        .map_err(|e| format!("[yt_set_playlist_thumbnail] save_meta: {e}"))?;
+
+        if existing_complete && !existing_track_ids.is_empty() {
+            db.mark_complete(&input.playlist_id)
+                .map_err(|e| format!("[yt_set_playlist_thumbnail] mark_complete: {e}"))?;
+        }
+    }
+
+    serde_json::to_string(&serde_json::json!({
+        "playlistId": input.playlist_id,
+        "thumbnails": updated_page.thumbnails,
+    }))
+    .map_err(|e| format!("[yt_set_playlist_thumbnail] serialization: {e}"))
 }
 
 #[tauri::command]

@@ -38,6 +38,8 @@ Referência curta dos comandos mais importantes do módulo YouTube Music.
 
 - `yt_rate_playlist`
 - `yt_create_playlist`
+- `yt_edit_playlist`
+- `yt_set_playlist_thumbnail`
 - `yt_delete_playlist`
 - `yt_add_playlist_items`
 - `yt_remove_playlist_items`

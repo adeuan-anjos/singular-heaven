@@ -47,6 +47,7 @@ interface SidePanelProps {
   activeView: string;
   onViewChange: (view: string) => void;
   onSelectPlaylist: (id: string | null) => void;
+  onEditPlaylist?: (playlist: Playlist) => void;
   onPlayAll: (
     tracks: Track[],
     startIndex?: number,
@@ -168,6 +169,7 @@ function PlaylistActionMenuContent({
   kind,
   playlist,
   isPending,
+  onEdit,
   onShufflePlay,
   onPlayNext,
   onAppendQueue,
@@ -178,6 +180,7 @@ function PlaylistActionMenuContent({
   kind: "dropdown" | "context";
   playlist: Playlist;
   isPending: boolean;
+  onEdit?: () => void;
   onShufflePlay: () => void;
   onPlayNext: () => void;
   onAppendQueue: () => void;
@@ -188,6 +191,7 @@ function PlaylistActionMenuContent({
   return (
     <PlaylistActionsMenu
       kind={kind}
+      showEdit={Boolean(onEdit && playlist.isOwnedByUser && playlist.isEditable)}
       showShuffle
       showPlayNext
       showAppendQueue
@@ -196,7 +200,9 @@ function PlaylistActionMenuContent({
       destructiveLabel={
         playlist.isOwnedByUser ? "Excluir playlist" : "Remover playlist"
       }
+      disableEdit={isPending}
       disableDestructive={isPending}
+      onEdit={onEdit}
       onShufflePlay={onShufflePlay}
       onPlayNext={onPlayNext}
       onAppendQueue={onAppendQueue}
@@ -269,6 +275,7 @@ function SidebarPlaylistMenuAnchor({
   onSelect,
   onHighlightOpen,
   onHighlightClose,
+  onEdit,
   onShufflePlay,
   onPlayNext,
   onAppendQueue,
@@ -282,6 +289,7 @@ function SidebarPlaylistMenuAnchor({
   onSelect: () => void;
   onHighlightOpen: () => void;
   onHighlightClose: () => void;
+  onEdit?: () => void;
   onShufflePlay: () => void;
   onPlayNext: () => void;
   onAppendQueue: () => void;
@@ -343,6 +351,7 @@ function SidebarPlaylistMenuAnchor({
       kind="dropdown"
       playlist={playlist}
       isPending={isPending}
+      onEdit={onEdit}
       onShufflePlay={onShufflePlay}
       onPlayNext={onPlayNext}
       onAppendQueue={onAppendQueue}
@@ -380,6 +389,7 @@ function SidebarPlaylistMenuAnchor({
             kind="context"
             playlist={playlist}
             isPending={isPending}
+            onEdit={onEdit}
             onShufflePlay={onShufflePlay}
             onPlayNext={onPlayNext}
             onAppendQueue={onAppendQueue}
@@ -397,6 +407,7 @@ export function SidePanel({
   activeView,
   onViewChange,
   onSelectPlaylist,
+  onEditPlaylist,
   onPlayAll,
   onSavePlaylist,
   onAddPlaylistNext,
@@ -749,6 +760,11 @@ export function SidePanel({
                               setHighlightedPlaylistId,
                               setHighlightRect
                             )
+                          }
+                          onEdit={
+                            onEditPlaylist
+                              ? () => onEditPlaylist(playlist)
+                              : undefined
                           }
                           onShufflePlay={() => handlePlaylistShufflePlay(playlist)}
                           onPlayNext={() => handlePlaylistPlayNext(playlist)}

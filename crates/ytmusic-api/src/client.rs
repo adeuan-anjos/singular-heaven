@@ -18,6 +18,24 @@ pub struct YtMusicClient {
 }
 
 impl YtMusicClient {
+    fn build_authenticated_header_map(&self, content_type: &str) -> Result<HeaderMap> {
+        let cookies = self.cookies.as_ref().ok_or(Error::NotAuthenticated)?;
+        let auth_headers = build_auth_headers(cookies, self.on_behalf_of_user.as_deref());
+        let mut header_map = HeaderMap::new();
+        for (key, value) in auth_headers {
+            if let (Ok(name), Ok(val)) = (
+                HeaderName::from_bytes(key.as_bytes()),
+                HeaderValue::from_str(&value),
+            ) {
+                header_map.insert(name, val);
+            }
+        }
+        if let Ok(content_type) = HeaderValue::from_str(content_type) {
+            header_map.insert(reqwest::header::CONTENT_TYPE, content_type);
+        }
+        Ok(header_map)
+    }
+
     /// Create a new unauthenticated client (public endpoints only).
     pub fn new() -> Result<Self> {
         let http = reqwest::Client::builder()
@@ -98,18 +116,8 @@ impl YtMusicClient {
         let mut request = self.http.post(&url).json(&payload);
 
         // Add auth headers if authenticated
-        if let Some(ref cookies) = self.cookies {
-            let auth_headers = build_auth_headers(cookies);
-            let mut header_map = HeaderMap::new();
-            for (key, value) in auth_headers {
-                if let (Ok(name), Ok(val)) = (
-                    HeaderName::from_bytes(key.as_bytes()),
-                    HeaderValue::from_str(&value),
-                ) {
-                    header_map.insert(name, val);
-                }
-            }
-            request = request.headers(header_map);
+        if self.cookies.is_some() {
+            request = request.headers(self.build_authenticated_header_map("application/json")?);
         }
 
         let response = request.send().await?;
@@ -124,6 +132,31 @@ impl YtMusicClient {
 
         let json: Value = response.json().await?;
         Ok(json)
+    }
+
+    pub(crate) async fn post_binary_json(
+        &self,
+        url: &str,
+        body: Vec<u8>,
+        content_type: &str,
+    ) -> Result<Value> {
+        let response = self
+            .http
+            .post(url)
+            .headers(self.build_authenticated_header_map(content_type)?)
+            .body(body)
+            .send()
+            .await?;
+
+        let status = response.status();
+        if !status.is_success() {
+            let body_text = response.text().await.unwrap_or_default();
+            return Err(Error::Api {
+                message: format!("HTTP {status}: {}", &body_text[..body_text.len().min(500)]),
+            });
+        }
+
+        Ok(response.json().await?)
     }
 
     // -----------------------------------------------------------------------

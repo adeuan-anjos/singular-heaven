@@ -249,6 +249,7 @@ export interface ApiPlaylistPage {
   playlistId: string;
   author: ApiArtistRef | null;
   description: string | null;
+  privacyStatus: PlaylistPrivacyStatus | null;
   year: string | null;
   trackCount: string | null;
   duration: string | null;
@@ -384,6 +385,7 @@ export async function ytGetLibrarySongs(): Promise<ApiLibrarySong[]> {
 
 export type TrackLikeStatus = "LIKE" | "DISLIKE" | "INDIFFERENT";
 export type PlaylistLikeStatus = "LIKE" | "DISLIKE" | "INDIFFERENT";
+export type PlaylistPrivacyStatus = "PUBLIC" | "PRIVATE" | "UNLISTED";
 
 export interface TrackLikeStatusResponse {
   videoId: string;
@@ -398,12 +400,37 @@ export interface PlaylistLikeStatusResponse {
 export interface CreatePlaylistInput {
   title: string;
   description?: string | null;
-  privacyStatus?: "PUBLIC" | "PRIVATE" | "UNLISTED" | null;
+  privacyStatus?: PlaylistPrivacyStatus | null;
   videoIds?: string[] | null;
 }
 
 export interface CreatePlaylistResponse {
   playlistId?: string;
+}
+
+export interface EditPlaylistInput {
+  playlistId: string;
+  title?: string | null;
+  description?: string | null;
+  privacyStatus?: PlaylistPrivacyStatus | null;
+}
+
+export interface EditPlaylistResponse {
+  playlistId: string;
+  title: string;
+  description: string | null;
+  privacyStatus: PlaylistPrivacyStatus | null;
+}
+
+export interface SetPlaylistThumbnailInput {
+  playlistId: string;
+  imageBytes: number[];
+  mimeType: string;
+}
+
+export interface SetPlaylistThumbnailResponse {
+  playlistId: string;
+  thumbnails: ApiThumbnail[];
 }
 
 export interface PlaylistItemRemoveInput {
@@ -442,6 +469,20 @@ export async function ytCreatePlaylist(
 export async function ytDeletePlaylist(playlistId: string): Promise<unknown> {
   const json = await invoke<string>("yt_delete_playlist", { playlistId });
   return parseJson<unknown>(json);
+}
+
+export async function ytEditPlaylist(
+  input: EditPlaylistInput
+): Promise<EditPlaylistResponse> {
+  const json = await invoke<string>("yt_edit_playlist", { input });
+  return parseJson<EditPlaylistResponse>(json);
+}
+
+export async function ytSetPlaylistThumbnail(
+  input: SetPlaylistThumbnailInput
+): Promise<SetPlaylistThumbnailResponse> {
+  const json = await invoke<string>("yt_set_playlist_thumbnail", { input });
+  return parseJson<SetPlaylistThumbnailResponse>(json);
 }
 
 export async function ytAddPlaylistItems(
@@ -515,6 +556,8 @@ export interface LoadPlaylistResponse {
   playlistId: string;
   title: string;
   author: { name: string; id: string | null } | null;
+  description: string | null;
+  privacyStatus: PlaylistPrivacyStatus | null;
   trackCount: string | null;
   thumbnails: { url: string; width: number; height: number }[];
   isOwnedByUser: boolean;

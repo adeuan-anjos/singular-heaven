@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input";
 import type { Track } from "../../types/music";
 import { usePlaylistLibraryStore } from "../../stores/playlist-library-store";
 import { ytAddPlaylistItems } from "../../services/yt-api";
+import { CreatePlaylistDialog } from "./create-playlist-dialog";
 
 interface AddToPlaylistDialogProps {
   open: boolean;
@@ -26,18 +27,15 @@ export function AddToPlaylistDialog({
 }: AddToPlaylistDialogProps) {
   const playlists = usePlaylistLibraryStore((s) => s.playlists);
   const hydrate = usePlaylistLibraryStore((s) => s.hydrate);
-  const createPlaylist = usePlaylistLibraryStore((s) => s.createPlaylist);
   const [query, setQuery] = useState("");
-  const [creating, setCreating] = useState(false);
-  const [createTitle, setCreateTitle] = useState("");
   const [pendingPlaylistId, setPendingPlaylistId] = useState<string | null>(null);
+  const [createDialogOpen, setCreateDialogOpen] = useState(false);
 
   useEffect(() => {
     if (!open) {
       setQuery("");
-      setCreating(false);
-      setCreateTitle("");
       setPendingPlaylistId(null);
+      setCreateDialogOpen(false);
       return;
     }
     void hydrate(false, "add-to-playlist-open");
@@ -63,20 +61,10 @@ export function AddToPlaylistDialog({
     }
   };
 
-  const handleCreateAndAdd = async () => {
-    if (!track || !createTitle.trim()) return;
-    setPendingPlaylistId("__create__");
-    try {
-      await createPlaylist(createTitle.trim(), "", [track.videoId]);
-      onOpenChange(false);
-    } finally {
-      setPendingPlaylistId(null);
-    }
-  };
-
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+    <>
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>Adicionar à playlist</DialogTitle>
           <DialogDescription>
@@ -115,40 +103,34 @@ export function AddToPlaylistDialog({
           </div>
 
           <div className="rounded-md border p-3">
-            <div className="mb-2 flex items-center justify-between">
+            <div className="space-y-2">
               <p className="text-sm font-medium">Nova playlist</p>
+              <p className="text-sm text-muted-foreground">
+                Abra o mesmo card completo de criação para definir nome, descrição, privacidade e capa.
+              </p>
               <Button
-                variant="ghost"
-                size="icon-sm"
-                onClick={() => setCreating((value) => !value)}
+                variant="outline"
+                onClick={() => setCreateDialogOpen(true)}
+                disabled={Boolean(pendingPlaylistId)}
               >
-                <Plus className="h-4 w-4" />
+                <Plus className="mr-2 h-4 w-4" />
+                Criar nova playlist
               </Button>
             </div>
-            {creating ? (
-              <div className="space-y-2">
-                <Input
-                  value={createTitle}
-                  onChange={(event) => setCreateTitle(event.target.value)}
-                  placeholder="Nome da playlist"
-                />
-                <Button
-                  variant="outline"
-                  onClick={() => void handleCreateAndAdd()}
-                  disabled={!createTitle.trim() || pendingPlaylistId === "__create__"}
-                >
-                  {pendingPlaylistId === "__create__" ? (
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  ) : (
-                    <Plus className="mr-2 h-4 w-4" />
-                  )}
-                  Criar e adicionar
-                </Button>
-              </div>
-            ) : null}
           </div>
         </div>
-      </DialogContent>
-    </Dialog>
+        </DialogContent>
+      </Dialog>
+
+      <CreatePlaylistDialog
+        open={createDialogOpen}
+        onOpenChange={setCreateDialogOpen}
+        initialVideoIds={track ? [track.videoId] : []}
+        onCreated={() => {
+          setCreateDialogOpen(false);
+          onOpenChange(false);
+        }}
+      />
+    </>
   );
 }

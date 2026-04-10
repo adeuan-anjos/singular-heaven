@@ -379,6 +379,8 @@ export function mapPlaylistPage(page: ApiPlaylistPage): Playlist {
     playlistId: page.playlistId,
     title: page.title,
     author: page.author ? mapArtistRef(page.author) : { id: null, name: "" },
+    description: page.description,
+    privacyStatus: page.privacyStatus,
     trackCount: page.trackCount ? parseInt(page.trackCount, 10) : undefined,
     thumbnails: mapThumbnails(page.thumbnails),
     isOwnedByUser: page.isOwnedByUser,

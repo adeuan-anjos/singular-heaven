@@ -71,8 +71,25 @@ Lista de bugs e dívidas técnicas já observados no projeto e deixados para cor
   - `Iniciar rádio` a partir de playlist
   - `Fixar em "Ouvir de novo"`
   - `Baixar` como feature dedicada
+  - colaboração/votação na edição de playlist
+  - remover imagem personalizada da playlist
 - Observação:
   - `Salvar na playlist`, `Compartilhar`, `Aleatório`, `Tocar a seguir` e `Adicionar à fila` já estão no fluxo principal.
+
+### Remover thumbnail custom de playlist ainda sem endpoint confirmado
+
+- Sintoma:
+  - O YouTube Music expõe `Remover imagem personalizada`, mas o app ainda não oferece essa ação.
+- Impacto:
+  - O usuário consegue aplicar uma capa custom, mas não consegue voltar para a thumbnail padrão da playlist pelo app.
+- Área afetada:
+  - [playlist-details-dialog.tsx](/./src/modules/youtube-music/components/shared/playlist-details-dialog.tsx)
+  - [playlist.rs](/./crates/ytmusic-api/src/api/playlist.rs)
+  - [commands.rs](/./src-tauri/src/youtube_music/commands.rs)
+- Observação:
+  - O fluxo de `set` da thumbnail foi validado e já está implementado.
+  - A shape exata de remoção no `browse/edit_playlist` ainda não foi confirmada.
+  - Tentativas óbvias de `ACTION_REMOVE_*` retornaram `INVALID_ARGUMENT`, então a ação ficou fora da UI por decisão explícita de segurança.
 
 ### Logs de debug ainda misturam payload útil com `Object`
 

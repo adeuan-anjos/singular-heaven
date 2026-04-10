@@ -102,6 +102,29 @@ pub fn parse_playlist_response(response: &Value, playlist_id: &str) -> Result<Pl
                 .or_else(|| get_text(d))
         });
 
+    let privacy_status = if is_single_col {
+        None
+    } else {
+        nav_str(
+            response,
+            &[
+                "contents",
+                "twoColumnBrowseResultsRenderer",
+                "tabs",
+                "0",
+                "tabRenderer",
+                "content",
+                "sectionListRenderer",
+                "contents",
+                "0",
+                "musicEditablePlaylistDetailHeaderRenderer",
+                "editHeader",
+                "musicPlaylistEditHeaderRenderer",
+                "privacy",
+            ],
+        )
+    };
+
     // secondSubtitle: ["X músicas", " • ", "Xh Xmin"]
     let second_subtitle_runs = h
         .and_then(|h| h.get("secondSubtitle"))
@@ -201,6 +224,7 @@ pub fn parse_playlist_response(response: &Value, playlist_id: &str) -> Result<Pl
         playlist_id: playlist_id.to_string(),
         author,
         description,
+        privacy_status,
         year,
         track_count,
         duration,
