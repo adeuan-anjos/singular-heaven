@@ -20,6 +20,20 @@ impl YtMusicClient {
             .and_then(|a| nav(a, &["getMultiPageMenuAction", "menu", "multiPageMenuRenderer"]));
 
         if let Some(menu_val) = menu {
+            // Extract primary Google account email from header
+            let header_email = menu_val.get("header")
+                .and_then(|h| h.get("activeAccountHeaderRenderer"))
+                .and_then(|r| r.get("email"))
+                .and_then(|e| e.get("runs"))
+                .and_then(|r| r.as_array())
+                .and_then(|a| a.first())
+                .and_then(|r| r.get("text"))
+                .and_then(|t| t.as_str())
+                .filter(|s| s.contains('@'))
+                .map(|s| s.to_string());
+
+            println!("[ytmusic-api] get_accounts header_email={:?}", header_email);
+
             let menu_sections = nav_array(&menu_val, &["sections"]);
             for section in &menu_sections {
                 let items = section.get("accountSectionListRenderer")
@@ -52,6 +66,15 @@ impl YtMusicClient {
                                 .and_then(|a| a.last())
                                 .and_then(|t| t.get("url"))
                                 .and_then(|u| u.as_str())
+                                .map(|s| s.to_string());
+
+                            let email = ai.get("accountByline")
+                                .and_then(|b| b.get("runs"))
+                                .and_then(|r| r.as_array())
+                                .and_then(|a| a.first())
+                                .and_then(|r| r.get("text"))
+                                .and_then(|t| t.as_str())
+                                .filter(|s| s.contains('@'))
                                 .map(|s| s.to_string());
 
                             let channel_handle = ai.get("channelHandle")
@@ -93,6 +116,8 @@ impl YtMusicClient {
                             if !name.is_empty() {
                                 accounts.push(AccountInfo {
                                     name,
+                                    // Prefer header email (Google account) over accountByline (usually empty for channels)
+                                    email: email.or_else(|| header_email.clone()),
                                     photo_url,
                                     channel_handle,
                                     page_id,

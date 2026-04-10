@@ -15,12 +15,14 @@ pub struct YtMusicClient {
     /// Brand account / channel ID for multi-account support.
     /// When set, all requests include `user.onBehalfOfUser` in the context.
     on_behalf_of_user: Option<String>,
+    /// Which Google account to use when multiple are logged in (X-Goog-AuthUser header).
+    auth_user: u32,
 }
 
 impl YtMusicClient {
     fn build_authenticated_header_map(&self, content_type: &str) -> Result<HeaderMap> {
         let cookies = self.cookies.as_ref().ok_or(Error::NotAuthenticated)?;
-        let auth_headers = build_auth_headers(cookies, self.on_behalf_of_user.as_deref());
+        let auth_headers = build_auth_headers(cookies, self.on_behalf_of_user.as_deref(), self.auth_user);
         let mut header_map = HeaderMap::new();
         for (key, value) in auth_headers {
             if let (Ok(name), Ok(val)) = (
@@ -48,11 +50,12 @@ impl YtMusicClient {
             language: "pt-BR".to_string(),
             country: "BR".to_string(),
             on_behalf_of_user: None,
+            auth_user: 0,
         })
     }
 
     /// Create a new authenticated client from a cookie string.
-    pub fn from_cookies(cookies: impl Into<String>) -> Result<Self> {
+    pub fn from_cookies(cookies: impl Into<String>, auth_user: u32) -> Result<Self> {
         let cookies = cookies.into();
         let http = reqwest::Client::builder()
             .user_agent(USER_AGENT)
@@ -64,6 +67,7 @@ impl YtMusicClient {
             language: "pt-BR".to_string(),
             country: "BR".to_string(),
             on_behalf_of_user: None,
+            auth_user,
         })
     }
 
@@ -76,6 +80,17 @@ impl YtMusicClient {
     /// Get the current on_behalf_of_user value.
     pub fn on_behalf_of_user(&self) -> Option<&str> {
         self.on_behalf_of_user.as_deref()
+    }
+
+    /// Set the Google account index (X-Goog-AuthUser header).
+    pub fn set_auth_user(&mut self, auth_user: u32) {
+        println!("[YtMusicClient] set_auth_user: {auth_user}");
+        self.auth_user = auth_user;
+    }
+
+    /// Get the current auth_user value.
+    pub fn auth_user(&self) -> u32 {
+        self.auth_user
     }
 
     /// Check if the client has cookie authentication.

@@ -9,8 +9,14 @@ import {
   CommandGroup,
   CommandItem,
 } from "@/components/ui/command";
-import { ChevronLeft, ChevronRight, Search, X, Loader2 } from "lucide-react";
-import { ytSearchSuggestions, ytSearch } from "../../services/yt-api";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { ChevronLeft, ChevronRight, Search, X, Loader2, LogOut } from "lucide-react";
+import { ytSearchSuggestions, ytSearch, ytGetAccounts, type ApiAccountInfo } from "../../services/yt-api";
 import { mapSearchResults } from "../../services/mappers";
 import type { Track, SearchResults, StackPage } from "../../types/music";
 
@@ -22,6 +28,7 @@ interface TopBarProps {
   onNavigate: (page: StackPage) => void;
   onPlayTrack: (track: Track) => void;
   onSearchSubmit: (query: string) => void;
+  onLogout?: () => void;
 }
 
 export function TopBar({
@@ -32,7 +39,9 @@ export function TopBar({
   onNavigate,
   onPlayTrack,
   onSearchSubmit,
+  onLogout,
 }: TopBarProps) {
+  const [activeAccount, setActiveAccount] = useState<ApiAccountInfo | null>(null);
   const [query, setQuery] = useState("");
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [results, setResults] = useState<SearchResults | null>(null);
@@ -41,6 +50,36 @@ export function TopBar({
   const inputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  console.log("[TopBar] render", {
+    hasLogout: Boolean(onLogout),
+    activeAccount: activeAccount
+      ? { name: activeAccount.name, channelHandle: activeAccount.channelHandle ?? null, hasPhoto: Boolean(activeAccount.photoUrl) }
+      : null,
+    query: query.length > 0 ? `"${query}"` : "(empty)",
+  });
+
+  useEffect(() => {
+    if (!onLogout) return;
+    console.log("[TopBar] fetching active account for avatar...");
+    let cancelled = false;
+    ytGetAccounts()
+      .then((accounts) => {
+        if (cancelled) return;
+        const active = accounts.find((a) => a.isActive) ?? accounts[0] ?? null;
+        console.log("[TopBar] active account loaded", {
+          name: active?.name ?? null,
+          channelHandle: active?.channelHandle ?? null,
+          hasPhoto: Boolean(active?.photoUrl),
+          isActive: active?.isActive ?? null,
+        });
+        setActiveAccount(active);
+      })
+      .catch((err) => {
+        console.error("[TopBar] failed to load active account", { error: String(err) });
+      });
+    return () => { cancelled = true; };
+  }, [onLogout]);
 
   // Debounced search as user types
   useEffect(() => {
@@ -335,6 +374,48 @@ export function TopBar({
             </div>
           )}
         </div>
+
+        {/* Account avatar + logout */}
+        {onLogout && (
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              render={<button className="ml-2 flex size-8 shrink-0 items-center justify-center rounded-full hover:bg-accent" />}
+            >
+              {activeAccount?.photoUrl ? (
+                <img
+                  referrerPolicy="no-referrer"
+                  src={activeAccount.photoUrl}
+                  alt={activeAccount.name}
+                  className="size-7 rounded-full"
+                />
+              ) : (
+                <div className="flex size-7 items-center justify-center rounded-full bg-muted text-xs font-medium">
+                  {activeAccount?.name?.charAt(0) ?? "?"}
+                </div>
+              )}
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" sideOffset={8}>
+              <div className="px-3 py-2">
+                <div className="text-sm font-medium">{activeAccount?.name}</div>
+                {activeAccount?.channelHandle && (
+                  <div className="text-xs text-muted-foreground">
+                    {activeAccount.channelHandle}
+                  </div>
+                )}
+              </div>
+              <DropdownMenuItem onClick={() => {
+                console.log("[TopBar] logout button clicked", {
+                  accountName: activeAccount?.name ?? null,
+                  channelHandle: activeAccount?.channelHandle ?? null,
+                });
+                onLogout();
+              }}>
+                <LogOut className="mr-2 size-4" />
+                Sair
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
       </div>
     </div>
   );

@@ -4,6 +4,7 @@ import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { LoginScreen } from "./components/auth/login-screen";
 import { AccountPicker } from "./components/auth/account-picker";
+import { GoogleAccountPicker } from "./components/auth/google-account-picker";
 import { SidePanel } from "./components/layout/side-panel";
 import { TopBar } from "./components/layout/top-bar";
 import { PlayerBar } from "./components/layout/player-bar";
@@ -25,11 +26,11 @@ import { useQueueStore } from "./stores/queue-store";
 import { usePlaylistLibraryStore } from "./stores/playlist-library-store";
 import { useTrackCacheStore } from "./stores/track-cache-store";
 import { useTrackLikeStore } from "./stores/track-like-store";
-import { ytGetCachedTracks, type QueueSnapshot } from "./services/yt-api";
+import { ytGetCachedTracks, ytAuthLogout, type QueueSnapshot } from "./services/yt-api";
 import type { PlayAllOptions, Playlist, Track } from "./types/music";
 import { useRenderTracker, useLeakDetector, startMemoryMonitor } from "@/lib/debug";
 
-type AuthState = "loading" | "unauthenticated" | "account-select" | "authenticated" | "skipped";
+type AuthState = "loading" | "unauthenticated" | "google-account-select" | "account-select" | "authenticated";
 
 export default function YouTubeMusicModule() {
   useRenderTracker("YouTubeMusicModule", {});
@@ -83,14 +84,30 @@ export default function YouTubeMusicModule() {
 
     async function checkAuth() {
       try {
-        const status = await invoke<{ authenticated: boolean }>("yt_auth_status");
-        console.log("[YouTubeMusicModule] yt_auth_status result", status);
+        // yt_ensure_session validates cookies and silently refreshes if expired
+        console.log("[YouTubeMusicModule] invoking yt_ensure_session...");
+        const status = await invoke<{
+          authenticated: boolean;
+          method: string;
+          hasPageId: boolean;
+        }>("yt_ensure_session");
+        console.log("[YouTubeMusicModule] yt_ensure_session result", JSON.stringify(status));
         if (!cancelled) {
-          setAuthState(status.authenticated ? "account-select" : "unauthenticated");
+          if (status.authenticated && status.hasPageId) {
+            console.log("[YouTubeMusicModule] auth state transition", { from: "loading", to: "authenticated" });
+            setAuthState("authenticated");
+          } else if (status.authenticated) {
+            console.log("[YouTubeMusicModule] auth state transition", { from: "loading", to: "account-select", reason: "no pageId" });
+            setAuthState("account-select");
+          } else {
+            console.log("[YouTubeMusicModule] auth state transition", { from: "loading", to: "unauthenticated" });
+            setAuthState("unauthenticated");
+          }
         }
       } catch (err) {
-        console.error("[YouTubeMusicModule] yt_auth_status failed", err);
+        console.error("[YouTubeMusicModule] yt_ensure_session failed", { error: String(err) });
         if (!cancelled) {
+          console.log("[YouTubeMusicModule] auth state transition", { from: "loading", to: "unauthenticated", reason: "invoke error" });
           setAuthState("unauthenticated");
         }
       }
@@ -221,19 +238,50 @@ export default function YouTubeMusicModule() {
   }, [queueSyncSnapshot]);
 
   const handleAuthenticated = useCallback(() => {
-    console.log("[YouTubeMusicModule] user authenticated, proceeding to account selection");
+    console.log("[YouTubeMusicModule] handleAuthenticated: browser cookies accepted", {
+      from: "unauthenticated",
+      to: "google-account-select",
+    });
+    setAuthState("google-account-select");
+  }, []);
+
+  const handleGoogleAccountSelected = useCallback((authUser: number) => {
+    console.log("[YouTubeMusicModule] handleGoogleAccountSelected: Google account confirmed", {
+      authUser,
+      from: "google-account-select",
+      to: "account-select",
+    });
     setAuthState("account-select");
   }, []);
 
   const handleAccountSelected = useCallback(() => {
-    console.log("[YouTubeMusicModule] account selected, proceeding to main UI");
+    console.log("[YouTubeMusicModule] handleAccountSelected: channel/brand account confirmed", {
+      from: "account-select",
+      to: "authenticated",
+    });
     setAuthState("authenticated");
   }, []);
 
-  const handleSkip = useCallback(() => {
-    console.log("[YouTubeMusicModule] user skipped authentication");
-    setAuthState("skipped");
-  }, []);
+  const handleLogout = useCallback(async () => {
+    console.log("[YouTubeMusicModule] handleLogout: starting logout flow", {
+      from: "authenticated",
+      to: "unauthenticated",
+    });
+    try {
+      await ytAuthLogout();
+      console.log("[YouTubeMusicModule] handleLogout: ytAuthLogout succeeded, clearing stores");
+      playlistLibraryClear();
+      trackCacheClear();
+      trackLikesClear();
+      playerCleanup();
+      void queueCleanup();
+      console.log("[YouTubeMusicModule] handleLogout: stores cleared, setting state to unauthenticated");
+      setAuthState("unauthenticated");
+    } catch (err) {
+      console.error("[YouTubeMusicModule] handleLogout: ytAuthLogout failed", { error: String(err) });
+    }
+  }, [playerCleanup, playlistLibraryClear, queueCleanup, trackCacheClear, trackLikesClear]);
+
 
   const handlePlayTrack = useCallback(async (track: Track) => {
     console.log("[YouTubeMusicModule] handlePlayTrack", { title: track.title });
@@ -585,7 +633,15 @@ export default function YouTubeMusicModule() {
     return (
       <LoginScreen
         onAuthenticated={handleAuthenticated}
-        onSkip={handleSkip}
+      />
+    );
+  }
+
+  if (authState === "google-account-select") {
+    return (
+      <GoogleAccountPicker
+        onAccountSelected={handleGoogleAccountSelected}
+        onBack={() => setAuthState("unauthenticated")}
       />
     );
   }
@@ -610,6 +666,7 @@ export default function YouTubeMusicModule() {
           onNavigate={nav.push}
           onPlayTrack={handlePlayTrack}
           onSearchSubmit={handleSearchSubmit}
+          onLogout={handleLogout}
         />
 
         {/* Main area */}

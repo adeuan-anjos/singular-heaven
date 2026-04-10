@@ -3,7 +3,6 @@ import { invoke } from "@tauri-apps/api/core";
 import {
   Music,
   AlertCircle,
-  ArrowRight,
   Loader2,
   Globe,
   MonitorSmartphone,
@@ -19,7 +18,6 @@ import {
 
 interface LoginScreenProps {
   onAuthenticated: () => void;
-  onSkip: () => void;
 }
 
 interface BrowserInfo {
@@ -31,6 +29,7 @@ interface BrowserInfo {
 interface AuthStatusResponse {
   authenticated: boolean;
   method: string;
+  hasPageId: boolean;
 }
 
 const BROWSER_LABELS: Record<string, string> = {
@@ -43,55 +42,85 @@ const BROWSER_LABELS: Record<string, string> = {
   vivaldi: "Vivaldi",
 };
 
-export function LoginScreen({ onAuthenticated, onSkip }: LoginScreenProps) {
+export function LoginScreen({ onAuthenticated }: LoginScreenProps) {
   const [error, setError] = useState<string | null>(null);
   const [browsers, setBrowsers] = useState<BrowserInfo[]>([]);
   const [detectingBrowsers, setDetectingBrowsers] = useState(true);
   const [browserAuthLoading, setBrowserAuthLoading] = useState<string | null>(null);
 
+  console.log("[LoginScreen] render", {
+    detectingBrowsers,
+    browserCount: browsers.length,
+    browserAuthLoading,
+    error,
+  });
+
   useEffect(() => {
+    console.log("[LoginScreen] mounted — starting browser detection");
     let cancelled = false;
 
     async function detect() {
-      console.log("[LoginScreen] Detecting browsers with YouTube cookies...");
+      console.log("[LoginScreen] invoking yt_detect_browsers...");
       try {
         const result = await invoke<BrowserInfo[]>("yt_detect_browsers");
         if (!cancelled) {
-          console.log("[LoginScreen] Detected browsers:", result);
+          console.log("[LoginScreen] yt_detect_browsers result", {
+            count: result.length,
+            browsers: result.map((b) => ({
+              name: b.name,
+              hasCookies: b.hasCookies,
+              cookieCount: b.cookieCount,
+            })),
+          });
           setBrowsers(result);
         }
       } catch (err) {
-        console.error("[LoginScreen] Failed to detect browsers:", err);
+        console.error("[LoginScreen] yt_detect_browsers failed", { error: String(err) });
       } finally {
         if (!cancelled) {
           setDetectingBrowsers(false);
+          console.log("[LoginScreen] browser detection complete");
         }
       }
     }
 
     detect();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+      console.log("[LoginScreen] unmounted");
+    };
   }, []);
 
   const handleBrowserAuth = useCallback(async (browser: string) => {
-    console.log("[LoginScreen] Starting browser cookie auth:", browser);
+    const browserInfo = browsers.find((b) => b.name === browser);
+    console.log("[LoginScreen] browser button clicked", {
+      browser,
+      cookieCount: browserInfo?.cookieCount ?? "unknown",
+    });
     setBrowserAuthLoading(browser);
     setError(null);
     try {
+      console.log("[LoginScreen] invoking yt_auth_from_browser", { browser });
       const result = await invoke<AuthStatusResponse>("yt_auth_from_browser", { browser });
-      console.log("[LoginScreen] yt_auth_from_browser result:", result);
+      console.log("[LoginScreen] yt_auth_from_browser result", {
+        authenticated: result.authenticated,
+        method: result.method,
+        hasPageId: result.hasPageId,
+      });
       if (result.authenticated) {
+        console.log("[LoginScreen] auth succeeded — calling onAuthenticated");
         onAuthenticated();
       } else {
+        console.warn("[LoginScreen] auth returned authenticated=false for browser", browser);
         setError("Falha ao autenticar com cookies do navegador.");
       }
     } catch (err) {
-      console.error("[LoginScreen] yt_auth_from_browser failed:", err);
+      console.error("[LoginScreen] yt_auth_from_browser failed", { browser, error: String(err) });
       setError(String(err));
     } finally {
       setBrowserAuthLoading(null);
     }
-  }, [onAuthenticated]);
+  }, [onAuthenticated, browsers]);
 
   return (
     <div className="flex h-full items-center justify-center p-6">
@@ -154,15 +183,6 @@ export function LoginScreen({ onAuthenticated, onSkip }: LoginScreenProps) {
             </div>
           )}
 
-          <div className="border-t pt-3 text-center">
-            <button
-              onClick={onSkip}
-              className="inline-flex items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-foreground"
-            >
-              Continuar sem login
-              <ArrowRight className="size-3.5" />
-            </button>
-          </div>
         </CardContent>
       </Card>
     </div>

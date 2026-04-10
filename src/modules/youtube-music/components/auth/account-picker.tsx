@@ -13,50 +13,81 @@ export function AccountPicker({ onAccountSelected }: AccountPickerProps) {
   const [switching, setSwitching] = useState<string | null>(null);
 
   useEffect(() => {
+    console.log("[AccountPicker] mounted");
     let cancelled = false;
     async function load() {
       try {
-        console.log("[AccountPicker] Loading accounts...");
+        console.log("[AccountPicker] loading accounts via ytGetAccounts...");
         const result = await ytGetAccounts();
-        console.log("[AccountPicker] Loaded accounts:", result.length, result.map(a => a.name));
+        console.log("[AccountPicker] accounts loaded", {
+          total: result.length,
+          accounts: result.map((a) => ({
+            name: a.name,
+            pageId: a.pageId ?? null,
+            hasChannel: a.hasChannel,
+            isActive: a.isActive,
+            channelHandle: a.channelHandle ?? null,
+          })),
+        });
         if (!cancelled) {
           setAccounts(result);
           // If only one account with a channel, auto-select it
-          const channelAccounts = result.filter(a => a.hasChannel);
-          console.log("[AccountPicker] Channel accounts:", channelAccounts.length);
+          const channelAccounts = result.filter((a) => a.hasChannel);
+          console.log("[AccountPicker] channel accounts", { count: channelAccounts.length });
           if (channelAccounts.length === 1) {
-            console.log("[AccountPicker] Auto-selecting single channel account:", channelAccounts[0].name);
+            console.log("[AccountPicker] auto-selecting single channel account", {
+              name: channelAccounts[0].name,
+              pageId: channelAccounts[0].pageId ?? null,
+            });
             await ytSwitchAccount(channelAccounts[0].pageId);
             onAccountSelected();
             return;
           }
           // If no channel accounts, proceed without switching
           if (channelAccounts.length === 0) {
-            console.log("[AccountPicker] No channel accounts found, proceeding without switching");
+            console.log("[AccountPicker] no channel accounts found, proceeding without switching");
             onAccountSelected();
             return;
           }
         }
       } catch (err) {
-        console.error("[AccountPicker] Failed to load accounts:", err);
-        if (!cancelled) onAccountSelected(); // proceed anyway
+        console.error("[AccountPicker] failed to load accounts", { error: String(err) });
+        if (!cancelled) {
+          console.log("[AccountPicker] proceeding despite error");
+          onAccountSelected();
+        }
       } finally {
         if (!cancelled) setLoading(false);
       }
     }
     load();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+      console.log("[AccountPicker] unmounted");
+    };
   }, [onAccountSelected]);
 
   const handleSelect = async (account: ApiAccountInfo) => {
-    console.log("[AccountPicker] Selecting account:", account.name, account.pageId);
+    console.log("[AccountPicker] account button clicked", {
+      name: account.name,
+      pageId: account.pageId ?? null,
+      channelHandle: account.channelHandle ?? null,
+    });
     setSwitching(account.pageId ?? "main");
     try {
+      console.log("[AccountPicker] calling ytSwitchAccount", { pageId: account.pageId ?? null });
       await ytSwitchAccount(account.pageId);
-      console.log("[AccountPicker] Account switched successfully");
+      console.log("[AccountPicker] account switched successfully", {
+        name: account.name,
+        pageId: account.pageId ?? null,
+      });
       onAccountSelected();
     } catch (err) {
-      console.error("[AccountPicker] Failed to switch:", err);
+      console.error("[AccountPicker] failed to switch account", {
+        name: account.name,
+        pageId: account.pageId ?? null,
+        error: String(err),
+      });
       setSwitching(null);
     }
   };

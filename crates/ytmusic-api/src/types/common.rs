@@ -56,6 +56,7 @@ pub enum VideoType {
 #[serde(rename_all = "camelCase")]
 pub struct AccountInfo {
     pub name: String,
+    pub email: Option<String>,
     pub photo_url: Option<String>,
     pub channel_handle: Option<String>,
     pub page_id: Option<String>,

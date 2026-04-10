@@ -317,6 +317,15 @@ export interface ApiAccountInfo {
 export interface ApiAuthStatus {
   authenticated: boolean;
   method: string;
+  hasPageId: boolean;
+}
+
+export interface ApiGoogleAccountInfo {
+  authUser: number;
+  name: string;
+  email: string | null;
+  photoUrl: string | null;
+  channelHandle: string | null;
 }
 
 export interface ApiBrowserInfo {
@@ -527,12 +536,22 @@ export async function ytDetectBrowsers(): Promise<ApiBrowserInfo[]> {
   return invoke<ApiBrowserInfo[]>("yt_detect_browsers");
 }
 
-export async function ytAuthFromBrowser(browser: string): Promise<ApiAuthStatus> {
-  return invoke<ApiAuthStatus>("yt_auth_from_browser", { browser });
+export async function ytAuthFromBrowser(
+  browser: string,
+  authUser?: number
+): Promise<ApiAuthStatus> {
+  return invoke<ApiAuthStatus>("yt_auth_from_browser", {
+    browser,
+    authUser: authUser ?? 0,
+  });
 }
 
 export async function ytAuthLogout(): Promise<ApiAuthStatus> {
   return invoke<ApiAuthStatus>("yt_auth_logout");
+}
+
+export async function ytDetectGoogleAccounts(): Promise<ApiGoogleAccountInfo[]> {
+  return invoke<ApiGoogleAccountInfo[]>("yt_detect_google_accounts");
 }
 
 export async function ytGetStreamUrl(videoId: string): Promise<ApiStreamingData> {
