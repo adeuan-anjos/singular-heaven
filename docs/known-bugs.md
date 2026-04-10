@@ -2,7 +2,77 @@
 
 Lista de bugs e dívidas técnicas já observados no projeto e deixados para corrigir depois.
 
+## Blockers para open source
+
+### OAuth client secret no git history
+
+- Descrição:
+  - O secret `REDACTED_OAUTH_SECRET` está commitado em `docs/archive/session-handoff-2026-04-07.md` e em diffs de source Rust.
+- Impacto:
+  - Qualquer pessoa que clone o repo pode extrair o secret do histórico git.
+- Fix necessário:
+  - Rotacionar o secret no Google Cloud Console.
+  - Executar `git filter-repo --replace-text` com scrub por conteúdo (não por path) para remover de todos os commits.
+  - Os relatórios de auditoria (`SECURITY-AUDIT-*.md`) também contêm o secret — garantir que estão no `.gitignore` antes do push.
+
+### Scripts de probe são ferramentas de exfiltração de credenciais
+
+- Descrição:
+  - `scripts/ytmusic_like_probe.py` e `scripts/ytmusic_playlist_probe.py` leem `yt_cookies.txt`, calculam SAPISIDHASH e fazem requests autenticadas.
+- Impacto:
+  - Para um avaliador de segurança, são ferramentas documentadas de roubo de credenciais dentro do repo.
+- Fix necessário:
+  - Remover do repo ou mover para um repositório privado separado.
+
+### Paths pessoais com username em docs
+
+- Descrição:
+  - `docs/README.md` contém 20+ paths absolutos com `~\...`.
+- Impacto:
+  - Vaza PII (username do sistema) para qualquer pessoa que leia a doc.
+- Fix necessário:
+  - Substituir por paths relativos ou genéricos.
+
+### PII em debug logs (emails e page_ids)
+
+- Descrição:
+  - `println!` em Rust loga email completo do usuário e page_id em plaintext.
+  - Arquivos afetados: `account.rs:35`, `commands.rs:920`, `commands.rs:782`, `lib.rs:363`, `client.rs:134`.
+- Impacto:
+  - Se um usuário colar o log numa issue pública do GitHub, vaza dados pessoais.
+- Fix necessário:
+  - Redactar nos logs: `k***@gmail.com`, `1124...687`.
+  - Ou gatar com `#[cfg(debug_assertions)]`.
+
+### Código morto de parsing de email do InnerTube
+
+- Descrição:
+  - Campo `email` adicionado a `AccountInfo` e `GoogleAccountInfo` com parsing de `accountByline` e `activeAccountHeaderRenderer`. O InnerTube não retorna email por nenhuma dessas vias — o campo é sempre `None`.
+- Impacto:
+  - Código morto no codebase. Não causa bug, mas polui a API com campo que nunca tem valor.
+- Fix necessário:
+  - Remover campo `email` de `AccountInfo`, `GoogleAccountInfo`, `ApiGoogleAccountInfo` e o parsing morto em `account.rs`.
+  - Ou manter se houver plano futuro de obter email por outra via.
+
 ## Alta prioridade
+
+### Cookies armazenados em plaintext no disco
+
+- Sintoma:
+  - Cookies do YouTube (sessão Google completa) ficam em `yt_cookies.txt` como texto plano no app data dir.
+- Impacto:
+  - Qualquer processo rodando como o mesmo usuário pode ler os cookies e sequestrar a sessão Google.
+  - Em cenário de open source, um usuário pode acidentalmente compartilhar o arquivo pensando ser um log.
+- Causa raiz:
+  - O app usa `std::fs::write` (Windows) ou `OpenOptions` com `0600` (Unix) — sem criptografia.
+- Fix necessário:
+  - Usar o crate `keyring` para armazenar cookies no OS credential store:
+    - Windows: Credential Manager
+    - macOS: Keychain
+    - Linux: libsecret/kwallet
+  - Fallback para arquivo criptografado se o credential store não estiver disponível.
+- Área afetada:
+  - [client.rs (tauri)](/src-tauri/src/youtube_music/client.rs) — `save_cookies`, `load_cookies`, `write_sensitive_file`
 
 ### HomeView falha ao cachear coleções de tracks
 
@@ -137,6 +207,18 @@ Lista de bugs e dívidas técnicas já observados no projeto e deixados para cor
   - [thumb_cache.rs](/./src-tauri/src/thumb_cache.rs)
   - [client.rs](/./src-tauri/src/youtube_music/client.rs)
 
+## Features futuras
+
+### Modo sem login (acesso anônimo)
+
+- Descrição:
+  - Permitir usar o app sem autenticação, com acesso limitado a funcionalidades públicas (busca, explorar, reprodução).
+  - A opção "Continuar sem login" existia na LoginScreen mas foi removida por estar incompleta — nenhuma tela ou funcionalidade tratava o estado sem autenticação corretamente.
+- Requisitos para implementar:
+  - Definir quais features funcionam sem login (busca, explorar, reprodução) e quais ficam bloqueadas (playlists, likes, biblioteca).
+  - Tratar graciosamente chamadas de API que exigem autenticação no modo anônimo.
+  - UI deve indicar claramente que o usuário não está logado e oferecer login a qualquer momento.
+
 ## Encerrados recentemente
 
 - Likes de track agora são backend-first e usam a conta real via cookies.
@@ -144,3 +226,5 @@ Lista de bugs e dívidas técnicas já observados no projeto e deixados para cor
 - Queue e playlist seguem ordem coerente com a fonte real.
 - `shuffle` / `repeat` foram corrigidos no backend da fila.
 - A sidebar de playlists agora usa composição shadcn-first mantendo a ordem backend-first via `guide`.
+- Cookies expirados agora são re-extraídos silenciosamente do browser via `yt_ensure_session`.
+- Multi-conta Google implementado com seleção de email e canal.

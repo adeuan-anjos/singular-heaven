@@ -46,6 +46,17 @@ Referência curta dos comandos mais importantes do módulo YouTube Music.
 - `yt_get_library_playlists`
 - `yt_get_sidebar_playlists`
 
+## Auth
+
+- `yt_ensure_session` — valida cookies e re-extrai silenciosamente se expirados (401)
+- `yt_auth_status` — retorna `{ authenticated, method, hasPageId }`
+- `yt_detect_browsers` — lista browsers com cookies do YouTube
+- `yt_auth_from_browser` — extrai cookies do browser selecionado (aceita `authUser`)
+- `yt_detect_google_accounts` — probing `X-Goog-AuthUser` 0-9 para listar contas Google
+- `yt_get_accounts` — lista canais/brand accounts da conta Google ativa
+- `yt_switch_account` — seleciona canal via `pageId`, persiste em disco
+- `yt_auth_logout` — deleta credenciais e reverte para nao-autenticado
+
 ## Rule
 
-Se uma feature nova mudar semântica de playback, likes ou playlists, esta doc deve ser atualizada ou linkar para a referência mais específica.
+Se uma feature nova mudar semântica de playback, likes, playlists ou auth, esta doc deve ser atualizada ou linkar para a referência mais específica.
