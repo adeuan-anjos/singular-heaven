@@ -19,9 +19,9 @@ impl YtMusicState {
     }
 
     /// Create authenticated state from cookies.
-    pub fn new_from_cookies(cookie_string: String) -> Result<Self, String> {
-        println!("[YtMusicState] Creating cookie-auth client ({} chars)...", cookie_string.len());
-        let client = YtMusicClient::from_cookies(&cookie_string)
+    pub fn new_from_cookies(cookie_string: String, auth_user: u32) -> Result<Self, String> {
+        println!("[YtMusicState] Creating cookie-auth client ({} chars, auth_user={auth_user})...", cookie_string.len());
+        let client = YtMusicClient::from_cookies(&cookie_string, auth_user)
             .map_err(|e| format!("[YtMusicState] Failed: {e}"))?;
         println!("[YtMusicState] Cookie-auth client ready.");
         Ok(Self { client, cookies: Some(cookie_string) })
@@ -33,6 +33,34 @@ impl YtMusicState {
 
     pub fn auth_method(&self) -> &'static str {
         if self.client.is_authenticated() { "cookie" } else { "none" }
+    }
+
+    // -------------------------------------------------------------------------
+    // Sensitive file helper (0600 on Unix, default ACL on Windows)
+    // -------------------------------------------------------------------------
+
+    fn write_sensitive_file(path: &PathBuf, content: &str) -> Result<(), String> {
+        #[cfg(unix)]
+        {
+            use std::fs::OpenOptions;
+            use std::io::Write;
+            use std::os::unix::fs::OpenOptionsExt;
+            let mut file = OpenOptions::new()
+                .write(true)
+                .create(true)
+                .truncate(true)
+                .mode(0o600)
+                .open(path)
+                .map_err(|e| format!("Failed to create file: {e}"))?;
+            file.write_all(content.as_bytes())
+                .map_err(|e| format!("Failed to write file: {e}"))?;
+        }
+        #[cfg(not(unix))]
+        {
+            std::fs::write(path, content)
+                .map_err(|e| format!("Failed to write file: {e}"))?;
+        }
+        Ok(())
     }
 
     // -------------------------------------------------------------------------
@@ -48,8 +76,7 @@ impl YtMusicState {
         println!("[YtMusicState] Saving cookies to {}", path.display());
         std::fs::create_dir_all(app_data_dir)
             .map_err(|e| format!("Failed to create app data dir: {e}"))?;
-        std::fs::write(&path, cookie_string)
-            .map_err(|e| format!("Failed to write cookie file: {e}"))?;
+        Self::write_sensitive_file(&path, cookie_string)?;
         println!("[YtMusicState] Cookies saved.");
         Ok(())
     }
@@ -93,9 +120,8 @@ impl YtMusicState {
         println!("[YtMusicState] Saving page_id to {}", path.display());
         std::fs::create_dir_all(app_data_dir)
             .map_err(|e| format!("Failed to create app data dir: {e}"))?;
-        std::fs::write(&path, page_id)
-            .map_err(|e| format!("Failed to write page_id file: {e}"))?;
-        println!("[YtMusicState] Page ID saved: {page_id}");
+        Self::write_sensitive_file(&path, page_id)?;
+        println!("[YtMusicState] Page ID saved.");
         Ok(())
     }
 
@@ -120,6 +146,61 @@ impl YtMusicState {
         if path.exists() {
             let _ = std::fs::remove_file(&path);
             println!("[YtMusicState] Page ID deleted.");
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // Auth user index persistence
+    // -------------------------------------------------------------------------
+
+    pub fn get_auth_user_path(app_data_dir: &PathBuf) -> PathBuf {
+        app_data_dir.join("yt_auth_user.txt")
+    }
+
+    pub fn save_auth_user(app_data_dir: &PathBuf, auth_user: u32) -> Result<(), String> {
+        let path = Self::get_auth_user_path(app_data_dir);
+        println!("[YtMusicState] save_auth_user: persisting auth_user={auth_user} to {}", path.display());
+        std::fs::create_dir_all(app_data_dir)
+            .map_err(|e| format!("Failed to create app data dir: {e}"))?;
+        Self::write_sensitive_file(&path, &auth_user.to_string())?;
+        println!("[YtMusicState] save_auth_user: auth_user={auth_user} saved successfully");
+        Ok(())
+    }
+
+    pub fn load_auth_user(app_data_dir: &PathBuf) -> Option<u32> {
+        let path = Self::get_auth_user_path(app_data_dir);
+        println!("[YtMusicState] load_auth_user: checking {}", path.display());
+        match std::fs::read_to_string(&path) {
+            Ok(val) if !val.trim().is_empty() => {
+                match val.trim().parse::<u32>() {
+                    Ok(auth_user) => {
+                        println!("[YtMusicState] load_auth_user: loaded auth_user={auth_user}");
+                        Some(auth_user)
+                    }
+                    Err(e) => {
+                        println!("[YtMusicState] load_auth_user: failed to parse value '{}': {e}", val.trim());
+                        None
+                    }
+                }
+            }
+            Ok(_) => {
+                println!("[YtMusicState] load_auth_user: file exists but is empty, returning None");
+                None
+            }
+            Err(_) => {
+                println!("[YtMusicState] load_auth_user: file not found, returning None (default auth_user=0 will be used)");
+                None
+            }
+        }
+    }
+
+    pub fn delete_auth_user(app_data_dir: &PathBuf) {
+        let path = Self::get_auth_user_path(app_data_dir);
+        if path.exists() {
+            let _ = std::fs::remove_file(&path);
+            println!("[YtMusicState] delete_auth_user: auth_user file deleted from {}", path.display());
+        } else {
+            println!("[YtMusicState] delete_auth_user: file did not exist, nothing to delete");
         }
     }
 }

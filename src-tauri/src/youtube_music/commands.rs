@@ -5,18 +5,50 @@ use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, Manager, State};
 use tokio::sync::Mutex;
 use ytmusic_api::types::common::LikeStatus;
+use ytmusic_api::YtMusicClient;
 
 use super::client::YtMusicState;
 use crate::playback_queue::{PlaybackQueue, QueueCommandResponse, QueueSnapshot, QueueWindowResponse};
 use crate::playlist_cache::{self, CachedCollectionMeta, CachedPlaylistMeta, CachedTrack, PlaylistCache};
 
 // ---------------------------------------------------------------------------
+// IPC input limits (prevent OOM via oversized payloads)
+// ---------------------------------------------------------------------------
+const MAX_TRACK_IDS: usize = 10_000;
+const MAX_COLLECTION_TRACKS: usize = 10_000;
+const MAX_PLAYLIST_ITEMS: usize = 5_000;
+const MAX_STRING_LEN: usize = 1_000;
+const MAX_WINDOW_LIMIT: usize = 500;
+
+fn validate_vec_len<T>(vec: &[T], max: usize, name: &str) -> Result<(), String> {
+    if vec.len() > max {
+        return Err(format!(
+            "{name}: too many items ({}, max {max})",
+            vec.len()
+        ));
+    }
+    Ok(())
+}
+
+fn validate_string_len(s: &str, max: usize, name: &str) -> Result<(), String> {
+    if s.len() > max {
+        return Err(format!(
+            "{name}: string too long ({}, max {max})",
+            s.len()
+        ));
+    }
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
 // Auth response DTOs
 // ---------------------------------------------------------------------------
 #[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct AuthStatusResponse {
     pub authenticated: bool,
     pub method: String,
+    pub has_page_id: bool,
 }
 
 #[derive(Serialize)]
@@ -589,13 +621,16 @@ pub async fn yt_detect_browsers() -> Result<Vec<BrowserInfo>, String> {
 
 /// Authenticate YouTube Music using cookies extracted from a browser.
 /// `browser` can be "chrome", "firefox", "edge", "brave", or "auto" to try all.
+/// `auth_user` selects which Google account index to use (X-Goog-AuthUser header); defaults to 0.
 #[tauri::command]
 pub async fn yt_auth_from_browser(
     browser: String,
+    auth_user: Option<u32>,
     app: AppHandle,
     state: State<'_, Arc<Mutex<YtMusicState>>>,
 ) -> Result<AuthStatusResponse, String> {
-    println!("[yt_auth_from_browser] browser={browser}");
+    let auth_user = auth_user.unwrap_or(0).min(9);
+    println!("[yt_auth_from_browser] browser={browser}, auth_user={auth_user}");
 
     // 1. Extract cookies
     let (used_browser, cookie_string) = if browser == "auto" {
@@ -612,14 +647,15 @@ pub async fn yt_auth_from_browser(
     );
 
     // 2. Create YtMusicState with cookies (sync — no .await)
-    let new_state = YtMusicState::new_from_cookies(cookie_string.clone())?;
+    let new_state = YtMusicState::new_from_cookies(cookie_string.clone(), auth_user)?;
 
-    // 3. Save cookies to disk for persistence
+    // 3. Persist cookies and auth_user to disk
     let app_data_dir = app
         .path()
         .app_data_dir()
         .map_err(|e| format!("[yt_auth_from_browser] Failed to resolve app data dir: {e}"))?;
     YtMusicState::save_cookies(&app_data_dir, &cookie_string)?;
+    YtMusicState::save_auth_user(&app_data_dir, auth_user)?;
 
     // 4. Replace state
     let mut state_guard = state.lock().await;
@@ -629,6 +665,7 @@ pub async fn yt_auth_from_browser(
     Ok(AuthStatusResponse {
         authenticated: true,
         method: "cookie".to_string(),
+        has_page_id: false,
     })
 }
 
@@ -640,10 +677,127 @@ pub async fn yt_auth_status(
     let state = state.lock().await;
     let authenticated = state.is_authenticated();
     let method = state.auth_method().to_string();
-    println!("[yt_auth_status] authenticated={authenticated}, method={method}");
+    let has_page_id = state.client.on_behalf_of_user().is_some();
+    println!("[yt_auth_status] authenticated={authenticated}, method={method}, has_page_id={has_page_id}");
     Ok(AuthStatusResponse {
         authenticated,
         method,
+        has_page_id,
+    })
+}
+
+/// Validate current session and silently refresh cookies if expired.
+/// Called on startup — if cookies are stale (401 from YouTube), re-extracts
+/// from the browser and updates state transparently.
+#[tauri::command]
+pub async fn yt_ensure_session(
+    app: AppHandle,
+    state: State<'_, Arc<Mutex<YtMusicState>>>,
+) -> Result<AuthStatusResponse, String> {
+    // 1. Check if authenticated at all
+    let (is_auth, auth_user, obu) = {
+        let s = state.lock().await;
+        (
+            s.is_authenticated(),
+            s.client.auth_user(),
+            s.client.on_behalf_of_user().map(|s| s.to_string()),
+        )
+    };
+
+    println!("[yt_ensure_session] authenticated={is_auth}, auth_user={auth_user}, has_page_id={}", obu.is_some());
+
+    if !is_auth {
+        println!("[yt_ensure_session] branch: not authenticated — skipping validation, returning unauthenticated");
+        return Ok(AuthStatusResponse {
+            authenticated: false,
+            method: "none".to_string(),
+            has_page_id: false,
+        });
+    }
+
+    // 2. Test session with a lightweight API call (drop lock before network I/O)
+    println!("[yt_ensure_session] testing session validity via get_accounts...");
+    let test_result = {
+        let s = state.lock().await;
+        s.client.get_accounts().await
+    };
+
+    let needs_refresh = match &test_result {
+        Err(e) => {
+            let err_str = format!("{e}");
+            let is_401 = err_str.contains("401") || err_str.contains("Unauthorized");
+            println!("[yt_ensure_session] test result: error=\"{err_str}\" is_401={is_401}");
+            is_401
+        }
+        Ok(accounts) => {
+            println!("[yt_ensure_session] test result: valid=true account_count={}", accounts.len());
+            false
+        }
+    };
+
+    if !needs_refresh {
+        let has_page_id = obu.is_some();
+        println!("[yt_ensure_session] branch: session valid — returning authenticated (has_page_id={has_page_id})");
+        return Ok(AuthStatusResponse {
+            authenticated: true,
+            method: "cookie".to_string(),
+            has_page_id,
+        });
+    }
+
+    // 3. Session expired — try silent refresh from browser
+    println!("[yt_ensure_session] branch: session expired (401) — attempting silent cookie refresh...");
+
+    let fresh_cookies = match extract_cookies_auto() {
+        Ok((browser, cookies)) => {
+            println!("[yt_ensure_session] branch: refresh success — browser=\"{browser}\" cookie_len={}", cookies.len());
+            cookies
+        }
+        Err(e) => {
+            println!("[yt_ensure_session] branch: refresh failed — no browser cookies available: {e}");
+            println!("[yt_ensure_session] deleting stale credentials and reverting to unauthenticated");
+            // Can't refresh — delete stale cookies and report as unauthenticated
+            let app_data_dir = app.path().app_data_dir()
+                .map_err(|e| format!("[yt_ensure_session] {e}"))?;
+            YtMusicState::delete_cookies(&app_data_dir)?;
+            YtMusicState::delete_page_id(&app_data_dir);
+            YtMusicState::delete_auth_user(&app_data_dir);
+            let new_state = YtMusicState::new_unauthenticated()?;
+            let mut guard = state.lock().await;
+            *guard = new_state;
+            println!("[yt_ensure_session] reverted to unauthenticated — returning unauthenticated");
+            return Ok(AuthStatusResponse {
+                authenticated: false,
+                method: "none".to_string(),
+                has_page_id: false,
+            });
+        }
+    };
+
+    // 4. Create new state with fresh cookies, preserving auth_user and on_behalf_of_user
+    println!("[yt_ensure_session] rebuilding client with fresh cookies (auth_user={auth_user}, preserve_obu={})", obu.is_some());
+    let mut new_state = YtMusicState::new_from_cookies(fresh_cookies.clone(), auth_user)?;
+    if let Some(ref obu) = obu {
+        new_state.client.set_on_behalf_of_user(Some(obu.clone()));
+        println!("[yt_ensure_session] restored on_behalf_of_user={obu}");
+    }
+
+    // 5. Save refreshed cookies to disk
+    let app_data_dir = app.path().app_data_dir()
+        .map_err(|e| format!("[yt_ensure_session] {e}"))?;
+    YtMusicState::save_cookies(&app_data_dir, &fresh_cookies)?;
+
+    // 6. Replace state
+    let mut guard = state.lock().await;
+    *guard = new_state;
+
+    let has_page_id = obu.is_some();
+    println!("[yt_ensure_session] branch: silent refresh complete (auth_user={auth_user}, has_page_id={has_page_id})");
+
+    Ok(AuthStatusResponse {
+        authenticated: true,
+        method: "cookie".to_string(),
+        has_page_id,
     })
 }
 
@@ -660,22 +814,122 @@ pub async fn yt_auth_logout(
         .app_data_dir()
         .map_err(|e| format!("[yt_auth_logout] Failed to resolve app data dir: {e}"))?;
 
-    // Delete saved cookie file and page_id
+    // Delete saved cookie file, page_id, and auth_user
+    println!("[yt_auth_logout] deleting credentials: cookies, page_id, auth_user...");
+    let cookies_path = YtMusicState::get_cookie_path(&app_data_dir);
+    let page_id_path = YtMusicState::get_page_id_path(&app_data_dir);
+    let auth_user_path = YtMusicState::get_auth_user_path(&app_data_dir);
+    println!("[yt_auth_logout] cookies file exists={}, page_id file exists={}, auth_user file exists={}",
+        cookies_path.exists(), page_id_path.exists(), auth_user_path.exists());
     YtMusicState::delete_cookies(&app_data_dir)?;
     YtMusicState::delete_page_id(&app_data_dir);
+    YtMusicState::delete_auth_user(&app_data_dir);
+    println!("[yt_auth_logout] all credential files deleted");
 
     // Recreate unauthenticated state (sync — no .await)
-    println!("[yt_auth_logout] Recreating unauthenticated client...");
+    println!("[yt_auth_logout] recreating unauthenticated client...");
     let new_state = YtMusicState::new_unauthenticated()?;
 
     let mut state_guard = state.lock().await;
     *state_guard = new_state;
-    println!("[yt_auth_logout] Reverted to unauthenticated client.");
+    println!("[yt_auth_logout] reverted to unauthenticated client — logout complete");
 
     Ok(AuthStatusResponse {
         authenticated: false,
         method: "none".to_string(),
+        has_page_id: false,
     })
+}
+
+// ---------------------------------------------------------------------------
+// Multi-Google-account detection
+// ---------------------------------------------------------------------------
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GoogleAccountInfo {
+    pub auth_user: u32,
+    pub name: String,
+    pub email: Option<String>,
+    pub photo_url: Option<String>,
+    pub channel_handle: Option<String>,
+}
+
+/// Probe X-Goog-AuthUser indices 0..N and return all distinct Google accounts
+/// available in the current cookie jar.
+///
+/// Stops when a request fails, returns an empty account list, or a
+/// (name, channel_handle) pair that was already seen. Capped at 10 probes.
+#[tauri::command]
+pub async fn yt_detect_google_accounts(
+    state: State<'_, Arc<Mutex<YtMusicState>>>,
+) -> Result<Vec<GoogleAccountInfo>, String> {
+    println!("[yt_detect_google_accounts] Starting account detection...");
+
+    // Clone cookies and drop the lock before any network I/O.
+    let cookies = {
+        let guard = state.lock().await;
+        guard.cookies.clone()
+    };
+
+    let cookies = cookies.ok_or_else(|| "[yt_detect_google_accounts] Not authenticated".to_string())?;
+
+    const MAX_AUTH_USER: u32 = 10;
+    let mut accounts: Vec<GoogleAccountInfo> = Vec::new();
+    let mut seen_keys: HashSet<(String, Option<String>)> = HashSet::new();
+
+    for auth_user in 0..MAX_AUTH_USER {
+        println!("[yt_detect_google_accounts] Probing auth_user={auth_user}");
+
+        let temp_client = match YtMusicClient::from_cookies(&cookies, auth_user) {
+            Ok(c) => c,
+            Err(e) => {
+                println!("[yt_detect_google_accounts] Failed to build client for auth_user={auth_user}: {e}");
+                break;
+            }
+        };
+
+        let account_list = match temp_client.get_accounts().await {
+            Ok(list) => list,
+            Err(e) => {
+                println!("[yt_detect_google_accounts] get_accounts error for auth_user={auth_user}: {e}. Skipping.");
+                continue;
+            }
+        };
+
+        if account_list.is_empty() {
+            println!("[yt_detect_google_accounts] Empty account list at auth_user={auth_user}. Skipping.");
+            continue;
+        }
+
+        // Find the identity for this auth_user: prefer the active account, else first.
+        let identity = account_list.iter().find(|a| a.is_active)
+            .or_else(|| account_list.first());
+
+        let Some(identity) = identity else {
+            println!("[yt_detect_google_accounts] No identity found for auth_user={auth_user}. Skipping.");
+            continue;
+        };
+
+        let key = (identity.name.clone(), identity.channel_handle.clone());
+        if seen_keys.contains(&key) {
+            println!("[yt_detect_google_accounts] Duplicate identity '{}' at auth_user={auth_user}. Skipping.", identity.name);
+            continue;
+        }
+
+        println!("[yt_detect_google_accounts] Found account: name='{}', email={:?}, handle={:?}", identity.name, identity.email, identity.channel_handle);
+        seen_keys.insert(key);
+        accounts.push(GoogleAccountInfo {
+            auth_user,
+            name: identity.name.clone(),
+            email: identity.email.clone(),
+            photo_url: identity.photo_url.clone(),
+            channel_handle: identity.channel_handle.clone(),
+        });
+    }
+
+    println!("[yt_detect_google_accounts] Detection complete. Found {} account(s).", accounts.len());
+    Ok(accounts)
 }
 
 // ---------------------------------------------------------------------------
@@ -1061,8 +1315,18 @@ pub async fn yt_load_playlist(
         tokio::spawn(async move {
             println!("[yt_load_playlist:bg] Starting background fetch for {pid}");
             let mut token = cont_token;
+            const MAX_CONTINUATION_PAGES: usize = 200;
+            let mut page_count: usize = 0;
 
             loop {
+                page_count += 1;
+                if page_count > MAX_CONTINUATION_PAGES {
+                    eprintln!(
+                        "[yt_load_playlist:bg] Hit MAX_CONTINUATION_PAGES ({MAX_CONTINUATION_PAGES}) for {pid}, stopping"
+                    );
+                    break;
+                }
+
                 // Throttle between API calls
                 tokio::time::sleep(std::time::Duration::from_millis(300)).await;
 
@@ -1198,6 +1462,7 @@ pub async fn yt_get_cached_tracks(
     video_ids: Vec<String>,
     cache: State<'_, Arc<tokio::sync::Mutex<PlaylistCache>>>,
 ) -> Result<String, String> {
+    validate_vec_len(&video_ids, MAX_TRACK_IDS, "yt_get_cached_tracks")?;
     println!(
         "[yt_get_cached_tracks] Resolving {} video IDs",
         video_ids.len()
@@ -1281,6 +1546,7 @@ pub async fn yt_get_playlist_window(
     limit: usize,
     cache: State<'_, Arc<tokio::sync::Mutex<PlaylistCache>>>,
 ) -> Result<String, String> {
+    let limit = limit.min(MAX_WINDOW_LIMIT);
     println!(
         "[yt_get_playlist_window] playlist_id={} offset={} limit={}",
         playlist_id, offset, limit
@@ -1336,6 +1602,9 @@ pub async fn yt_cache_collection_snapshot(
     snapshot: CollectionSnapshotInput,
     cache: State<'_, Arc<tokio::sync::Mutex<PlaylistCache>>>,
 ) -> Result<CachedCollectionMeta, String> {
+    validate_vec_len(&snapshot.tracks, MAX_COLLECTION_TRACKS, "yt_cache_collection_snapshot")?;
+    validate_string_len(&snapshot.collection_id, MAX_STRING_LEN, "collection_id")?;
+    validate_string_len(&snapshot.title, MAX_STRING_LEN, "title")?;
     println!(
         "[yt_cache_collection_snapshot] type={} id={} tracks={}",
         snapshot.collection_type,
@@ -1506,6 +1775,25 @@ pub async fn yt_set_playlist_thumbnail(
         input.mime_type
     );
 
+    // SECURITY: Cap image size at 10 MB
+    const MAX_IMAGE_BYTES: usize = 10 * 1024 * 1024;
+    if input.image_bytes.len() > MAX_IMAGE_BYTES {
+        return Err(format!(
+            "[yt_set_playlist_thumbnail] Image too large: {} bytes (max {})",
+            input.image_bytes.len(),
+            MAX_IMAGE_BYTES
+        ));
+    }
+
+    // SECURITY: Only allow known image MIME types
+    const ALLOWED_MIMES: &[&str] = &["image/jpeg", "image/png", "image/webp"];
+    if !ALLOWED_MIMES.contains(&input.mime_type.as_str()) {
+        return Err(format!(
+            "[yt_set_playlist_thumbnail] Invalid mime_type: '{}' (allowed: {:?})",
+            input.mime_type, ALLOWED_MIMES
+        ));
+    }
+
     let updated_page = {
         let state = state.lock().await;
         state
@@ -1566,6 +1854,7 @@ pub async fn yt_add_playlist_items(
     source_playlist_id: Option<String>,
     state: State<'_, Arc<Mutex<YtMusicState>>>,
 ) -> Result<String, String> {
+    validate_vec_len(&video_ids, MAX_PLAYLIST_ITEMS, "yt_add_playlist_items")?;
     println!(
         "[yt_add_playlist_items] playlist_id={} video_ids={} source_playlist_id={:?}",
         playlist_id,
@@ -1615,6 +1904,7 @@ pub async fn yt_get_collection_window(
     limit: usize,
     cache: State<'_, Arc<tokio::sync::Mutex<PlaylistCache>>>,
 ) -> Result<String, String> {
+    let limit = limit.min(MAX_WINDOW_LIMIT);
     println!(
         "[yt_get_collection_window] type={} id={} offset={} limit={}",
         collection_type, collection_id, offset, limit
@@ -1672,6 +1962,7 @@ pub async fn yt_queue_set(
     queue: State<'_, Arc<tokio::sync::Mutex<PlaybackQueue>>>,
     app: AppHandle,
 ) -> Result<QueueCommandResponse, String> {
+    validate_vec_len(&track_ids, MAX_TRACK_IDS, "yt_queue_set")?;
     println!(
         "[yt_queue_set] count={} start_index={} playlist_id={:?} is_complete={} shuffle={}",
         track_ids.len(),
@@ -1704,6 +1995,7 @@ pub async fn yt_queue_get_window(
     limit: usize,
     queue: State<'_, Arc<tokio::sync::Mutex<PlaybackQueue>>>,
 ) -> Result<QueueWindowResponse, String> {
+    let limit = limit.min(MAX_WINDOW_LIMIT);
     let queue = queue.lock().await;
     let response = queue.get_window(offset, limit);
     let first = response.items.first().map(|item| {
@@ -1803,6 +2095,7 @@ pub async fn yt_queue_add_collection_next(
     queue: State<'_, Arc<tokio::sync::Mutex<PlaybackQueue>>>,
     app: AppHandle,
 ) -> Result<QueueCommandResponse, String> {
+    validate_vec_len(&track_ids, MAX_TRACK_IDS, "yt_queue_add_collection_next")?;
     println!(
         "[yt_queue_add_collection_next] count={} sample={}",
         track_ids.len(),
@@ -1823,6 +2116,7 @@ pub async fn yt_queue_append_collection(
     queue: State<'_, Arc<tokio::sync::Mutex<PlaybackQueue>>>,
     app: AppHandle,
 ) -> Result<QueueCommandResponse, String> {
+    validate_vec_len(&track_ids, MAX_TRACK_IDS, "yt_queue_append_collection")?;
     println!(
         "[yt_queue_append_collection] count={} sample={}",
         track_ids.len(),

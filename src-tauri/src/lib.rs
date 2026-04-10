@@ -10,12 +10,6 @@ use tokio::sync::Mutex;
 
 use youtube_music::client::YtMusicState;
 
-// Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-#[tauri::command]
-fn greet(name: &str) -> String {
-    format!("Hello, {}! You've been greeted from Rust!", name)
-}
-
 #[tauri::command]
 fn yt_set_memory_level(window: tauri::WebviewWindow, low: bool) {
     println!("[yt_set_memory_level] low={low}");
@@ -116,6 +110,40 @@ pub fn run() {
                     } else if let Some(val) = param.strip_prefix("s=") {
                         size = val.parse().unwrap_or(60);
                     }
+                }
+
+                // SECURITY: Only allow YouTube/Google CDN domains (SSRF prevention)
+                let is_allowed = original_url.starts_with("https://") && {
+                    // Extract host from https://HOST/... or https://HOST?...
+                    let after_scheme = &original_url[8..];
+                    let host = after_scheme
+                        .split('/')
+                        .next()
+                        .unwrap_or("")
+                        .split('?')
+                        .next()
+                        .unwrap_or("")
+                        .split(':')
+                        .next()
+                        .unwrap_or("");
+                    host.ends_with(".ytimg.com")
+                        || host.ends_with(".ggpht.com")
+                        || host.ends_with(".googleusercontent.com")
+                        || host.ends_with(".gstatic.com")
+                        || host == "ytimg.com"
+                        || host == "ggpht.com"
+                        || host == "googleusercontent.com"
+                        || host == "gstatic.com"
+                };
+
+                if !original_url.is_empty() && !is_allowed {
+                    println!("[thumb://] BLOCKED: URL domain not in allowlist: {original_url}");
+                    let resp = tauri::http::Response::builder()
+                        .status(403)
+                        .body("Forbidden: URL domain not allowed".as_bytes().to_vec())
+                        .unwrap();
+                    responder.respond(resp);
+                    return;
                 }
 
                 if original_url.is_empty() {
@@ -231,6 +259,20 @@ pub fn run() {
                 let video_id = path.as_str();
                 println!("[stream://] Request for videoId={video_id}");
 
+                // SECURITY: Validate videoId format (exactly 11 chars, base64url alphabet)
+                let is_valid_video_id = video_id.len() == 11
+                    && video_id.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-');
+
+                if !is_valid_video_id {
+                    eprintln!("[stream://] BLOCKED: invalid videoId format: {video_id}");
+                    let resp = tauri::http::Response::builder()
+                        .status(400)
+                        .body("Invalid videoId format".as_bytes().to_vec())
+                        .unwrap();
+                    responder.respond(resp);
+                    return;
+                }
+
                 let state = app.state::<Arc<Mutex<YtMusicState>>>();
                 let result = {
                     let st = state.lock().await;
@@ -247,7 +289,6 @@ pub fn run() {
                             .header("Content-Length", len.to_string())
                             .header("Accept-Ranges", "bytes")
                             .header("Content-Range", format!("bytes 0-{}/{}", len.saturating_sub(1), len))
-                            .header("Access-Control-Allow-Origin", "*")
                             .body(bytes)
                             .unwrap();
                         responder.respond(resp);
@@ -301,34 +342,46 @@ pub fn run() {
             });
 
             if let Some(cookie_string) = saved_cookies {
-                println!("[setup] Found saved cookies, creating cookie-auth client...");
-                match YtMusicState::new_from_cookies(cookie_string) {
+                let auth_user = app_data_dir.as_ref()
+                    .and_then(|dir| YtMusicState::load_auth_user(dir))
+                    .unwrap_or(0);
+
+                println!("[setup] found saved cookies — creating cookie-auth client (auth_user={auth_user})...");
+                match YtMusicState::new_from_cookies(cookie_string, auth_user) {
                     Ok(mut state) => {
                         // Restore saved brand account (pageId) if available
+                        let mut restored_page_id: Option<String> = None;
                         if let Some(ref dir) = app_data_dir {
                             if let Some(page_id) = YtMusicState::load_page_id(dir) {
-                                println!("[setup] Restoring saved page_id: {page_id}");
-                                state.client.set_on_behalf_of_user(Some(page_id));
+                                println!("[setup] restoring saved page_id={page_id}");
+                                state.client.set_on_behalf_of_user(Some(page_id.clone()));
+                                restored_page_id = Some(page_id);
                             }
                         }
-                        println!("[setup] Cookie-auth client created from saved cookies.");
+                        println!("[setup] FINAL STATE SUMMARY: authenticated=true, auth_user={auth_user}, has_page_id={}", restored_page_id.is_some());
+                        if let Some(ref pid) = restored_page_id {
+                            println!("[setup] FINAL STATE SUMMARY: page_id={pid}");
+                        }
                         app.manage(Arc::new(Mutex::new(state)));
                         println!("[setup] YtMusicState added to managed state.");
                         return Ok(());
                     }
                     Err(e) => {
-                        eprintln!("[setup] Failed to create cookie-auth client: {e}");
-                        println!("[setup] Falling back to unauthenticated...");
+                        eprintln!("[setup] failed to create cookie-auth client: {e}");
+                        println!("[setup] falling back to unauthenticated...");
                     }
                 }
+            } else {
+                println!("[setup] no saved cookies found");
             }
 
             // Priority 2: Unauthenticated
-            println!("[setup] No saved credentials, creating unauthenticated client...");
+            println!("[setup] no saved credentials — creating unauthenticated client...");
+            println!("[setup] FINAL STATE SUMMARY: authenticated=false, auth_user=0, has_page_id=false");
             let state = match YtMusicState::new_unauthenticated() {
                 Ok(s) => s,
                 Err(e) => {
-                    eprintln!("[setup] Failed to create YtMusicState: {e}");
+                    eprintln!("[setup] failed to create YtMusicState: {e}");
                     return Ok(());
                 }
             };
@@ -338,7 +391,6 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
-            greet,
             yt_set_memory_level,
             youtube_music::commands::yt_search,
             youtube_music::commands::yt_search_suggestions,
@@ -364,9 +416,11 @@ pub fn run() {
             youtube_music::commands::yt_get_watch_playlist,
             youtube_music::commands::yt_get_lyrics,
             youtube_music::commands::yt_auth_status,
+            youtube_music::commands::yt_ensure_session,
             youtube_music::commands::yt_auth_logout,
             youtube_music::commands::yt_detect_browsers,
             youtube_music::commands::yt_auth_from_browser,
+            youtube_music::commands::yt_detect_google_accounts,
             youtube_music::commands::yt_get_accounts,
             youtube_music::commands::yt_switch_account,
             youtube_music::commands::yt_get_stream_url,

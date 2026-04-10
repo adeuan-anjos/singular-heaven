@@ -23,5 +23,12 @@ dist-ssr
 *.sln
 *.sw?
 
+# Environment / secrets
+.env
+.env.*
+
+# Security audit reports (contain sensitive findings)
+SECURITY-AUDIT-*.md
+
 # Rust
 target/
