@@ -95,6 +95,7 @@ export function PlaylistPage() {
     onAppendPlaylistToQueue,
     onPlaylistDeleted,
     onPlayAll,
+    onStartRadio,
   } = useYtActions();
   const refreshVersion = usePlaylistRefreshStore((s) => s.versions[playlistId] ?? 0);
   const [playlist, setPlaylist] = useState<Playlist | null>(null);
@@ -403,6 +404,7 @@ export function PlaylistPage() {
       showShuffle={hasTracksAvailable}
       showPlayNext
       showAppendQueue
+      showStartRadio={hasTracksAvailable}
       showSavePlaylist
       showShare
       destructiveLabel={destructiveLabel}
@@ -410,6 +412,7 @@ export function PlaylistPage() {
       disableShuffle={!hasTracksAvailable}
       disablePlayNext={!hasTracksAvailable}
       disableAppendQueue={!hasTracksAvailable}
+      disableStartRadio={!hasTracksAvailable}
       disableDestructive={playlistPending}
       onEdit={
         onEditPlaylist ? () => onEditPlaylist(playlist) : undefined
@@ -417,6 +420,7 @@ export function PlaylistPage() {
       onShufflePlay={() => void handleShufflePlayAction()}
       onPlayNext={() => void handleAddPlaylistNextAction()}
       onAppendQueue={() => void handleAppendPlaylistToQueueAction()}
+      onStartRadio={() => void onStartRadio({ kind: "playlist", id: playlist.playlistId })}
       onSavePlaylist={() => onSavePlaylist(playlistId, playlist.title)}
       onShare={() => void handleSharePlaylist()}
       onDestructive={() =>

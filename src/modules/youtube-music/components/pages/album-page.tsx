@@ -21,14 +21,14 @@ import {
 import { usePlayerStore } from "../../stores/player-store";
 import { useYtActions } from "../../router/actions-context";
 import { paths } from "../../router/paths";
-import { Play, Shuffle, Loader2 } from "lucide-react";
+import { Play, Shuffle, Radio, Loader2 } from "lucide-react";
 import type { Album } from "../../types/music";
 
 export function AlbumPage() {
   const params = useParams<{ id: string }>();
   const albumId = decodeURIComponent(params.id ?? "");
   const [, navigate] = useLocation();
-  const { onPlayTrack, onPlayAll, onAddToQueue, onAddToPlaylist } = useYtActions();
+  const { onPlayTrack, onPlayAll, onAddToQueue, onAddToPlaylist, onStartRadio } = useYtActions();
   const [album, setAlbum] = useState<Album | null>(null);
   const [collectionTracks, setCollectionTracks] = useState<TrackCollectionEntry[]>([]);
   const [loading, setLoading] = useState(true);
@@ -170,6 +170,13 @@ export function AlbumPage() {
               >
                 <Shuffle data-icon="inline-start" />
                 Aleatório
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => void onStartRadio({ kind: "album", id: album.browseId })}
+              >
+                <Radio data-icon="inline-start" />
+                Iniciar rádio
               </Button>
             </ButtonGroup>
           </CollectionHeaderActions>

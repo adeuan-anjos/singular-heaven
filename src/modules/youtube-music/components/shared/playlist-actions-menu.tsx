@@ -13,6 +13,7 @@ import {
   ListEnd,
   ListPlus,
   PencilLine,
+  Radio,
   Share2,
   Shuffle,
   Trash2,
@@ -26,6 +27,7 @@ interface PlaylistActionsMenuProps {
   showShuffle?: boolean;
   showPlayNext?: boolean;
   showAppendQueue?: boolean;
+  showStartRadio?: boolean;
   showSavePlaylist?: boolean;
   showShare?: boolean;
   destructiveLabel?: string | null;
@@ -33,6 +35,7 @@ interface PlaylistActionsMenuProps {
   disableShuffle?: boolean;
   disablePlayNext?: boolean;
   disableAppendQueue?: boolean;
+  disableStartRadio?: boolean;
   disableSavePlaylist?: boolean;
   disableShare?: boolean;
   disableDestructive?: boolean;
@@ -40,6 +43,7 @@ interface PlaylistActionsMenuProps {
   onShufflePlay?: () => void;
   onPlayNext?: () => void;
   onAppendQueue?: () => void;
+  onStartRadio?: () => void;
   onSavePlaylist?: () => void;
   onShare?: () => void;
   onDestructive?: () => void;
@@ -51,6 +55,7 @@ export function PlaylistActionsMenu({
   showShuffle = false,
   showPlayNext = true,
   showAppendQueue = true,
+  showStartRadio = false,
   showSavePlaylist = true,
   showShare = true,
   destructiveLabel = null,
@@ -58,6 +63,7 @@ export function PlaylistActionsMenu({
   disableShuffle = false,
   disablePlayNext = false,
   disableAppendQueue = false,
+  disableStartRadio = false,
   disableSavePlaylist = false,
   disableShare = false,
   disableDestructive = false,
@@ -65,6 +71,7 @@ export function PlaylistActionsMenu({
   onShufflePlay,
   onPlayNext,
   onAppendQueue,
+  onStartRadio,
   onSavePlaylist,
   onShare,
   onDestructive,
@@ -74,7 +81,7 @@ export function PlaylistActionsMenu({
   const Separator = kind === "dropdown" ? DropdownMenuSeparator : ContextMenuSeparator;
 
   const hasEditAction = showEdit;
-  const hasPlaybackActions = showShuffle || showPlayNext || showAppendQueue;
+  const hasPlaybackActions = showShuffle || showPlayNext || showAppendQueue || showStartRadio;
   const hasPlaylistActions = showSavePlaylist || showShare;
 
   return (
@@ -98,6 +105,12 @@ export function PlaylistActionsMenu({
             <Item onClick={onShufflePlay} disabled={disableShuffle}>
               <Shuffle />
               Aleatório
+            </Item>
+          ) : null}
+          {showStartRadio ? (
+            <Item onClick={onStartRadio} disabled={disableStartRadio}>
+              <Radio />
+              Iniciar rádio
             </Item>
           ) : null}
           {showPlayNext ? (
