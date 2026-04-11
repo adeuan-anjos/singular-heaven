@@ -6,6 +6,25 @@ use crate::error::{Error, Result};
 use crate::parsers::watch::{parse_lyrics_response, parse_watch_continuation_response, parse_watch_response};
 use crate::types::watch::{Lyrics, WatchPlaylist, WatchPlaylistRequest};
 
+/// Minimal percent-encoding for URL query values. Escapes everything that isn't
+/// an unreserved ASCII character per RFC 3986 (A-Z, a-z, 0-9, hyphen, underscore,
+/// period, tilde). This ensures tokens with special characters don't corrupt
+/// the URL query string.
+fn percent_encode_query(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    for b in s.bytes() {
+        match b {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
+                out.push(b as char);
+            }
+            _ => {
+                out.push_str(&format!("%{:02X}", b));
+            }
+        }
+    }
+    out
+}
+
 impl YtMusicClient {
     /// Get a watch or radio playlist.
     ///
@@ -46,7 +65,8 @@ impl YtMusicClient {
             result.continuation.is_some()
         );
 
-        // Continuation loop
+        // Continuation loop with safeguards against infinite loops
+        const MAX_WATCH_PAGES: usize = 40;
         let mut pages = 1usize;
         while result.tracks.len() < req.limit {
             let Some(token) = result.continuation.clone() else {
@@ -57,13 +77,26 @@ impl YtMusicClient {
                 break;
             };
 
+            // Guard against theoretical infinite loop: hard cap on pages.
+            if pages >= MAX_WATCH_PAGES {
+                println!(
+                    "[ytmusic-api] get_watch_playlist: page cap ({MAX_WATCH_PAGES}) reached — stopping to avoid infinite loop"
+                );
+                break;
+            }
+
             let cont_result = self
                 .get_watch_playlist_continuation(&token, is_playlist)
                 .await?;
             pages += 1;
 
-            if cont_result.tracks.is_empty() && cont_result.continuation.is_none() {
-                println!("[ytmusic-api] get_watch_playlist: continuation returned empty — stopping");
+            // Break on empty page regardless of continuation token presence.
+            // This prevents spinning when the server returns empty pages with
+            // non-null continuation tokens (theoretical edge case).
+            if cont_result.tracks.is_empty() {
+                println!(
+                    "[ytmusic-api] get_watch_playlist: empty continuation page at page {pages} — stopping to avoid spin"
+                );
                 break;
             }
 
@@ -100,8 +133,10 @@ impl YtMusicClient {
         );
 
         let ctype = if is_playlist { "" } else { "Radio" };
+        // Percent-encode the continuation token to handle special characters in the URL.
+        let encoded_continuation = percent_encode_query(continuation);
         let endpoint = format!(
-            "{ENDPOINT_NEXT}?ctoken={continuation}&continuation={continuation}&type=next{ctype}"
+            "{ENDPOINT_NEXT}?ctoken={encoded_continuation}&continuation={encoded_continuation}&type=next{ctype}"
         );
 
         let body = json!({

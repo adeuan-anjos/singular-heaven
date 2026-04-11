@@ -121,8 +121,12 @@ impl YtMusicClient {
     }
 
     /// Send a POST request to an InnerTube endpoint.
-    /// `endpoint` is the path after the base URL (e.g., "search").
-    /// `body` is merged with the context object.
+    ///
+    /// `endpoint` is the path after the base URL (e.g., "search" or
+    /// "next?ctoken=..."). If it already contains a query string, extra
+    /// params are appended with `&`; otherwise with `?`.
+    ///
+    /// `body` is merged with the context object before sending.
     pub async fn post_innertube(&self, endpoint: &str, body: Value) -> Result<Value> {
         let separator = if endpoint.contains('?') { '&' } else { '?' };
         let url = format!("{BASE_URL}{endpoint}{separator}key={API_KEY}&prettyPrint=false");
