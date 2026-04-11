@@ -47,7 +47,7 @@ pub fn parse_watch_response(response: &Value) -> Result<WatchPlaylist> {
             "tabRenderer", "endpoint", "browseEndpoint", "browseId",
         ]));
 
-    Ok(WatchPlaylist { tracks, lyrics_browse_id, related_browse_id })
+    Ok(WatchPlaylist { tracks, continuation: None, lyrics_browse_id, related_browse_id })
 }
 
 fn parse_watch_track(renderer: &Value) -> Option<WatchTrack> {
@@ -82,7 +82,7 @@ fn parse_watch_track(renderer: &Value) -> Option<WatchTrack> {
         })
         .unwrap_or_default();
 
-    Some(WatchTrack { title, video_id, artists, album, duration, thumbnails })
+    Some(WatchTrack { title, video_id, artists, album, length: duration, like_status: None, video_type: None, views: None, thumbnails })
 }
 
 pub fn parse_lyrics_response(response: &Value) -> Result<Lyrics> {

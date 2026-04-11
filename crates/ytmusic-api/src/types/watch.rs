@@ -1,12 +1,5 @@
 use serde::Serialize;
-use super::common::{Thumbnail, ArtistRef, AlbumRef, LikeStatus};
-
-/// Tipo do seed a partir do qual o rádio é gerado.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum WatchSeedKind {
-    Video,
-    Playlist,
-}
+use super::common::{Thumbnail, ArtistRef, AlbumRef, LikeStatus, VideoType};
 
 /// Requisição para `get_watch_playlist`. Reflete os parâmetros de
 /// `ytmusicapi.WatchMixin.get_watch_playlist` em Python.
@@ -63,7 +56,7 @@ pub struct WatchTrack {
     pub length: Option<String>,
     pub thumbnails: Vec<Thumbnail>,
     pub like_status: Option<LikeStatus>,
-    pub video_type: Option<String>,
+    pub video_type: Option<VideoType>,
     pub views: Option<String>,
 }
 
