@@ -8,6 +8,13 @@ O formato segue o espírito de [Keep a Changelog](https://keepachangelog.com/), 
 
 ### Added
 
+- Performance: `Arc<Mutex>` → `Arc<RwLock>` — todas as chamadas API rodam em paralelo (startup 10.3s → 1.36s).
+- Cache SWR (stale-while-revalidate) em SQLite para liked track IDs e library playlists — warm start instantâneo (~21ms vs 5-8s).
+- Sidebar otimizada: usa cache de library playlists + 1 request `guide` (elimina fetch duplicado de 6-8s).
+- Instrumentação de performance (`services/perf.ts`) com timeline, waterfall e `__perfDump()` no console.
+- Manifesto UAC no build Windows (`requireAdministrator`) para compatibilidade com Chromium 130+ appbound encryption.
+- Novos comandos cached: `yt_get_liked_track_ids_cached`, `yt_get_library_playlists_cached`, `yt_get_sidebar_playlists_cached`.
+- Eventos Tauri `liked-track-ids-updated` e `library-playlists-updated` para refresh silencioso de dados cached.
 - Autenticacao multi-conta Google: probing `X-Goog-AuthUser` 0-9 para listar todas as contas logadas no browser.
 - Selecao de conta Google → canal em fluxo de dois passos (auto-pula se so ha uma opcao).
 - Validacao silenciosa de sessao no startup (`yt_ensure_session`): re-extrai cookies do browser automaticamente se expirados.
@@ -20,6 +27,12 @@ O formato segue o espírito de [Keep a Changelog](https://keepachangelog.com/), 
 - Sidebar de playlists baseada no `guide` do YouTube Music para refletir a ordem real do produto.
 - Documentação específica da sidebar e das regras de composição com shadcn + virtualização.
 - Referência de composição de menus shadcn/Base UI com blur, highlight e ancoragem em listas virtualizadas.
+
+### Fixed
+
+- CSP corrigido para incluir `http://thumb.localhost` e `http://stream.localhost` (imagens e áudio quebrados em build de produção).
+- Dead code `is_cached` removido de `thumb_cache.rs`.
+- Indicador de "tocando agora" (barrinhas do equalizer no `TrackTableRow`) consumia 3-6% de CPU do WebView2 na tela de playlist e ~6.5% com o app minimizado. A animação CSS usava `height` (não-composable, força style+layout+paint a cada frame × 144Hz × 3 spans) e o Chromium não pausa CSS animations automaticamente enquanto há áudio reproduzindo. Fix troca a animação para `transform: scaleY` (composable, roda só no compositor thread da GPU) e adiciona um hook `useDocumentHiddenClass` em `src/lib/hooks/` que sincroniza uma classe `document-hidden` no `<html>` via `visibilitychange` — uma regra CSS (`html.document-hidden .equalizer span { animation-play-state: paused }`) pausa completamente a animação quando o app está minimizado. Aplica-se a qualquer animação `infinite` visível durante playback: usar apenas `transform`/`opacity` e pausar em `document-hidden`.
 
 ### Changed
 
