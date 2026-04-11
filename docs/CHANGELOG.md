@@ -8,6 +8,7 @@ O formato segue o espírito de [Keep a Changelog](https://keepachangelog.com/), 
 
 ### Added
 
+- Componentes shadcn `Item` (list row composition) e `Spinner` instalados via CLI e usados nos pickers de auth.
 - Performance: `Arc<Mutex>` → `Arc<RwLock>` — todas as chamadas API rodam em paralelo (startup 10.3s → 1.36s).
 - Cache SWR (stale-while-revalidate) em SQLite para liked track IDs e library playlists — warm start instantâneo (~21ms vs 5-8s).
 - Sidebar otimizada: usa cache de library playlists + 1 request `guide` (elimina fetch duplicado de 6-8s).
@@ -36,6 +37,8 @@ O formato segue o espírito de [Keep a Changelog](https://keepachangelog.com/), 
 
 ### Changed
 
+- `yt_detect_google_accounts` agora faz o probing de `X-Goog-AuthUser` 0-9 em paralelo via `futures::future::join_all` (antes era um `for` sequencial). Reduz o tempo da tela de seleção de conta Google de ~5-10s para ~500ms-1s em contas com múltiplos perfis logados. Dedup determinístico mantido via iteração ordenada por `auth_user`. Dependência `futures = "0.3"` adicionada em `src-tauri/Cargo.toml`.
+- `GoogleAccountPicker` e `AccountPicker` refatorados para usar o componente `Item` (shadcn/ReUI) ao invés de `<button>` nativo ou `Button variant="outline"` empilhado. Linhas agora seguem a composição `Item > ItemMedia/ItemContent/ItemActions` com `Button` de ação em `ItemActions` (padrão do demo ReUI, zero customização via `className` nos sub-componentes de `Item`). Visual mais compacto e idiomático. `Card` externo removido — o `Item variant="outline"` já fornece o container visual. Loading state usa `Skeleton` dentro de `Item`s ao invés de `Loader2` solto.
 - `CollectionHeader` refatorado de componente monolítico (props-driven) para composição shadcn-first com sub-componentes (`CollectionHeaderInfo`, `CollectionHeaderThumbnail`, `CollectionHeaderContent`, `CollectionHeaderActions`, `CollectionHeaderMenu`).
 - Botões de ação em headers agora usam `ButtonGroup` (componente shadcn instalado) ao invés de `flex gap-*` manual.
 - Ícones em botões agora usam `data-icon="inline-start"` ao invés de `className="mr-2 h-4 w-4"` — delega sizing e spacing ao Button.

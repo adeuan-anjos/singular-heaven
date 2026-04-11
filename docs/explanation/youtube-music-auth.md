@@ -17,7 +17,7 @@ Browser (cookies no disco)
 
 1. **LoginScreen** — `yt_detect_browsers` lista browsers com cookies do YouTube
 2. **Selecao de browser** — `yt_auth_from_browser` extrai cookies via `rookie`
-3. **GoogleAccountPicker** — `yt_detect_google_accounts` faz probing de `X-Goog-AuthUser` 0-9 para descobrir contas logadas
+3. **GoogleAccountPicker** — `yt_detect_google_accounts` faz probing de `X-Goog-AuthUser` 0-9 em paralelo (`futures::future::join_all`) para descobrir contas logadas. Dedup por `(name, channel_handle)` aplicado na iteração ordenada dos resultados (first-wins por `auth_user`).
 4. **AccountPicker** — `yt_get_accounts` lista canais/brand accounts da conta selecionada
 5. **Main app** — credenciais salvas, app pronto
 
@@ -69,6 +69,8 @@ SAPISIDHASH timestamp_SHA1(timestamp SAPISID origin)
 ## Multi-conta Google
 
 O header `X-Goog-AuthUser` determina qual conta Google e usada. O Google suporta ate 10 contas simultaneas por browser. Contas sem YouTube Music retornam 403 e sao puladas no probing.
+
+O probe 0-9 roda em paralelo: 10 `YtMusicClient` temporarios sao construidos com `auth_user` distintos e disparados simultaneamente via `futures::future::join_all`. Como os clients temporarios nao tocam no `YtMusicState` compartilhado, nao ha contencao de lock. O tempo total da deteccao e ~max(10 requests) em vez de ~sum(10 requests).
 
 ## Multi-canal (brand accounts)
 

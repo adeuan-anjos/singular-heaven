@@ -185,12 +185,92 @@ O `ButtonGroup` raiz aplica `gap-2` entre grupos filhos. Botões dentro do mesmo
 
 Já coberto em [Shadcn Menu Composition](shadcn-menu-composition.md) — os wrappers de menu e botão já resolvem spacing.
 
+## Listas de items (rows com avatar + texto + ação)
+
+Para qualquer lista de linhas com avatar/imagem + título + descrição + ação — account pickers, team members, device lists, search results densos — usar o componente `Item` (`@/components/ui/item`).
+
+### Regra central
+
+Não empilhar `Button variant="outline"` nem `<button>` manual pra criar rows. Não embrulhar em `Card`. O `Item` já é o container da linha, com `variant` e `size` próprios.
+
+```tsx
+<ItemGroup>
+  {items.map((item) => (
+    <Item key={item.id} variant="outline" size="xs">
+      <ItemMedia>
+        <Avatar>
+          <AvatarImage src={item.photoUrl} alt={item.name} />
+          <AvatarFallback>{item.name.charAt(0)}</AvatarFallback>
+        </Avatar>
+      </ItemMedia>
+      <ItemContent>
+        <ItemTitle>{item.name}</ItemTitle>
+        <ItemDescription>{item.subtitle}</ItemDescription>
+      </ItemContent>
+      <ItemActions>
+        <Button variant="outline" size="sm" onClick={() => handleSelect(item)}>
+          Selecionar
+        </Button>
+      </ItemActions>
+    </Item>
+  ))}
+</ItemGroup>
+```
+
+### Não customizar sub-componentes
+
+`Item`, `ItemMedia`, `ItemContent`, `ItemTitle`, `ItemDescription`, `ItemActions` já cuidam de sizing, spacing, typography e truncation. O `Avatar` dentro de `ItemMedia` também: não passar `className="size-*"` — o Item escala sozinho pelo `size="xs"|sm|default"`.
+
+A ação da linha é o `Button` dentro de `ItemActions`, não a linha inteira. Não transformar o `Item` num `<button>` via `render={<button>}` — além de exigir `className` compensatório (`text-left`, `disabled:*`), quebra a separação semântica entre "display row" e "action".
+
+### Loading state
+
+Usar `Skeleton` **dentro** de `Item`s com a mesma shape da lista final. Preserva o reservado visual, evita layout shift quando os dados chegam.
+
+```tsx
+<ItemGroup>
+  {Array.from({ length: 4 }).map((_, i) => (
+    <Item key={i} variant="outline" size="xs">
+      <ItemMedia>
+        <Skeleton className="size-8 rounded-full" />
+      </ItemMedia>
+      <ItemContent>
+        <Skeleton className="h-4 w-32" />
+      </ItemContent>
+    </Item>
+  ))}
+</ItemGroup>
+```
+
+### O que NÃO fazer
+
+```tsx
+// Errado — Button empilhado vira "gigante e tosco", border duplo, padding gigante
+{accounts.map(acc => (
+  <Button variant="outline" className="h-auto justify-start gap-3 px-4 py-3">
+    <img src={acc.photoUrl} className="size-10 rounded-full" />
+    <div>...</div>
+  </Button>
+))}
+
+// Errado — Card como wrapper duplica o container visual do Item
+<Card>
+  <CardContent>
+    <ItemGroup>...</ItemGroup>
+  </CardContent>
+</Card>
+```
+
 ## Componentes existentes que seguem esse padrão
 
 - `CollectionHeader` — header de playlist, álbum e artista
   - `CollectionHeaderInfo`, `CollectionHeaderThumbnail`, `CollectionHeaderContent`
   - `CollectionHeaderActions` (usa `ButtonGroup` como raiz)
   - `CollectionHeaderMenu` (wrapper de conveniência para `DropdownMenu` com ellipsis)
+- `GoogleAccountPicker` e `AccountPicker` — pickers de auth do YouTube Music
+  - Usam `ItemGroup` + `Item` para as linhas
+  - Ação via `Button` em `ItemActions`
+  - Zero `className` nos sub-componentes de `Item`
 
 ## Relação com outras docs
 

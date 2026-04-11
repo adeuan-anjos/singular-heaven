@@ -1187,21 +1187,32 @@ pub async fn yt_detect_google_accounts(
     let cookies = cookies.ok_or_else(|| "[yt_detect_google_accounts] Not authenticated".to_string())?;
 
     const MAX_AUTH_USER: u32 = 10;
+
+    // Build all 10 clients up-front, then fire get_accounts() in parallel.
+    // Previously this loop was sequential, causing 5-10s of startup latency.
+    let probes = (0..MAX_AUTH_USER).filter_map(|auth_user| {
+        match YtMusicClient::from_cookies(&cookies, auth_user) {
+            Ok(client) => Some((auth_user, client)),
+            Err(e) => {
+                println!("[yt_detect_google_accounts] Failed to build client for auth_user={auth_user}: {e}");
+                None
+            }
+        }
+    });
+
+    let futures = probes.map(|(auth_user, client)| async move {
+        let result = client.get_accounts().await;
+        (auth_user, result)
+    });
+
+    let results = futures::future::join_all(futures).await;
+
     let mut accounts: Vec<GoogleAccountInfo> = Vec::new();
     let mut seen_keys: HashSet<(String, Option<String>)> = HashSet::new();
 
-    for auth_user in 0..MAX_AUTH_USER {
-        println!("[yt_detect_google_accounts] Probing auth_user={auth_user}");
-
-        let temp_client = match YtMusicClient::from_cookies(&cookies, auth_user) {
-            Ok(c) => c,
-            Err(e) => {
-                println!("[yt_detect_google_accounts] Failed to build client for auth_user={auth_user}: {e}");
-                break;
-            }
-        };
-
-        let account_list = match temp_client.get_accounts().await {
+    // Iterate in auth_user order to keep dedup deterministic (first wins).
+    for (auth_user, result) in results {
+        let account_list = match result {
             Ok(list) => list,
             Err(e) => {
                 println!("[yt_detect_google_accounts] get_accounts error for auth_user={auth_user}: {e}. Skipping.");
@@ -1214,7 +1225,6 @@ pub async fn yt_detect_google_accounts(
             continue;
         }
 
-        // Find the identity for this auth_user: prefer the active account, else first.
         let identity = account_list.iter().find(|a| a.is_active)
             .or_else(|| account_list.first());
 
@@ -1229,7 +1239,7 @@ pub async fn yt_detect_google_accounts(
             continue;
         }
 
-        println!("[yt_detect_google_accounts] Found account: name='{}', email={:?}, handle={:?}", identity.name, identity.email, identity.channel_handle);
+        println!("[yt_detect_google_accounts] Found account: auth_user={auth_user}, name='{}', email={:?}, handle={:?}", identity.name, identity.email, identity.channel_handle);
         seen_keys.insert(key);
         accounts.push(GoogleAccountInfo {
             auth_user,

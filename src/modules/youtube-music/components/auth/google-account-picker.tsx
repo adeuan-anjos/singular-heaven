@@ -1,12 +1,18 @@
 import { useState, useEffect } from "react";
-import { Mail, Loader2, ArrowLeft } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Button } from "@/components/ui/button";
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+  Item,
+  ItemActions,
+  ItemContent,
+  ItemDescription,
+  ItemGroup,
+  ItemMedia,
+  ItemTitle,
+} from "@/components/ui/item";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Spinner } from "@/components/ui/spinner";
 import {
   ytDetectGoogleAccounts,
   ytAuthFromBrowser,
@@ -75,103 +81,93 @@ export function GoogleAccountPicker({
   }, [onAccountSelected]);
 
   const handleSelect = async (account: ApiGoogleAccountInfo) => {
-    console.log("[GoogleAccountPicker] account button clicked", {
+    console.log("[GoogleAccountPicker] account clicked", {
       name: account.name,
       authUser: account.authUser,
-      channelHandle: account.channelHandle ?? null,
     });
     setSelecting(account.authUser);
     try {
-      console.log("[GoogleAccountPicker] calling ytAuthFromBrowser with authUser", account.authUser);
       await ytAuthFromBrowser("auto", account.authUser);
-      console.log("[GoogleAccountPicker] ytAuthFromBrowser succeeded, notifying parent", {
-        authUser: account.authUser,
-        name: account.name,
-      });
+      console.log("[GoogleAccountPicker] authenticated", { authUser: account.authUser });
       onAccountSelected(account.authUser);
     } catch (err) {
-      console.error("[GoogleAccountPicker] ytAuthFromBrowser failed", {
+      console.error("[GoogleAccountPicker] auth failed", {
         authUser: account.authUser,
-        name: account.name,
         error: String(err),
       });
       setSelecting(null);
     }
   };
 
-  if (loading) {
-    return (
-      <div className="flex h-full items-center justify-center">
-        <Loader2 className="size-6 animate-spin text-muted-foreground" />
-      </div>
-    );
-  }
-
-  console.log("[GoogleAccountPicker] render", {
-    total: accounts.length,
-    accounts: accounts.map((a) => ({ authUser: a.authUser, name: a.name, channelHandle: a.channelHandle ?? null })),
-    selecting,
-  });
+  console.log("[GoogleAccountPicker] render", { loading, total: accounts.length, selecting });
 
   return (
     <div className="flex h-full items-center justify-center p-6">
-      <Card className="w-full max-w-md">
-        <CardHeader className="text-center">
-          <div className="mx-auto mb-2 flex size-12 items-center justify-center rounded-full bg-primary/10">
-            <Mail className="size-6 text-primary" />
-          </div>
-          <CardTitle className="text-xl">Selecionar conta Google</CardTitle>
-          <CardDescription>
+      <div className="flex w-full max-w-md flex-col gap-4">
+        <div className="text-center">
+          <h2 className="text-base font-semibold">Selecionar conta Google</h2>
+          <p className="text-sm text-muted-foreground">
             Escolha qual conta do Google deseja usar.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-2">
-          {accounts.map((account) => (
-            <button
-              key={account.authUser}
-              onClick={() => handleSelect(account)}
-              disabled={selecting !== null}
-              className="flex items-center gap-3 rounded-lg border border-border px-4 py-3 text-left transition-colors hover:bg-accent disabled:opacity-50"
-            >
-              {account.photoUrl ? (
-                <img
-                  referrerPolicy="no-referrer"
-                  src={account.photoUrl}
-                  alt={account.name}
-                  className="size-10 rounded-full"
-                />
-              ) : (
-                <div className="flex size-10 items-center justify-center rounded-full bg-muted text-sm font-medium">
-                  {account.name.charAt(0)}
-                </div>
-              )}
-              <div className="min-w-0 flex-1">
-                <div className="truncate text-sm font-medium">
-                  {account.name}
-                </div>
-                {account.email && (
-                  <div className="truncate text-xs text-muted-foreground">
-                    {account.email}
-                  </div>
-                )}
-              </div>
-              {selecting === account.authUser && (
-                <Loader2 className="size-4 animate-spin text-muted-foreground" />
-              )}
-            </button>
-          ))}
+          </p>
+        </div>
 
-          <div className="border-t pt-3 text-center">
-            <button
-              onClick={onBack}
-              className="inline-flex items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-foreground"
-            >
-              <ArrowLeft className="size-3.5" />
-              Voltar
-            </button>
-          </div>
-        </CardContent>
-      </Card>
+        <ItemGroup>
+          {loading
+            ? Array.from({ length: 4 }).map((_, i) => (
+                <Item key={i} variant="outline" size="xs">
+                  <ItemMedia>
+                    <Skeleton className="size-8 rounded-full" />
+                  </ItemMedia>
+                  <ItemContent>
+                    <Skeleton className="h-4 w-32" />
+                  </ItemContent>
+                </Item>
+              ))
+            : accounts.map((account) => {
+                const isSelecting = selecting === account.authUser;
+                return (
+                  <Item key={account.authUser} variant="outline" size="xs">
+                    <ItemMedia>
+                      <Avatar>
+                        <AvatarImage
+                          src={account.photoUrl ?? undefined}
+                          alt={account.name}
+                          referrerPolicy="no-referrer"
+                        />
+                        <AvatarFallback>
+                          {account.name.charAt(0).toUpperCase()}
+                        </AvatarFallback>
+                      </Avatar>
+                    </ItemMedia>
+                    <ItemContent>
+                      <ItemTitle>{account.name}</ItemTitle>
+                      {account.email && (
+                        <ItemDescription>{account.email}</ItemDescription>
+                      )}
+                    </ItemContent>
+                    <ItemActions>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleSelect(account)}
+                        disabled={selecting !== null}
+                      >
+                        {isSelecting && <Spinner data-icon="inline-start" />}
+                        Selecionar
+                      </Button>
+                    </ItemActions>
+                  </Item>
+                );
+              })}
+        </ItemGroup>
+
+        <div className="text-center">
+          <Button variant="ghost" size="sm" onClick={onBack}>
+            <ArrowLeft data-icon="inline-start" />
+            Voltar
+          </Button>
+        </div>
+      </div>
     </div>
   );
 }
