@@ -2801,9 +2801,9 @@ pub async fn yt_queue_clear(
 // Radio helpers (Task 7)
 // ---------------------------------------------------------------------------
 
-/// Convert a `WatchTrack` (API shape) to a `CachedTrack` (cache/frontend shape).
-/// Fields map 1:1 except `length` → `duration` and the duration string is parsed
-/// into `duration_seconds` via `playlist_cache::parse_duration`.
+/// Converts a `WatchTrack` (watch/next endpoint shape) into a `CachedTrack`
+/// (SQLite cache shape). Drops `like_status`, `video_type`, and `views` because
+/// the cache schema doesn't store them.
 fn cached_from_watch(t: &WatchTrack) -> CachedTrack {
     let artists: Vec<CachedArtist> = t
         .artists
@@ -2927,17 +2927,20 @@ pub async fn continue_radio_background(app: AppHandle) {
     // 3. Cache tracks so get_tracks_by_ids can resolve them. Radio tracks live
     //    in collection_tracks with collection_type = "radio". We use the current
     //    row count as start_pos to append rather than overwrite prior pages.
+    //    Cache write is best-effort: queue append proceeds even if cache fails.
     if !cached.is_empty() {
         let cache_state = app.state::<Arc<tokio::sync::Mutex<PlaylistCache>>>();
         let cache_guard = cache_state.lock().await;
-        let start_pos = cache_guard
-            .collection_track_count("radio", &collection_id)
-            .unwrap_or(0);
-        let rows = playlist_cache::cached_tracks_to_rows(&cached);
-        if let Err(e) =
-            cache_guard.save_collection_tracks("radio", &collection_id, start_pos, &rows)
-        {
-            println!("[continue_radio] cache save_collection_tracks error: {e}");
+        match cache_guard.collection_track_count("radio", &collection_id) {
+            Ok(start_pos) => {
+                let rows = playlist_cache::cached_tracks_to_rows(&cached);
+                if let Err(e) = cache_guard.save_collection_tracks("radio", &collection_id, start_pos, &rows) {
+                    println!("[continue_radio] save_collection_tracks error: {e}");
+                }
+            }
+            Err(e) => {
+                println!("[continue_radio] collection_track_count error: {e} — skipping cache write");
+            }
         }
     }
 
