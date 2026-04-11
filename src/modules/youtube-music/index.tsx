@@ -252,6 +252,28 @@ export default function YouTubeMusicModule() {
     };
   }, [queueSyncSnapshot]);
 
+  useEffect(() => {
+    let cancelled = false;
+    let unlisten: UnlistenFn | null = null;
+
+    listen("radio-extended", () => {
+      if (cancelled) return;
+      console.log("[YouTubeMusicModule] radio-extended event received");
+      useQueueStore.getState().applyRadioExtended();
+    }).then((fn) => {
+      if (cancelled) {
+        fn();
+      } else {
+        unlisten = fn;
+      }
+    });
+
+    return () => {
+      cancelled = true;
+      unlisten?.();
+    };
+  }, []);
+
   // SWR: listen for background refresh of liked track IDs
   useEffect(() => {
     let cancelled = false;

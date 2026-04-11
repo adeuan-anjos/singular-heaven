@@ -17,6 +17,7 @@ import {
   ytQueueRemove,
   ytQueueSet,
   ytQueueToggleShuffle,
+  ytRadioReroll,
 } from "../services/yt-api";
 
 const PAGE_SIZE = 50;
@@ -34,6 +35,7 @@ interface QueueState {
   isComplete: boolean;
   shuffle: boolean;
   repeat: RepeatMode;
+  isRadio: boolean;
   pageSize: number;
   revealStep: number;
 }
@@ -65,6 +67,7 @@ interface QueueActions {
   removeFromQueue: (index: number) => Promise<void>;
   toggleShuffle: () => Promise<void>;
   cycleRepeat: () => Promise<void>;
+  applyRadioExtended: () => void;
   cleanup: () => Promise<void>;
 }
 
@@ -111,6 +114,7 @@ function applySnapshot(snapshot: QueueSnapshot): Partial<QueueState> {
     isComplete: snapshot.isComplete,
     shuffle: snapshot.shuffle,
     repeat: snapshot.repeat,
+    isRadio: snapshot.isRadio,
   };
 }
 
@@ -124,6 +128,7 @@ export const useQueueStore = create<QueueStore>()((set, get) => ({
   isComplete: true,
   shuffle: false,
   repeat: "off",
+  isRadio: false,
   pageSize: PAGE_SIZE,
   revealStep: PAGE_SIZE,
 
@@ -441,6 +446,27 @@ export const useQueueStore = create<QueueStore>()((set, get) => ({
   },
 
   toggleShuffle: async () => {
+    if (get().isRadio) {
+      console.log("[QueueStore] toggleShuffle in radio mode → re-roll");
+      try {
+        const response = await ytRadioReroll();
+        console.log("[QueueStore] radio re-roll snapshot", {
+          totalLoaded: response.snapshot.totalLoaded,
+          currentIndex: response.snapshot.currentIndex,
+          isComplete: response.snapshot.isComplete,
+        });
+        set((state) => ({
+          ...applySnapshot(response.snapshot),
+          revealedCount: deriveRevealedCount(state.revealedCount, response.snapshot, true),
+          pages: emptyPages(),
+          pagesVersion: state.pagesVersion + 1,
+        }));
+      } catch (err) {
+        console.error("[QueueStore] radio re-roll failed", err);
+        throw err;
+      }
+      return;
+    }
     const response = await ytQueueToggleShuffle();
     console.log("[QueueStore] toggleShuffle", { shuffle: response.snapshot.shuffle });
     set((state) => ({
@@ -457,6 +483,14 @@ export const useQueueStore = create<QueueStore>()((set, get) => ({
     set((state) => ({
       ...applySnapshot(response.snapshot),
       revealedCount: deriveRevealedCount(state.revealedCount, response.snapshot, false),
+    }));
+  },
+
+  applyRadioExtended: () => {
+    console.log("[QueueStore] radio-extended event → invalidate pages");
+    set((state) => ({
+      pages: emptyPages(),
+      pagesVersion: state.pagesVersion + 1,
     }));
   },
 
