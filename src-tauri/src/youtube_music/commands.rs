@@ -2967,13 +2967,17 @@ pub async fn continue_radio_background(app: AppHandle) {
     let added = {
         let mut q = queue.lock().await;
         let added = q.append_radio_batch(&track_ids);
+        let exhausted = track_ids.is_empty() || page.continuation.is_none();
         if let Some(rs) = q.radio_state_mut() {
             rs.continuation = page.continuation.clone();
             rs.loaded_count += added;
-            if track_ids.is_empty() || page.continuation.is_none() {
+            if exhausted {
                 rs.pool_exhausted = true;
                 println!("[continue_radio] pool_exhausted=true");
             }
+        }
+        if exhausted {
+            q.set_is_complete(true);
         }
         added
     };
@@ -3051,6 +3055,7 @@ pub async fn yt_radio_start(
 
     let loaded_count = track_ids.len();
     let continuation = page.continuation.clone();
+    let has_more = continuation.is_some();
     let response = {
         let mut q = queue.lock().await;
         // `set_queue` clears radio_state automatically (Task 5 behavior), so we
@@ -3059,13 +3064,13 @@ pub async fn yt_radio_start(
             track_ids,
             0,
             None,
-            /* is_complete */ false,
+            /* is_complete */ !has_more,
             /* shuffle */ false,
         );
         q.set_radio_state(RadioState {
             seed,
             continuation,
-            pool_exhausted: false,
+            pool_exhausted: !has_more,
             loaded_count,
         });
         // Rebuild the response so `snapshot.is_radio` reflects the installed
@@ -3152,11 +3157,15 @@ pub async fn yt_radio_reroll(
             .cloned()
             .collect();
         let added = q.append_radio_batch(&track_ids_to_append);
+        let has_more = page.continuation.is_some();
         if let Some(rs) = q.radio_state_mut() {
             rs.continuation = page.continuation.clone();
             rs.loaded_count = added;
-            rs.pool_exhausted = page.continuation.is_none();
+            rs.pool_exhausted = !has_more;
         }
+        // Sync is_complete: if reroll fetched a page with continuation,
+        // recover a previously stale is_complete=true.
+        q.set_is_complete(!has_more);
         println!(
             "[yt_radio_reroll] removed={} added={} pool_exhausted={}",
             removed,

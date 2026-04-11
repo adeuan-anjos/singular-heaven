@@ -166,6 +166,16 @@ impl PlaybackQueue {
         self.radio_state.as_mut()
     }
 
+    pub fn set_is_complete(&mut self, complete: bool) {
+        if self.is_complete != complete {
+            println!(
+                "[PlaybackQueue] set_is_complete {} → {}",
+                self.is_complete, complete
+            );
+            self.is_complete = complete;
+        }
+    }
+
     pub fn clear_radio(&mut self) {
         if self.radio_state.is_some() {
             println!("[PlaybackQueue] clear_radio");

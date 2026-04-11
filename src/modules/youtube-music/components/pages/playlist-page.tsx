@@ -420,7 +420,14 @@ export function PlaylistPage() {
       onShufflePlay={() => void handleShufflePlayAction()}
       onPlayNext={() => void handleAddPlaylistNextAction()}
       onAppendQueue={() => void handleAppendPlaylistToQueueAction()}
-      onStartRadio={() => void onStartRadio({ kind: "playlist", id: playlist.playlistId })}
+      onStartRadio={() => {
+        const firstTrack = playlist.tracks?.[0];
+        if (!firstTrack?.videoId) {
+          console.warn("[playlist-page] no tracks loaded, cannot start radio");
+          return;
+        }
+        void onStartRadio({ kind: "video", id: firstTrack.videoId });
+      }}
       onSavePlaylist={() => onSavePlaylist(playlistId, playlist.title)}
       onShare={() => void handleSharePlaylist()}
       onDestructive={() =>
