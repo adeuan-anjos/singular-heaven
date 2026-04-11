@@ -416,6 +416,7 @@ export async function ytGetLibrarySongs(): Promise<ApiLibrarySong[]> {
 export type TrackLikeStatus = "LIKE" | "DISLIKE" | "INDIFFERENT";
 export type PlaylistLikeStatus = "LIKE" | "DISLIKE" | "INDIFFERENT";
 export type PlaylistPrivacyStatus = "PUBLIC" | "PRIVATE" | "UNLISTED";
+export type RadioSeedKind = "video" | "playlist" | "album" | "artist";
 
 export interface TrackLikeStatusResponse {
   videoId: string;
@@ -738,6 +739,7 @@ export interface QueueSnapshot {
   isComplete: boolean;
   shuffle: boolean;
   repeat: "off" | "all" | "one";
+  isRadio: boolean;
 }
 
 export interface QueueWindowItem {
@@ -828,4 +830,17 @@ export async function ytQueueCycleRepeat(): Promise<QueueCommandResponse> {
 
 export async function ytQueueClear(): Promise<QueueCommandResponse> {
   return invoke<QueueCommandResponse>("yt_queue_clear");
+}
+
+export async function ytRadioStart(
+  seedKind: RadioSeedKind,
+  seedId: string,
+): Promise<QueueCommandResponse> {
+  const json = await invoke<string>("yt_radio_start", { seedKind, seedId });
+  return parseJson<QueueCommandResponse>(json);
+}
+
+export async function ytRadioReroll(): Promise<QueueCommandResponse> {
+  const json = await invoke<string>("yt_radio_reroll");
+  return parseJson<QueueCommandResponse>(json);
 }
