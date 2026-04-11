@@ -39,3 +39,6 @@ target/
 
 # Claude Code local state (session locks, etc.)
 .claude/
+
+# Local experiments and API fixture dumps
+tmp/
