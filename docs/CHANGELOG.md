@@ -36,6 +36,10 @@ O formato segue o espírito de [Keep a Changelog](https://keepachangelog.com/), 
 
 ### Changed
 
+- `CollectionHeader` refatorado de componente monolítico (props-driven) para composição shadcn-first com sub-componentes (`CollectionHeaderInfo`, `CollectionHeaderThumbnail`, `CollectionHeaderContent`, `CollectionHeaderActions`, `CollectionHeaderMenu`).
+- Botões de ação em headers agora usam `ButtonGroup` (componente shadcn instalado) ao invés de `flex gap-*` manual.
+- Ícones em botões agora usam `data-icon="inline-start"` ao invés de `className="mr-2 h-4 w-4"` — delega sizing e spacing ao Button.
+- Referência de composição de componentes shadcn documentada em `docs/reference/shadcn-component-composition.md`.
 - Queue e playback agora têm semântica global consistente de `shuffle`, `repeat`, `next`, `previous` e `add next`.
 - Coleções reproduzíveis deixaram de depender de arrays locais como fonte de verdade.
 - Menus de playlist foram refinados para usar blur global, highlight do item alvo e regras explícitas de `DropdownMenu` vs `ContextMenu`.

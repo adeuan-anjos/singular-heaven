@@ -1,8 +1,14 @@
 import { useState, useEffect, useRef } from "react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
-import { CollectionHeader } from "../shared/collection-header";
-import type { CollectionHeaderAction } from "../shared/collection-header";
+import { ButtonGroup } from "@/components/ui/button-group";
+import {
+  CollectionHeader,
+  CollectionHeaderInfo,
+  CollectionHeaderThumbnail,
+  CollectionHeaderContent,
+  CollectionHeaderActions,
+} from "../shared/collection-header";
 import { CarouselSection } from "../shared/carousel-section";
 import { MediaCard } from "../shared/media-card";
 import { TrackTable } from "../shared/track-table";
@@ -121,32 +127,51 @@ export function ArtistPage({
   // Use the largest available thumbnail (last in array = highest resolution)
   const imgUrl = artist.thumbnails[artist.thumbnails.length - 1]?.url ?? "";
 
-  const infoLines: string[] = [];
-  if (artist.monthlyListeners) infoLines.push(artist.monthlyListeners);
-  if (artist.subscribers) infoLines.push(`${artist.subscribers} inscritos`);
-
-  const actions: CollectionHeaderAction[] = [];
-  if (artist.shuffleId) {
-    actions.push({ label: "Aleatório", icon: Shuffle, onClick: () => {} });
-  }
-  if (artist.radioId) {
-    actions.push({ label: "Rádio", icon: Radio, onClick: () => {} });
-  }
-  actions.push({
-    label: subscribed ? "Inscrito" : "Inscrever-se",
-    onClick: () => setSubscribed(!subscribed),
-    variant: subscribed ? "default" : "outline",
-  });
-
   return (
     <ScrollArea className="group/page h-full">
       <div className="mx-auto max-w-screen-xl space-y-6 p-4">
-        <CollectionHeader
-          title={artist.name}
-          thumbnailUrl={imgUrl || undefined}
-          infoLines={infoLines}
-          actions={actions}
-        />
+        <CollectionHeader>
+          <CollectionHeaderInfo>
+            <CollectionHeaderThumbnail
+              src={imgUrl || undefined}
+              alt={artist.name}
+              fallback={artist.name.charAt(0)}
+            />
+            <CollectionHeaderContent>
+              <h1 className="text-4xl font-bold text-foreground">{artist.name}</h1>
+              {artist.monthlyListeners && (
+                <p className="text-sm text-muted-foreground">{artist.monthlyListeners}</p>
+              )}
+              {artist.subscribers && (
+                <p className="text-sm text-muted-foreground">{artist.subscribers} inscritos</p>
+              )}
+            </CollectionHeaderContent>
+          </CollectionHeaderInfo>
+          <CollectionHeaderActions>
+            <ButtonGroup>
+              {artist.shuffleId && (
+                <Button variant="outline" onClick={() => {}}>
+                  <Shuffle data-icon="inline-start" />
+                  Aleatório
+                </Button>
+              )}
+              {artist.radioId && (
+                <Button variant="outline" onClick={() => {}}>
+                  <Radio data-icon="inline-start" />
+                  Rádio
+                </Button>
+              )}
+            </ButtonGroup>
+            <ButtonGroup>
+              <Button
+                variant={subscribed ? "default" : "outline"}
+                onClick={() => setSubscribed(!subscribed)}
+              >
+                {subscribed ? "Inscrito" : "Inscrever-se"}
+              </Button>
+            </ButtonGroup>
+          </CollectionHeaderActions>
+        </CollectionHeader>
 
         {/* Top songs */}
         {artist.topSongs && artist.topSongs.length > 0 && (

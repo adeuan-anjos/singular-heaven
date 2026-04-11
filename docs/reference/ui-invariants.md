@@ -37,6 +37,14 @@
 - coração de track nunca usa `useState` local como source of truth
 - update otimista precisa ter rollback
 
+## Botões e ícones
+
+- ícones com texto usam `data-icon="inline-start"` ou `data-icon="inline-end"` — nunca `className="mr-2 h-4 w-4"`
+- icon buttons usam `size="icon"` + `aria-label` — nunca classes manuais de tamanho
+- botões relacionados usam `ButtonGroup` — nunca `flex gap-*` manual
+- botões de ação em headers usam nested `ButtonGroup` para separar clusters funcionais
+- ver [Shadcn Component Composition](shadcn-component-composition.md) para regras completas
+
 ## Menus
 
 - largura do menu é ajustada no `Content`, não no `Item`

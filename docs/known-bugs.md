@@ -113,18 +113,17 @@ Lista de bugs e dívidas técnicas já observados no projeto e deixados para cor
 
 ## Média prioridade
 
-### CollectionHeader de artista ainda usa like local/fake
+### Páginas de artista ainda usam subscribe local/fake
 
 - Sintoma:
-  - Os corações de header em páginas de artista continuam locais.
+  - O botão “Inscrever-se” em páginas de artista usa `useState` local — não está conectado ao backend.
 - Impacto:
-  - A UI pode sugerir suporte a “curtir artista/coleção”, mas isso não está conectado ao backend nem à conta real.
+  - A UI sugere suporte a inscrição, mas o estado é perdido ao navegar.
 - Área afetada:
   - [artist-page.tsx](/./src/modules/youtube-music/components/pages/artist-page.tsx)
   - [artist-songs-page.tsx](/./src/modules/youtube-music/components/pages/artist-songs-page.tsx)
-  - [collection-header.tsx](/./src/modules/youtube-music/components/shared/collection-header.tsx)
 - Observação:
-  - Isso é deliberadamente separado do coração de track. Precisa decidir a semântica antes de implementar.
+  - Após refatoração do `CollectionHeader` para composição shadcn-first, o estado de subscribe vive nas páginas consumidoras, não no componente compartilhado. Precisa decidir a semântica antes de implementar.
 
 ### Ações avançadas de playlist ainda não implementadas
 

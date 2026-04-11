@@ -18,8 +18,36 @@ Não começar pelo componente visual. Começar pela fonte de verdade.
    - changelog
    - explanation/reference
 
+## Header da página
+
+Se a página tiver header com thumbnail, título e ações, usar os sub-componentes de `CollectionHeader`:
+
+```tsx
+<CollectionHeader>
+  <CollectionHeaderInfo>
+    <CollectionHeaderThumbnail src="..." alt="..." fallback="X" />
+    <CollectionHeaderContent>
+      <h1 className="text-4xl font-bold text-foreground">Título</h1>
+      <p className="text-sm text-muted-foreground">Subtítulo</p>
+    </CollectionHeaderContent>
+  </CollectionHeaderInfo>
+  <CollectionHeaderActions>
+    <ButtonGroup>
+      <Button variant="outline">
+        <Play data-icon="inline-start" /> Reproduzir
+      </Button>
+    </ButtonGroup>
+  </CollectionHeaderActions>
+</CollectionHeader>
+```
+
+Ver [Shadcn Component Composition](../reference/shadcn-component-composition.md) para regras completas.
+
 ## Anti-patterns
 
 - `findIndex(videoId)` como verdade de posição
 - arrays locais do React como fonte de playback
 - like de música em estado local
+- componente monolítico com props `actions[]`, `menuContent`, `trailingActions` — usar composição
+- `className="mr-2 h-4 w-4"` em ícones de botão — usar `data-icon="inline-start"`
+- `flex gap-*` manual para agrupar botões — usar `ButtonGroup`

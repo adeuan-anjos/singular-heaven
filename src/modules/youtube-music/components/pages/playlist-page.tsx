@@ -2,7 +2,15 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-import { CollectionHeader } from "../shared/collection-header";
+import {
+  CollectionHeader,
+  CollectionHeaderInfo,
+  CollectionHeaderThumbnail,
+  CollectionHeaderContent,
+  CollectionHeaderActions,
+  CollectionHeaderMenu,
+} from "../shared/collection-header";
+import { ButtonGroup } from "@/components/ui/button-group";
 import { PlaylistDestructiveDialog } from "../shared/playlist-destructive-dialog";
 import { PlaylistActionsMenu } from "../shared/playlist-actions-menu";
 import { TrackTable } from "../shared/track-table";
@@ -436,80 +444,106 @@ export function PlaylistPage({
 
   const headerContent = (
     <div className="space-y-6 p-4">
-      <CollectionHeader
-        title={playlist.title}
-        subtitle={playlist.author.name}
-        infoLines={[
-          [playlist.trackCount !== undefined ? `${playlist.trackCount} músicas` : ""]
-            .filter(Boolean)
-            .join(" • "),
-        ]}
-        description={playlist.description ?? undefined}
-        thumbnailUrl={
-          playlist.thumbnails[playlist.thumbnails.length - 1]?.url ??
-          playlist.thumbnails[0]?.url
-        }
-        actions={[
-          {
-            label: "Reproduzir",
-            icon: Play,
-            onClick: async () => {
-              const playback = await resolvePlaybackSnapshot();
-              const currentTracks = playlist.tracks ?? [];
-              console.log(
-                `[PlaylistPage] play all using playback tracks ${JSON.stringify({
-                  playlistId,
-                  tracks: currentTracks.length,
-                  queueTrackIds: playback.trackIds.length,
-                  isComplete: playback.isComplete,
-                })}`
-              );
-              onPlayAll(currentTracks, 0, playlistId, playback.isComplete, {
-                queueTrackIds: playback.trackIds,
-              });
-            },
-          },
-          {
-            label: "Aleatório",
-            icon: Shuffle,
-            onClick: async () => {
-              const playback = await resolvePlaybackSnapshot();
-              const currentTracks = playlist.tracks ?? [];
-              console.log(
-                `[PlaylistPage] shuffle play using playback tracks ${JSON.stringify({
-                  playlistId,
-                  tracks: currentTracks.length,
-                  queueTrackIds: playback.trackIds.length,
-                  isComplete: playback.isComplete,
-                })}`
-              );
-              onPlayAll(currentTracks, 0, playlistId, playback.isComplete, {
-                queueTrackIds: playback.trackIds,
-                shuffle: true,
-              });
-            },
-          },
-        ]}
-        onGoToAuthor={
-          playlist.author.id
-            ? () => onNavigate({ type: "artist", artistId: playlist.author.id! })
-            : undefined
-        }
-        trailingActions={
-          !playlist.isSpecial && !playlist.isOwnedByUser ? (
+      <CollectionHeader>
+        <CollectionHeaderInfo>
+          <CollectionHeaderThumbnail
+            src={
+              playlist.thumbnails[playlist.thumbnails.length - 1]?.url ??
+              playlist.thumbnails[0]?.url
+            }
+            alt={playlist.title}
+            fallback={playlist.title.charAt(0)}
+          />
+          <CollectionHeaderContent>
+            <h1 className="text-4xl font-bold text-foreground">{playlist.title}</h1>
+            {playlist.author.name && (
+              <p className="text-sm text-muted-foreground">
+                {playlist.author.id ? (
+                  <button
+                    type="button"
+                    className="hover:underline"
+                    onClick={() => onNavigate({ type: "artist", artistId: playlist.author.id! })}
+                  >
+                    {playlist.author.name}
+                  </button>
+                ) : (
+                  <span>{playlist.author.name}</span>
+                )}
+              </p>
+            )}
+            {playlist.trackCount !== undefined && (
+              <p className="text-sm text-muted-foreground">{playlist.trackCount} músicas</p>
+            )}
+            {playlist.description && (
+              <p className="line-clamp-2 text-sm text-muted-foreground/70">{playlist.description}</p>
+            )}
+          </CollectionHeaderContent>
+        </CollectionHeaderInfo>
+        <CollectionHeaderActions>
+          <ButtonGroup>
             <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => void toggleSavedPlaylist(playlist)}
-              disabled={playlistPending}
+              variant="outline"
+              onClick={async () => {
+                const playback = await resolvePlaybackSnapshot();
+                const currentTracks = playlist.tracks ?? [];
+                console.log(
+                  `[PlaylistPage] play all using playback tracks ${JSON.stringify({
+                    playlistId,
+                    tracks: currentTracks.length,
+                    queueTrackIds: playback.trackIds.length,
+                    isComplete: playback.isComplete,
+                  })}`
+                );
+                onPlayAll(currentTracks, 0, playlistId, playback.isComplete, {
+                  queueTrackIds: playback.trackIds,
+                });
+              }}
             >
-              <Bookmark className={`h-5 w-5 ${saved ? "fill-current" : ""}`} />
+              <Play data-icon="inline-start" />
+              Reproduzir
             </Button>
-          ) : undefined
-        }
-        menuContent={playlistMenuContent}
-        menuContentClassName="w-56"
-      />
+            <Button
+              variant="outline"
+              onClick={async () => {
+                const playback = await resolvePlaybackSnapshot();
+                const currentTracks = playlist.tracks ?? [];
+                console.log(
+                  `[PlaylistPage] shuffle play using playback tracks ${JSON.stringify({
+                    playlistId,
+                    tracks: currentTracks.length,
+                    queueTrackIds: playback.trackIds.length,
+                    isComplete: playback.isComplete,
+                  })}`
+                );
+                onPlayAll(currentTracks, 0, playlistId, playback.isComplete, {
+                  queueTrackIds: playback.trackIds,
+                  shuffle: true,
+                });
+              }}
+            >
+              <Shuffle data-icon="inline-start" />
+              Aleatório
+            </Button>
+          </ButtonGroup>
+          <ButtonGroup>
+            {!playlist.isSpecial && !playlist.isOwnedByUser && (
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={() => void toggleSavedPlaylist(playlist)}
+                disabled={playlistPending}
+              >
+                <Bookmark className={saved ? "fill-current" : ""} />
+              </Button>
+            )}
+            {playlistMenuContent && (
+              <CollectionHeaderMenu contentClassName="w-56">
+                {playlistMenuContent}
+              </CollectionHeaderMenu>
+            )}
+          </ButtonGroup>
+        </CollectionHeaderActions>
+      </CollectionHeader>
 
       <div className="relative">
         <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />

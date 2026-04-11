@@ -1,7 +1,15 @@
 import { useState, useEffect, useRef } from "react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Input } from "@/components/ui/input";
-import { CollectionHeader } from "../shared/collection-header";
+import { Button } from "@/components/ui/button";
+import { ButtonGroup } from "@/components/ui/button-group";
+import {
+  CollectionHeader,
+  CollectionHeaderInfo,
+  CollectionHeaderThumbnail,
+  CollectionHeaderContent,
+  CollectionHeaderActions,
+} from "../shared/collection-header";
 import { TrackTable } from "../shared/track-table";
 import { ytGetAlbum } from "../../services/yt-api";
 import { mapAlbumPage } from "../../services/mappers";
@@ -123,34 +131,61 @@ export function AlbumPage({
   return (
     <ScrollArea className="group/page h-full">
       <div className="mx-auto max-w-screen-xl space-y-6 p-4">
-        <CollectionHeader
-          title={album.title}
-          subtitle={artistName}
-          infoLines={[
-            [album.year, `${tracks.length} músicas`].filter(Boolean).join(" • "),
-          ]}
-          thumbnailUrl={album.thumbnails[album.thumbnails.length - 1]?.url ?? album.thumbnails[0]?.url}
-          actions={[
-            {
-              label: "Reproduzir",
-              icon: Play,
-              onClick: () =>
-                onPlayAll(tracks, 0, undefined, true, {
-                  queueTrackIds: trackIdsRef.current,
-                }),
-            },
-            {
-              label: "Aleatório",
-              icon: Shuffle,
-              onClick: () =>
-                onPlayAll(tracks, 0, undefined, true, {
-                  queueTrackIds: trackIdsRef.current,
-                  shuffle: true,
-                }),
-            },
-          ]}
-          onGoToAuthor={album.artists[0]?.id ? () => onNavigate({ type: "artist", artistId: album.artists[0].id! }) : undefined}
-        />
+        <CollectionHeader>
+          <CollectionHeaderInfo>
+            <CollectionHeaderThumbnail
+              src={album.thumbnails[album.thumbnails.length - 1]?.url ?? album.thumbnails[0]?.url}
+              alt={album.title}
+              fallback={album.title.charAt(0)}
+            />
+            <CollectionHeaderContent>
+              <h1 className="text-4xl font-bold text-foreground">{album.title}</h1>
+              <p className="text-sm text-muted-foreground">
+                {album.artists[0]?.id ? (
+                  <button
+                    type="button"
+                    className="hover:underline"
+                    onClick={() => onNavigate({ type: "artist", artistId: album.artists[0].id! })}
+                  >
+                    {artistName}
+                  </button>
+                ) : (
+                  <span>{artistName}</span>
+                )}
+              </p>
+              <p className="text-sm text-muted-foreground">
+                {[album.year, `${tracks.length} músicas`].filter(Boolean).join(" • ")}
+              </p>
+            </CollectionHeaderContent>
+          </CollectionHeaderInfo>
+          <CollectionHeaderActions>
+            <ButtonGroup>
+              <Button
+                variant="outline"
+                onClick={() =>
+                  onPlayAll(tracks, 0, undefined, true, {
+                    queueTrackIds: trackIdsRef.current,
+                  })
+                }
+              >
+                <Play data-icon="inline-start" />
+                Reproduzir
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() =>
+                  onPlayAll(tracks, 0, undefined, true, {
+                    queueTrackIds: trackIdsRef.current,
+                    shuffle: true,
+                  })
+                }
+              >
+                <Shuffle data-icon="inline-start" />
+                Aleatório
+              </Button>
+            </ButtonGroup>
+          </CollectionHeaderActions>
+        </CollectionHeader>
 
         <div className="relative">
           <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />

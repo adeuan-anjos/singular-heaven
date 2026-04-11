@@ -1,5 +1,7 @@
-import { type ComponentType, type ReactNode } from "react";
+import type { ReactNode } from "react";
+import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { ButtonGroup } from "@/components/ui/button-group";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -7,100 +9,118 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Ellipsis } from "lucide-react";
 
-export interface CollectionHeaderAction {
-  label: string;
-  icon?: ComponentType<{ className?: string }>;
-  onClick: () => void;
-  variant?: "outline" | "default";
-}
-
-export interface CollectionHeaderProps {
-  title: string;
-  thumbnailUrl?: string;
-  /** Clickable subtitle (e.g. artist name) */
-  subtitle?: string;
-  onGoToAuthor?: () => void;
-  /** Flexible info lines — each page passes what it needs */
-  infoLines?: string[];
-  description?: string;
-  /** Action buttons — each page configures its own set */
-  actions: CollectionHeaderAction[];
-  trailingActions?: ReactNode;
-  menuContent?: ReactNode;
-  menuContentClassName?: string;
-}
-
-export function CollectionHeader({
-  title,
-  thumbnailUrl,
-  subtitle,
-  onGoToAuthor,
-  infoLines,
-  description,
-  actions,
-  trailingActions,
-  menuContent,
-  menuContentClassName,
-}: CollectionHeaderProps) {
+function CollectionHeader({
+  className,
+  ...props
+}: React.ComponentProps<"div">) {
   return (
-    <div className="space-y-4">
-      {/* Cover + Info */}
-      <div className="flex items-start gap-6">
-        <div className="flex h-48 w-48 shrink-0 items-center justify-center overflow-hidden rounded-sm bg-muted">
-          {thumbnailUrl ? (
-            <img referrerPolicy="no-referrer" src={thumbnailUrl} alt={title} className="h-full w-full object-cover" />
-          ) : (
-            <span className="text-4xl text-muted-foreground">{title.charAt(0)}</span>
-          )}
-        </div>
-        <div className="flex flex-1 flex-col gap-2">
-          <h1 className="text-4xl font-bold text-foreground">{title}</h1>
-          {subtitle && (
-            <p className="text-sm text-muted-foreground">
-              {onGoToAuthor ? (
-                <button type="button" className="hover:underline" onClick={onGoToAuthor}>
-                  {subtitle}
-                </button>
-              ) : (
-                <span>{subtitle}</span>
-              )}
-            </p>
-          )}
-          {infoLines?.map((line) => (
-            <p key={line} className="text-sm text-muted-foreground">
-              {line}
-            </p>
-          ))}
-          {description && (
-            <p className="line-clamp-2 text-sm text-muted-foreground/70">{description}</p>
-          )}
-        </div>
-      </div>
+    <div
+      data-slot="collection-header"
+      className={cn("space-y-4", className)}
+      {...props}
+    />
+  );
+}
 
-      {/* Actions */}
-      <div className="flex items-center gap-3">
-        {actions.map((action) => (
-          <Button
-            key={action.label}
-            variant={action.variant ?? "outline"}
-            onClick={action.onClick}
-          >
-            {action.icon && <action.icon className="mr-2 h-4 w-4" />}
-            {action.label}
-          </Button>
-        ))}
-        {trailingActions}
-        {menuContent ? (
-          <DropdownMenu>
-            <DropdownMenuTrigger render={<Button variant="ghost" size="icon" />}>
-              <Ellipsis className="h-5 w-5" />
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className={menuContentClassName}>
-              {menuContent}
-            </DropdownMenuContent>
-          </DropdownMenu>
-        ) : null}
-      </div>
+function CollectionHeaderInfo({
+  className,
+  ...props
+}: React.ComponentProps<"div">) {
+  return (
+    <div
+      data-slot="collection-header-info"
+      className={cn("flex items-start gap-6", className)}
+      {...props}
+    />
+  );
+}
+
+function CollectionHeaderThumbnail({
+  className,
+  src,
+  alt,
+  fallback,
+  ...props
+}: React.ComponentProps<"div"> & {
+  src?: string;
+  alt?: string;
+  fallback?: string;
+}) {
+  return (
+    <div
+      data-slot="collection-header-thumbnail"
+      className={cn(
+        "flex h-48 w-48 shrink-0 items-center justify-center overflow-hidden rounded-sm bg-muted",
+        className
+      )}
+      {...props}
+    >
+      {src ? (
+        <img
+          referrerPolicy="no-referrer"
+          src={src}
+          alt={alt ?? ""}
+          className="h-full w-full object-cover"
+        />
+      ) : (
+        <span className="text-4xl text-muted-foreground">
+          {fallback ?? ""}
+        </span>
+      )}
     </div>
   );
 }
+
+function CollectionHeaderContent({
+  className,
+  ...props
+}: React.ComponentProps<"div">) {
+  return (
+    <div
+      data-slot="collection-header-content"
+      className={cn("flex flex-1 flex-col gap-2", className)}
+      {...props}
+    />
+  );
+}
+
+function CollectionHeaderActions({
+  className,
+  ...props
+}: React.ComponentProps<typeof ButtonGroup>) {
+  return (
+    <ButtonGroup
+      data-slot="collection-header-actions"
+      className={className}
+      {...props}
+    />
+  );
+}
+
+function CollectionHeaderMenu({
+  contentClassName,
+  children,
+}: {
+  contentClassName?: string;
+  children: ReactNode;
+}) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger render={<Button variant="outline" size="icon" aria-label="Mais opções" />}>
+        <Ellipsis />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className={contentClassName}>
+        {children}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+export {
+  CollectionHeader,
+  CollectionHeaderInfo,
+  CollectionHeaderThumbnail,
+  CollectionHeaderContent,
+  CollectionHeaderActions,
+  CollectionHeaderMenu,
+};
