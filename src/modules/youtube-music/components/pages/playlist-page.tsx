@@ -8,7 +8,6 @@ import {
   CollectionHeaderContent,
   CollectionHeaderActions,
   CollectionHeaderMenu,
-  CollectionHeaderFilter,
 } from "../shared/collection-header";
 import { ButtonGroup } from "@/components/ui/button-group";
 import { PlaylistDestructiveDialog } from "../shared/playlist-destructive-dialog";
@@ -443,7 +442,11 @@ export function PlaylistPage({
 
   const headerContent = (
     <div className="space-y-4 p-4">
-      <CollectionHeader>
+      <CollectionHeader
+        filterValue={filter}
+        onFilterChange={(e) => setFilter(e.target.value)}
+        filterPlaceholder="Filtrar a playlist por título, artista ou álbum"
+      >
         <CollectionHeaderInfo>
           <CollectionHeaderThumbnail
             src={
@@ -543,12 +546,6 @@ export function PlaylistPage({
           </ButtonGroup>
         </CollectionHeaderActions>
       </CollectionHeader>
-
-      <CollectionHeaderFilter
-        value={filter}
-        onChange={(e) => setFilter(e.target.value)}
-        placeholder="Filtrar a playlist por título, artista ou álbum"
-      />
     </div>
   );
 

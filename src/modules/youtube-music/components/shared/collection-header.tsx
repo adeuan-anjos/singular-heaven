@@ -16,14 +16,39 @@ import { Ellipsis, Search } from "lucide-react";
 
 function CollectionHeader({
   className,
+  filterValue,
+  onFilterChange,
+  filterPlaceholder,
+  children,
   ...props
-}: React.ComponentProps<"div">) {
+}: React.ComponentProps<"div"> & {
+  filterValue?: string;
+  onFilterChange?: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  filterPlaceholder?: string;
+}) {
+  const showFilter = onFilterChange !== undefined;
+
   return (
     <div
       data-slot="collection-header"
       className={cn("space-y-4", className)}
       {...props}
-    />
+    >
+      {children}
+      <InputGroup
+        data-slot="collection-header-filter"
+        className={cn(!showFilter && "hidden")}
+      >
+        <InputGroupAddon align="inline-start">
+          <Search />
+        </InputGroupAddon>
+        <InputGroupInput
+          value={filterValue ?? ""}
+          onChange={onFilterChange}
+          placeholder={filterPlaceholder}
+        />
+      </InputGroup>
+    </div>
   );
 }
 
@@ -121,20 +146,6 @@ function CollectionHeaderMenu({
   );
 }
 
-function CollectionHeaderFilter({
-  className,
-  ...props
-}: React.ComponentProps<typeof InputGroupInput>) {
-  return (
-    <InputGroup data-slot="collection-header-filter">
-      <InputGroupAddon align="inline-start">
-        <Search />
-      </InputGroupAddon>
-      <InputGroupInput className={className} {...props} />
-    </InputGroup>
-  );
-}
-
 export {
   CollectionHeader,
   CollectionHeaderInfo,
@@ -142,5 +153,4 @@ export {
   CollectionHeaderContent,
   CollectionHeaderActions,
   CollectionHeaderMenu,
-  CollectionHeaderFilter,
 };

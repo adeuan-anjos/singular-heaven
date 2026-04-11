@@ -8,7 +8,6 @@ import {
   CollectionHeaderThumbnail,
   CollectionHeaderContent,
   CollectionHeaderActions,
-  CollectionHeaderFilter,
 } from "../shared/collection-header";
 import { TrackTable } from "../shared/track-table";
 import { ytGetArtist } from "../../services/yt-api";
@@ -155,8 +154,12 @@ export function ArtistSongsPage({
 
   return (
     <ScrollArea className="group/page h-full">
-      <div className="mx-auto max-w-screen-xl space-y-6 p-4">
-        <CollectionHeader>
+      <div className="mx-auto max-w-screen-xl space-y-4 p-4">
+        <CollectionHeader
+          filterValue={filter}
+          onFilterChange={(e) => setFilter(e.target.value)}
+          filterPlaceholder="Filtrar por título, artista ou álbum"
+        >
           <CollectionHeaderInfo>
             <CollectionHeaderThumbnail
               src={imgUrl || undefined}
@@ -194,12 +197,6 @@ export function ArtistSongsPage({
             </ButtonGroup>
           </CollectionHeaderActions>
         </CollectionHeader>
-
-        <CollectionHeaderFilter
-          value={filter}
-          onChange={(e) => setFilter(e.target.value)}
-          placeholder="Filtrar por título, artista ou álbum"
-        />
 
         {/* Músicas heading */}
         <h2 className="text-lg font-semibold text-foreground">Músicas</h2>

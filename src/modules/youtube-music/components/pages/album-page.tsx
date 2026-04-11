@@ -8,7 +8,6 @@ import {
   CollectionHeaderThumbnail,
   CollectionHeaderContent,
   CollectionHeaderActions,
-  CollectionHeaderFilter,
 } from "../shared/collection-header";
 import { TrackTable } from "../shared/track-table";
 import { ytGetAlbum } from "../../services/yt-api";
@@ -130,8 +129,12 @@ export function AlbumPage({
 
   return (
     <ScrollArea className="group/page h-full">
-      <div className="mx-auto max-w-screen-xl space-y-6 p-4">
-        <CollectionHeader>
+      <div className="mx-auto max-w-screen-xl space-y-4 p-4">
+        <CollectionHeader
+          filterValue={filter}
+          onFilterChange={(e) => setFilter(e.target.value)}
+          filterPlaceholder="Filtrar por título ou artista"
+        >
           <CollectionHeaderInfo>
             <CollectionHeaderThumbnail
               src={album.thumbnails[album.thumbnails.length - 1]?.url ?? album.thumbnails[0]?.url}
@@ -186,12 +189,6 @@ export function AlbumPage({
             </ButtonGroup>
           </CollectionHeaderActions>
         </CollectionHeader>
-
-        <CollectionHeaderFilter
-          value={filter}
-          onChange={(e) => setFilter(e.target.value)}
-          placeholder="Filtrar por título ou artista"
-        />
 
         <TrackTable
           tracks={filteredTracks}

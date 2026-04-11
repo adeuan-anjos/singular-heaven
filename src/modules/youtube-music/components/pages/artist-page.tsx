@@ -129,7 +129,7 @@ export function ArtistPage({
 
   return (
     <ScrollArea className="group/page h-full">
-      <div className="mx-auto max-w-screen-xl space-y-6 p-4">
+      <div className="mx-auto max-w-screen-xl space-y-4 p-4">
         <CollectionHeader>
           <CollectionHeaderInfo>
             <CollectionHeaderThumbnail
