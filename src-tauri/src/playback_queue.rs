@@ -761,7 +761,7 @@ impl PlaybackQueue {
         track_ids.len()
     }
 
-    fn current_track_id(&self) -> Option<String> {
+    pub fn current_track_id(&self) -> Option<String> {
         self.current_index
             .and_then(|index| self.playback_items.get(index))
             .map(|entry| entry.video_id.clone())

@@ -2683,6 +2683,27 @@ pub async fn yt_queue_handle_track_end(
         queue.handle_track_end()
     };
     emit_queue_state_updated(&app, &response.snapshot);
+
+    // Radio mode — trigger continuation in background if queue is running low.
+    {
+        let q = queue.lock().await;
+        if let Some(rs) = q.radio_state() {
+            let remaining = q.remaining_after_current();
+            let should_continue =
+                remaining <= 10 && !rs.pool_exhausted && rs.continuation.is_some();
+            drop(q);
+            if should_continue {
+                println!(
+                    "[yt_queue_handle_track_end] radio low ({remaining} remaining) — spawning continuation"
+                );
+                let app_clone = app.clone();
+                tokio::spawn(async move {
+                    continue_radio_background(app_clone).await;
+                });
+            }
+        }
+    }
+
     Ok(response)
 }
 
@@ -2849,7 +2870,6 @@ fn cached_from_watch(t: &WatchTrack) -> CachedTrack {
 /// Build a `WatchPlaylistRequest` from a `RadioSeed`. Video and Artist seeds use
 /// the video-radio endpoint; Playlist and Album seeds use the playlist-radio
 /// endpoint (their IDs share the `PL`/`OLA` prefix the parser needs).
-#[allow(dead_code)] // used by Task 8 (yt_radio_start) and Task 9 (yt_radio_reroll)
 fn radio_request<'a>(seed: &'a RadioSeed, limit: usize) -> WatchPlaylistRequest<'a> {
     match seed.kind {
         RadioSeedKind::Video | RadioSeedKind::Artist => {
@@ -2867,7 +2887,6 @@ fn radio_request<'a>(seed: &'a RadioSeed, limit: usize) -> WatchPlaylistRequest<
 /// `collection_type = "radio"` so the frontend can resolve them via
 /// `get_tracks_by_ids`. Emits `radio-extended` on success so the frontend can
 /// invalidate any cached pages.
-#[allow(dead_code)] // wired up in Task 9
 pub async fn continue_radio_background(app: AppHandle) {
     println!("[continue_radio] start");
 
@@ -3066,4 +3085,95 @@ pub async fn yt_radio_start(
 
     serde_json::to_string(&response)
         .map_err(|e| format!("[yt_radio_start] serialization: {e}"))
+}
+
+/// Re-rolls the current radio: fetches a fresh page from the same seed,
+/// truncates the queue after the current track, and appends the new tracks.
+/// The current track is preserved and filtered from the new batch to avoid
+/// duplicating it. Updates `RadioState` with the new continuation token.
+#[tauri::command]
+pub async fn yt_radio_reroll(
+    app: AppHandle,
+    state: State<'_, Arc<RwLock<YtMusicState>>>,
+    activity: State<'_, Arc<SessionActivity>>,
+    queue: State<'_, Arc<tokio::sync::Mutex<PlaybackQueue>>>,
+) -> Result<String, String> {
+    println!("[yt_radio_reroll] entering");
+
+    // 1. Clone the seed WITHOUT holding lock during network I/O.
+    let seed = {
+        let q = queue.lock().await;
+        let Some(rs) = q.radio_state() else {
+            return Err("[yt_radio_reroll] not in radio mode".into());
+        };
+        rs.seed.clone()
+    };
+
+    // 2. Fetch a fresh page of the same radio.
+    let page = session::with_session_refresh(
+        &state,
+        &app,
+        &activity,
+        "yt_radio_reroll",
+        |client| {
+            let r = radio_request(&seed, 50);
+            async move { client.get_watch_playlist(r).await }
+        },
+    )
+    .await
+    .map_err(|e| format!("[yt_radio_reroll] {e}"))?;
+
+    let track_ids: Vec<String> = page.tracks.iter().map(|t| t.video_id.clone()).collect();
+    if track_ids.is_empty() {
+        return Err("[yt_radio_reroll] radio returned no tracks".into());
+    }
+
+    // 3. Best-effort cache write (fresh seed start — overwrite at position 0).
+    let cached: Vec<CachedTrack> = page.tracks.iter().map(cached_from_watch).collect();
+    let collection_id = format!("{}:{}", seed.kind.as_str(), seed.id);
+    {
+        let cache_state = app.state::<Arc<tokio::sync::Mutex<PlaylistCache>>>();
+        let cache_guard = cache_state.lock().await;
+        let rows = playlist_cache::cached_tracks_to_rows(&cached);
+        if let Err(e) = cache_guard.save_collection_tracks("radio", &collection_id, 0, &rows) {
+            println!("[yt_radio_reroll] save_collection_tracks error: {e}");
+        }
+    }
+
+    // 4. Truncate queue after current track, then append new tracks
+    //    (filter out any that match the current track to avoid duplicating it).
+    let response = {
+        let mut q = queue.lock().await;
+        let current = q.current_track_id();
+        let removed = q.truncate_after_current();
+        let track_ids_to_append: Vec<String> = track_ids
+            .iter()
+            .filter(|id| Some(id.as_str()) != current.as_deref())
+            .cloned()
+            .collect();
+        let added = q.append_radio_batch(&track_ids_to_append);
+        if let Some(rs) = q.radio_state_mut() {
+            rs.continuation = page.continuation.clone();
+            rs.loaded_count = added;
+            rs.pool_exhausted = page.continuation.is_none();
+        }
+        println!(
+            "[yt_radio_reroll] removed={} added={} pool_exhausted={}",
+            removed,
+            added,
+            q.radio_state()
+                .map(|rs| rs.pool_exhausted)
+                .unwrap_or(false)
+        );
+        QueueCommandResponse {
+            track_id: q.current_track_id(),
+            snapshot: q.snapshot(),
+        }
+    };
+
+    // 5. Sync frontend.
+    emit_queue_state_updated(&app, &response.snapshot);
+
+    serde_json::to_string(&response)
+        .map_err(|e| format!("[yt_radio_reroll] serialization: {e}"))
 }
