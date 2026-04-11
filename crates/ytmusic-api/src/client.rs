@@ -124,7 +124,8 @@ impl YtMusicClient {
     /// `endpoint` is the path after the base URL (e.g., "search").
     /// `body` is merged with the context object.
     pub async fn post_innertube(&self, endpoint: &str, body: Value) -> Result<Value> {
-        let url = format!("{BASE_URL}{endpoint}?key={API_KEY}&prettyPrint=false");
+        let separator = if endpoint.contains('?') { '&' } else { '?' };
+        let url = format!("{BASE_URL}{endpoint}{separator}key={API_KEY}&prettyPrint=false");
 
         let mut payload = body;
         payload["context"] = self.build_context();

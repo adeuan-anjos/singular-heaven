@@ -2,37 +2,125 @@ use serde_json::json;
 
 use crate::client::YtMusicClient;
 use crate::constants::*;
-use crate::error::Result;
-use crate::parsers::watch::{parse_watch_response, parse_lyrics_response};
-use crate::types::watch::{WatchPlaylist, Lyrics};
+use crate::error::{Error, Result};
+use crate::parsers::watch::{parse_lyrics_response, parse_watch_continuation_response, parse_watch_response};
+use crate::types::watch::{Lyrics, WatchPlaylist, WatchPlaylistRequest};
 
 impl YtMusicClient {
-    /// Get the watch/queue playlist for a video (radio mode).
+    /// Get a watch or radio playlist.
     ///
-    /// Returns the queue tracks, lyrics browse ID, and related browse ID.
-    pub async fn get_watch_playlist(&self, video_id: &str) -> Result<WatchPlaylist> {
-        println!("[ytmusic-api] get_watch_playlist(video_id=\"{video_id}\")");
+    /// Port of `ytmusicapi.WatchMixin.get_watch_playlist` (Python reference).
+    ///
+    /// When `radio=true`, iterates continuation tokens until at least `limit`
+    /// tracks are collected or the continuation stream ends. Logs progress at
+    /// every step.
+    pub async fn get_watch_playlist(&self, req: WatchPlaylistRequest<'_>) -> Result<WatchPlaylist> {
+        println!(
+            "[ytmusic-api] get_watch_playlist video_id={:?} playlist_id={:?} radio={} shuffle={} limit={}",
+            req.video_id, req.playlist_id, req.radio, req.shuffle, req.limit
+        );
 
-        let playlist_id = format!("RDAMVM{video_id}");
-        let body = json!({
-            "videoId": video_id,
-            "playlistId": playlist_id,
-            "isAudioOnly": true,
-        });
+        let body = build_watch_body(&req)?;
+
+        // `is_playlist` tracks whether the effective seed is a playlist/album
+        // (PL or OLA prefix). Used to choose the continuation ctype.
+        let effective_pid = req
+            .playlist_id
+            .map(String::from)
+            .or_else(|| req.video_id.map(|v| format!("RDAMVM{v}")));
+        let is_playlist = effective_pid
+            .as_deref()
+            .map(|pid| pid.starts_with("PL") || pid.starts_with("OLA"))
+            .unwrap_or(false);
+
+        println!("[ytmusic-api] get_watch_playlist request body keys: {:?}",
+            body.as_object().map(|o| o.keys().collect::<Vec<_>>()));
+
+        // First page
         let response = self.post_innertube(ENDPOINT_NEXT, body).await?;
-        let result = parse_watch_response(&response)?;
+        let mut result = parse_watch_response(&response)?;
 
         println!(
-            "[ytmusic-api] get_watch_playlist returned: tracks={} lyrics={:?} related={:?}",
-            result.tracks.len(), result.lyrics_browse_id, result.related_browse_id
+            "[ytmusic-api] get_watch_playlist first page: tracks={} has_continuation={}",
+            result.tracks.len(),
+            result.continuation.is_some()
+        );
+
+        // Continuation loop
+        let mut pages = 1usize;
+        while result.tracks.len() < req.limit {
+            let Some(token) = result.continuation.clone() else {
+                println!(
+                    "[ytmusic-api] get_watch_playlist: continuation exhausted at {} tracks",
+                    result.tracks.len()
+                );
+                break;
+            };
+
+            let cont_result = self
+                .get_watch_playlist_continuation(&token, is_playlist)
+                .await?;
+            pages += 1;
+
+            if cont_result.tracks.is_empty() && cont_result.continuation.is_none() {
+                println!("[ytmusic-api] get_watch_playlist: continuation returned empty — stopping");
+                break;
+            }
+
+            let added = cont_result.tracks.len();
+            result.tracks.extend(cont_result.tracks);
+            result.continuation = cont_result.continuation;
+
+            println!(
+                "[ytmusic-api] get_watch_playlist page {pages}: +{added} -> {} total, has_next={}",
+                result.tracks.len(),
+                result.continuation.is_some()
+            );
+        }
+
+        println!(
+            "[ytmusic-api] get_watch_playlist returned: tracks={} pages={} lyrics={:?} related={:?}",
+            result.tracks.len(), pages, result.lyrics_browse_id, result.related_browse_id
         );
 
         Ok(result)
     }
 
+    /// Fetch a single continuation page. `is_playlist` controls the ctoken type
+    /// that the Python lib calls "" vs "Radio" — playlists use no suffix,
+    /// radios suffix with "Radio".
+    pub async fn get_watch_playlist_continuation(
+        &self,
+        continuation: &str,
+        is_playlist: bool,
+    ) -> Result<WatchPlaylist> {
+        println!(
+            "[ytmusic-api] watch_continuation is_playlist={is_playlist} token={}...",
+            &continuation[..continuation.len().min(12)]
+        );
+
+        let ctype = if is_playlist { "" } else { "Radio" };
+        let endpoint = format!(
+            "{ENDPOINT_NEXT}?ctoken={continuation}&continuation={continuation}&type=next{ctype}"
+        );
+
+        let body = json!({
+            "enablePersistentPlaylistPanel": true,
+            "isAudioOnly": true,
+            "tunerSettingValue": "AUTOMIX_SETTING_NORMAL",
+        });
+
+        let response = self.post_innertube(&endpoint, body).await?;
+        let result = parse_watch_continuation_response(&response)?;
+        println!(
+            "[ytmusic-api] watch_continuation: +{} tracks, has_next={}",
+            result.tracks.len(),
+            result.continuation.is_some()
+        );
+        Ok(result)
+    }
+
     /// Get lyrics for a song by its lyrics browse ID (e.g. "MPLYt_...").
-    ///
-    /// The browse ID is obtained from `get_watch_playlist().lyrics_browse_id`.
     pub async fn get_lyrics(&self, browse_id: &str) -> Result<Lyrics> {
         println!("[ytmusic-api] get_lyrics(browse_id=\"{browse_id}\")");
 
@@ -47,4 +135,62 @@ impl YtMusicClient {
 
         Ok(result)
     }
+}
+
+/// Pure helper: builds the innertube body for `get_watch_playlist`.
+/// Returns `Err` if the request is invalid. Testable without I/O.
+pub(crate) fn build_watch_body(req: &WatchPlaylistRequest<'_>) -> Result<serde_json::Value> {
+    use serde_json::json;
+
+    if req.video_id.is_none() && req.playlist_id.is_none() {
+        return Err(Error::Api {
+            message: "get_watch_playlist: provide video_id, playlist_id, or both".into(),
+        });
+    }
+    if req.radio && req.shuffle {
+        return Err(Error::Api {
+            message: "get_watch_playlist: radio=true is incompatible with shuffle=true".into(),
+        });
+    }
+
+    let mut body = json!({
+        "enablePersistentPlaylistPanel": true,
+        "isAudioOnly": true,
+        "tunerSettingValue": "AUTOMIX_SETTING_NORMAL",
+    });
+
+    let effective_playlist_id: Option<String> = match (req.video_id, req.playlist_id) {
+        (Some(vid), None) => {
+            body["videoId"] = json!(vid);
+            Some(format!("RDAMVM{vid}"))
+        }
+        (Some(vid), Some(pid)) => {
+            body["videoId"] = json!(vid);
+            Some(pid.to_string())
+        }
+        (None, Some(pid)) => Some(pid.to_string()),
+        (None, None) => unreachable!(),
+    };
+
+    if req.video_id.is_some() && !req.radio && !req.shuffle {
+        body["watchEndpointMusicSupportedConfigs"] = json!({
+            "watchEndpointMusicConfig": {
+                "hasPersistentPlaylistPanel": true,
+                "musicVideoType": "MUSIC_VIDEO_TYPE_ATV",
+            }
+        });
+    }
+
+    if let Some(ref pid) = effective_playlist_id {
+        body["playlistId"] = json!(pid);
+    }
+
+    if req.shuffle && effective_playlist_id.is_some() {
+        body["params"] = json!("wAEB8gECKAE%3D");
+    }
+    if req.radio {
+        body["params"] = json!("wAEB");
+    }
+
+    Ok(body)
 }

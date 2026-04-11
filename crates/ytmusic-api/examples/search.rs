@@ -176,7 +176,7 @@ async fn main() {
 
     // Test 12: Watch playlist
     println!("\n=== Test 12: Watch playlist ===\n");
-    match client.get_watch_playlist("ZtEtKXhhtS4").await {
+    match client.get_watch_playlist(ytmusic_api::types::watch::WatchPlaylistRequest::for_video_radio("ZtEtKXhhtS4", 25)).await {
         Ok(watch) => {
             println!("  Queue: {} tracks", watch.tracks.len());
             println!("  Lyrics browseId: {:?}", watch.lyrics_browse_id);

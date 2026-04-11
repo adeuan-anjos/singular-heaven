@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, Manager, State};
 use tokio::sync::RwLock;
 use ytmusic_api::types::common::LikeStatus;
+use ytmusic_api::types::watch::WatchPlaylistRequest;
 use ytmusic_api::YtMusicClient;
 
 use super::client::YtMusicState;
@@ -879,7 +880,11 @@ pub async fn yt_get_watch_playlist(
         "yt_get_watch_playlist",
         |client| {
             let id = video_id.clone();
-            async move { client.get_watch_playlist(&id).await }
+            async move {
+                client
+                    .get_watch_playlist(WatchPlaylistRequest::for_video_radio(&id, 25))
+                    .await
+            }
         },
     )
     .await
