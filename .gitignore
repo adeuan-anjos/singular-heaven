@@ -36,3 +36,6 @@ target/
 
 # Git worktrees
 .worktrees/
+
+# Claude Code local state (session locks, etc.)
+.claude/
