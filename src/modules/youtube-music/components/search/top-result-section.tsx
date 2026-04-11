@@ -1,6 +1,8 @@
+import { useLocation } from "wouter";
 import { TopResultCard } from "./top-result-card";
 import { TrackRow } from "../shared/track-row";
-import type { Track, Artist, Album, Thumbnail, StackPage } from "../../types/music";
+import { paths } from "../../router/paths";
+import type { Track, Artist, Album, Thumbnail } from "../../types/music";
 
 type TopResultType =
   | { kind: "artist"; artist: Artist }
@@ -11,7 +13,6 @@ interface TopResultSectionProps {
   topResult: TopResultType;
   topSongs: Track[];
   currentTrackId?: string;
-  onNavigate: (page: StackPage) => void;
   onPlayTrack: (track: Track) => void;
   onAddToQueue: (track: Track) => void;
   onAddToPlaylist?: (track: Track) => void;
@@ -48,14 +49,14 @@ function getCardProps(topResult: TopResultType): {
 
 function getOnClick(
   topResult: TopResultType,
-  onNavigate: (page: StackPage) => void,
+  navigate: (to: string) => void,
   onPlayTrack: (track: Track) => void,
 ): () => void {
   switch (topResult.kind) {
     case "artist":
-      return () => onNavigate({ type: "artist", artistId: topResult.artist.browseId });
+      return () => navigate(paths.artist(topResult.artist.browseId));
     case "album":
-      return () => onNavigate({ type: "album", albumId: topResult.album.browseId });
+      return () => navigate(paths.album(topResult.album.browseId));
     case "song":
       return () => onPlayTrack(topResult.song);
   }
@@ -80,13 +81,13 @@ export function TopResultSection({
   topResult,
   topSongs,
   currentTrackId,
-  onNavigate,
   onPlayTrack,
   onAddToQueue,
   onAddToPlaylist,
   onGoToArtist,
   onGoToAlbum,
 }: TopResultSectionProps) {
+  const [, navigate] = useLocation();
   const cardProps = getCardProps(topResult);
   const songs = topSongs.slice(0, 4);
 
@@ -101,7 +102,7 @@ export function TopResultSection({
           thumbnail={cardProps.thumbnail}
           name={cardProps.name}
           typeLabel={cardProps.typeLabel}
-          onClick={getOnClick(topResult, onNavigate, onPlayTrack)}
+          onClick={getOnClick(topResult, navigate, onPlayTrack)}
           onPlay={getOnPlay(topResult, onPlayTrack, topSongs)}
         />
       </div>

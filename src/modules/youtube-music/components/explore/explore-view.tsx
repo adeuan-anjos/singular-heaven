@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useLocation } from "wouter";
 import { Loader2 } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { CarouselSection } from "../shared/carousel-section";
@@ -12,15 +13,14 @@ import {
   cacheFiniteTrackCollection,
   createTrackCollectionId,
 } from "../../services/track-collections";
-import type { Track, ExploreData, ChartTrack, StackPage } from "../../types/music";
+import { useYtActions } from "../../router/actions-context";
+import { paths } from "../../router/paths";
+import type { ExploreData, ChartTrack } from "../../types/music";
 import { perfMark, endModuleLoad } from "../../services/perf";
 
-interface ExploreViewProps {
-  onNavigate: (page: StackPage) => void;
-  onPlayTrack: (track: Track) => void;
-}
-
-export function ExploreView({ onNavigate, onPlayTrack }: ExploreViewProps) {
+export function ExploreView() {
+  const [, navigate] = useLocation();
+  const { onPlayTrack } = useYtActions();
   const [data, setData] = useState<ExploreData | null>(null);
   const [chartTracks, setChartTracks] = useState<ChartTrack[]>([]);
   const [loading, setLoading] = useState(true);
@@ -127,9 +127,9 @@ export function ExploreView({ onNavigate, onPlayTrack }: ExploreViewProps) {
                 typeLabel="Álbum"
                 artistName={album.artists.map((a) => a.name).join(", ")}
                 thumbnails={album.thumbnails}
-                onClick={() => onNavigate({ type: "album", albumId: album.browseId })}
-                onPlay={() => onNavigate({ type: "album", albumId: album.browseId })}
-                onGoToArtist={firstArtistId ? () => onNavigate({ type: "artist", artistId: firstArtistId }) : undefined}
+                onClick={() => navigate(paths.album(album.browseId))}
+                onPlay={() => navigate(paths.album(album.browseId))}
+                onGoToArtist={firstArtistId ? () => navigate(paths.artist(firstArtistId)) : undefined}
               />
             );
           })}
@@ -140,8 +140,8 @@ export function ExploreView({ onNavigate, onPlayTrack }: ExploreViewProps) {
             title="Top músicas"
             tracks={chartTracks}
             onPlayTrack={onPlayTrack}
-            onGoToArtist={(artistId) => onNavigate({ type: "artist", artistId })}
-            onGoToAlbum={(albumId) => onNavigate({ type: "album", albumId })}
+            onGoToArtist={(artistId) => navigate(paths.artist(artistId))}
+            onGoToAlbum={(albumId) => navigate(paths.album(albumId))}
           />
         </div>
 
@@ -159,8 +159,8 @@ export function ExploreView({ onNavigate, onPlayTrack }: ExploreViewProps) {
                 thumbnails={track.thumbnails}
                 onClick={() => onPlayTrack(track)}
                 onPlay={() => onPlayTrack(track)}
-                onGoToArtist={firstArtistId ? () => onNavigate({ type: "artist", artistId: firstArtistId }) : undefined}
-                onGoToAlbum={albumId ? () => onNavigate({ type: "album", albumId }) : undefined}
+                onGoToArtist={firstArtistId ? () => navigate(paths.artist(firstArtistId)) : undefined}
+                onGoToAlbum={albumId ? () => navigate(paths.album(albumId)) : undefined}
               />
             );
           })}
@@ -168,7 +168,7 @@ export function ExploreView({ onNavigate, onPlayTrack }: ExploreViewProps) {
 
         <div className="space-y-3">
           <SectionHeader title="Momentos e gêneros" />
-          <MoodGrid categories={data.moodsAndGenres} onSelect={onNavigate} />
+          <MoodGrid categories={data.moodsAndGenres} />
         </div>
 
         <CarouselSection title="Novos vídeos">
@@ -185,8 +185,8 @@ export function ExploreView({ onNavigate, onPlayTrack }: ExploreViewProps) {
                 thumbnails={track.thumbnails}
                 onClick={() => onPlayTrack(track)}
                 onPlay={() => onPlayTrack(track)}
-                onGoToArtist={firstArtistId ? () => onNavigate({ type: "artist", artistId: firstArtistId }) : undefined}
-                onGoToAlbum={albumId ? () => onNavigate({ type: "album", albumId }) : undefined}
+                onGoToArtist={firstArtistId ? () => navigate(paths.artist(firstArtistId)) : undefined}
+                onGoToAlbum={albumId ? () => navigate(paths.album(albumId)) : undefined}
               />
             );
           })}

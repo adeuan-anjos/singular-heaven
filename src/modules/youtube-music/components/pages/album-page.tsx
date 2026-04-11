@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { useLocation, useParams } from "wouter";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
 import { ButtonGroup } from "@/components/ui/button-group";
@@ -18,32 +19,16 @@ import {
   type TrackCollectionEntry,
 } from "../../services/track-collections";
 import { usePlayerStore } from "../../stores/player-store";
+import { useYtActions } from "../../router/actions-context";
+import { paths } from "../../router/paths";
 import { Play, Shuffle, Loader2 } from "lucide-react";
-import type { Album, PlayAllOptions, Track, StackPage } from "../../types/music";
+import type { Album } from "../../types/music";
 
-interface AlbumPageProps {
-  albumId: string;
-  onNavigate: (page: StackPage) => void;
-  onPlayTrack: (track: Track) => void;
-  onAddToQueue: (track: Track) => void;
-  onAddToPlaylist: (track: Track) => void;
-  onPlayAll: (
-    tracks: Track[],
-    startIndex?: number,
-    playlistId?: string,
-    isComplete?: boolean,
-    options?: PlayAllOptions
-  ) => void;
-}
-
-export function AlbumPage({
-  albumId,
-  onNavigate,
-  onPlayTrack,
-  onAddToQueue,
-  onAddToPlaylist,
-  onPlayAll,
-}: AlbumPageProps) {
+export function AlbumPage() {
+  const params = useParams<{ id: string }>();
+  const albumId = decodeURIComponent(params.id ?? "");
+  const [, navigate] = useLocation();
+  const { onPlayTrack, onPlayAll, onAddToQueue, onAddToPlaylist } = useYtActions();
   const [album, setAlbum] = useState<Album | null>(null);
   const [collectionTracks, setCollectionTracks] = useState<TrackCollectionEntry[]>([]);
   const [loading, setLoading] = useState(true);
@@ -148,7 +133,7 @@ export function AlbumPage({
                   <button
                     type="button"
                     className="hover:underline"
-                    onClick={() => onNavigate({ type: "artist", artistId: album.artists[0].id! })}
+                    onClick={() => navigate(paths.artist(album.artists[0].id!))}
                   >
                     {artistName}
                   </button>
@@ -212,8 +197,8 @@ export function AlbumPage({
           }}
           onAddToQueue={onAddToQueue}
           onAddToPlaylist={onAddToPlaylist}
-          onGoToArtist={(id) => onNavigate({ type: "artist", artistId: id })}
-          onGoToAlbum={(id) => onNavigate({ type: "album", albumId: id })}
+          onGoToArtist={(id) => navigate(paths.artist(id))}
+          onGoToAlbum={(id) => navigate(paths.album(id))}
         />
 
         {filter && filteredTracks.length === 0 && (

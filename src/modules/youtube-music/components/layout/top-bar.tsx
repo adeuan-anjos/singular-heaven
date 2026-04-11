@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from "react";
+import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -18,29 +19,35 @@ import {
 import { ChevronLeft, ChevronRight, Search, X, Loader2, LogOut } from "lucide-react";
 import { ytSearchSuggestions, ytSearch, ytGetAccounts, type ApiAccountInfo } from "../../services/yt-api";
 import { mapSearchResults } from "../../services/mappers";
-import type { Track, SearchResults, StackPage } from "../../types/music";
+import { useYtActions } from "../../router/actions-context";
+import {
+  useCanGoBack,
+  useCanGoForward,
+  useHistoryBack,
+  useHistoryForward,
+} from "../../router/history-store";
+import { paths } from "../../router/paths";
+import type { SearchResults } from "../../types/music";
 
 interface TopBarProps {
-  onBack: () => void;
-  onForward: () => void;
-  canGoBack: boolean;
-  canGoForward: boolean;
-  onNavigate: (page: StackPage) => void;
-  onPlayTrack: (track: Track) => void;
-  onSearchSubmit: (query: string) => void;
   onLogout?: () => void;
 }
 
-export function TopBar({
-  onBack,
-  onForward,
-  canGoBack,
-  canGoForward,
-  onNavigate,
-  onPlayTrack,
-  onSearchSubmit,
-  onLogout,
-}: TopBarProps) {
+export function TopBar({ onLogout }: TopBarProps) {
+  const [, navigate] = useLocation();
+  const canGoBack = useCanGoBack();
+  const canGoForward = useCanGoForward();
+  const goBack = useHistoryBack();
+  const goForward = useHistoryForward();
+  const { onPlayTrack } = useYtActions();
+
+  const handleSearchSubmit = useCallback(
+    (q: string) => {
+      console.log("[TopBar] submit search", { query: q });
+      navigate(paths.search(q));
+    },
+    [navigate],
+  );
   const [activeAccount, setActiveAccount] = useState<ApiAccountInfo | null>(null);
   const [query, setQuery] = useState("");
   const [dropdownOpen, setDropdownOpen] = useState(false);
@@ -159,9 +166,9 @@ export function TopBar({
       inputRef.current?.blur();
     } else if (e.key === "Enter" && query.trim().length > 0) {
       setDropdownOpen(false);
-      onSearchSubmit(query.trim());
+      handleSearchSubmit(query.trim());
     }
-  }, [query, onSearchSubmit]);
+  }, [query, handleSearchSubmit]);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -199,7 +206,7 @@ export function TopBar({
                 <Button
                   variant="ghost"
                   size="icon"
-                  onClick={onBack}
+                  onClick={goBack}
                   disabled={!canGoBack}
                 />
               }
@@ -215,7 +222,7 @@ export function TopBar({
                 <Button
                   variant="ghost"
                   size="icon"
-                  onClick={onForward}
+                  onClick={goForward}
                   disabled={!canGoForward}
                 />
               }
@@ -267,7 +274,7 @@ export function TopBar({
                       {suggestions.slice(0, 5).map((text, i) => (
                         <CommandItem
                           key={`suggestion-${i}`}
-                          onSelect={() => handleSelect(() => onSearchSubmit(text))}
+                          onSelect={() => handleSelect(() => handleSearchSubmit(text))}
                         >
                           <Search className="mr-2 h-3.5 w-3.5 text-muted-foreground" />
                           <span className="text-sm">{text}</span>
@@ -305,7 +312,7 @@ export function TopBar({
                       {results.artists.slice(0, 3).map((artist) => (
                         <CommandItem
                           key={artist.browseId}
-                          onSelect={() => handleSelect(() => onNavigate({ type: "artist", artistId: artist.browseId }))}
+                          onSelect={() => handleSelect(() => navigate(paths.artist(artist.browseId)))}
                         >
                           <div className="mr-3 flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-sm bg-muted">
                             {artist.thumbnails[0]?.url ? (
@@ -325,7 +332,7 @@ export function TopBar({
                       {results.albums.slice(0, 3).map((album) => (
                         <CommandItem
                           key={album.browseId}
-                          onSelect={() => handleSelect(() => onNavigate({ type: "album", albumId: album.browseId }))}
+                          onSelect={() => handleSelect(() => navigate(paths.album(album.browseId)))}
                         >
                           <div className="mr-3 flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-sm bg-muted">
                             {album.thumbnails[0]?.url ? (
@@ -348,7 +355,7 @@ export function TopBar({
                       {results.playlists.slice(0, 3).map((pl) => (
                         <CommandItem
                           key={pl.playlistId}
-                          onSelect={() => handleSelect(() => onNavigate({ type: "playlist", playlistId: pl.playlistId }))}
+                          onSelect={() => handleSelect(() => navigate(paths.playlist(pl.playlistId)))}
                         >
                           <div className="mr-3 flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-sm bg-muted">
                             {pl.thumbnails[0]?.url ? (

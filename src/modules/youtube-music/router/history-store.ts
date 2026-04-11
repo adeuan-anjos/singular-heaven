@@ -59,13 +59,30 @@ export const useHistoryStore = create<HistoryState & HistoryActions>((set, get) 
   },
 }));
 
+const useFullLocation = () => useHistoryStore((s) => s.stack[s.index]);
+
+function splitPath(full: string): string {
+  const idx = full.indexOf("?");
+  return idx >= 0 ? full.slice(0, idx) : full;
+}
+
+function splitSearch(full: string): string {
+  const idx = full.indexOf("?");
+  return idx >= 0 ? full.slice(idx + 1) : "";
+}
+
 export const useMemoryLocation = (): [
   string,
   (to: string, opts?: NavigateOptions) => void,
 ] => {
-  const path = useHistoryStore((s) => s.stack[s.index]);
+  const full = useFullLocation();
   const navigate = useHistoryStore((s) => s.navigate);
-  return [path, navigate];
+  return [splitPath(full), navigate];
+};
+
+export const useMemorySearch = (): string => {
+  const full = useFullLocation();
+  return splitSearch(full);
 };
 
 export const useCanGoBack = () => useHistoryStore((s) => s.index > 0);

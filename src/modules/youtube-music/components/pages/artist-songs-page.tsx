@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { useLocation, useParams } from "wouter";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
 import { ButtonGroup } from "@/components/ui/button-group";
@@ -18,36 +19,20 @@ import {
   type TrackCollectionEntry,
 } from "../../services/track-collections";
 import { usePlayerStore } from "../../stores/player-store";
+import { useYtActions } from "../../router/actions-context";
+import { paths } from "../../router/paths";
 import {
   Shuffle,
   Radio,
   Loader2,
 } from "lucide-react";
-import type { Artist, PlayAllOptions, Track, StackPage } from "../../types/music";
+import type { Artist } from "../../types/music";
 
-interface ArtistSongsPageProps {
-  artistId: string;
-  onNavigate: (page: StackPage) => void;
-  onPlayTrack: (track: Track) => void;
-  onPlayAll: (
-    tracks: Track[],
-    startIndex?: number,
-    playlistId?: string,
-    isComplete?: boolean,
-    options?: PlayAllOptions
-  ) => void;
-  onAddToQueue: (track: Track) => void;
-  onAddToPlaylist: (track: Track) => void;
-}
-
-export function ArtistSongsPage({
-  artistId,
-  onNavigate,
-  onPlayTrack,
-  onPlayAll,
-  onAddToQueue,
-  onAddToPlaylist,
-}: ArtistSongsPageProps) {
+export function ArtistSongsPage() {
+  const params = useParams<{ id: string }>();
+  const artistId = decodeURIComponent(params.id ?? "");
+  const [, navigate] = useLocation();
+  const { onPlayTrack, onPlayAll, onAddToQueue, onAddToPlaylist } = useYtActions();
   const [artist, setArtist] = useState<Artist | null>(null);
   const [collectionTracks, setCollectionTracks] = useState<TrackCollectionEntry[]>([]);
   const [loading, setLoading] = useState(true);
@@ -224,8 +209,8 @@ export function ArtistSongsPage({
           }}
           onAddToQueue={onAddToQueue}
           onAddToPlaylist={onAddToPlaylist}
-          onGoToArtist={(id) => onNavigate({ type: "artist", artistId: id })}
-          onGoToAlbum={(id) => onNavigate({ type: "album", albumId: id })}
+          onGoToArtist={(id) => navigate(paths.artist(id))}
+          onGoToAlbum={(id) => navigate(paths.album(id))}
         />
 
         {filter && filteredSongs.length === 0 && (

@@ -1,4 +1,5 @@
 import React from "react";
+import { useLocation } from "wouter";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -24,15 +25,15 @@ import { useTrackLikeStore } from "../../stores/track-like-store";
 import { useRenderTracker } from "@/lib/debug";
 import { ProgressBar } from "./progress-bar";
 import { thumbUrl } from "../../utils/thumb-url";
+import { paths } from "../../router/paths";
 
 interface PlayerBarProps {
   onOpenQueue: () => void;
-  onGoToArtist?: (artistId: string) => void;
-  onGoToAlbum?: (albumId: string) => void;
 }
 
-export const PlayerBar = React.memo(function PlayerBar({ onOpenQueue, onGoToArtist, onGoToAlbum }: PlayerBarProps) {
-  useRenderTracker("PlayerBar", { onOpenQueue, onGoToArtist, onGoToAlbum });
+export const PlayerBar = React.memo(function PlayerBar({ onOpenQueue }: PlayerBarProps) {
+  useRenderTracker("PlayerBar", { onOpenQueue });
+  const [, navigate] = useLocation();
 
   const currentTrackId = usePlayerStore((s) => s.currentTrackId);
   const track = useTrack(currentTrackId ?? undefined);
@@ -91,7 +92,7 @@ export const PlayerBar = React.memo(function PlayerBar({ onOpenQueue, onGoToArti
         <button
           type="button"
           className="shrink-0"
-          onClick={() => track.album && onGoToAlbum?.(track.album.id)}
+          onClick={() => track.album && navigate(paths.album(track.album.id))}
         >
           <Avatar className="h-12 w-12 rounded-md">
             <AvatarImage src={thumbUrl(imgUrl, 96)} alt={track.title} className="object-cover" />
@@ -104,7 +105,10 @@ export const PlayerBar = React.memo(function PlayerBar({ onOpenQueue, onGoToArti
             <button
               type="button"
               className="hover:underline"
-              onClick={() => track.artists[0]?.id && onGoToArtist?.(track.artists[0].id)}
+              onClick={() => {
+                const artistId = track.artists[0]?.id;
+                if (artistId) navigate(paths.artist(artistId));
+              }}
             >
               {artistName}
             </button>
@@ -114,7 +118,7 @@ export const PlayerBar = React.memo(function PlayerBar({ onOpenQueue, onGoToArti
                 <button
                   type="button"
                   className="hover:underline"
-                  onClick={() => onGoToAlbum?.(track.album!.id)}
+                  onClick={() => navigate(paths.album(track.album!.id))}
                 >
                   {track.album.name}
                 </button>

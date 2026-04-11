@@ -1,12 +1,14 @@
+import { useLocation } from "wouter";
 import { cn } from "@/lib/utils";
-import type { MoodCategory, StackPage } from "../../types/music";
+import { paths } from "../../router/paths";
+import type { MoodCategory } from "../../types/music";
 
 interface MoodGridProps {
   categories: MoodCategory[];
-  onSelect: (page: StackPage) => void;
 }
 
-export function MoodGrid({ categories, onSelect }: MoodGridProps) {
+export function MoodGrid({ categories }: MoodGridProps) {
+  const [, navigate] = useLocation();
   return (
     <div className="grid grid-cols-6 gap-3">
       {categories.map((cat) => (
@@ -14,7 +16,7 @@ export function MoodGrid({ categories, onSelect }: MoodGridProps) {
           key={cat.params}
           type="button"
           className="group flex h-10 items-center overflow-hidden rounded-md bg-card text-left text-sm font-medium text-foreground shadow-sm transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          onClick={() => onSelect({ type: "mood", params: cat.params, title: cat.title })}
+          onClick={() => navigate(paths.mood(cat.params, cat.title))}
         >
           <span
             aria-hidden="true"

@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useLocation } from "wouter";
 import { Loader2 } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { CarouselSection } from "../shared/carousel-section";
@@ -9,14 +10,13 @@ import {
   cacheFiniteTrackCollection,
   createTrackCollectionId,
 } from "../../services/track-collections";
-import type { Track, Album, Artist, Playlist, HomeSection, StackPage } from "../../types/music";
+import { useYtActions } from "../../router/actions-context";
+import { paths } from "../../router/paths";
+import type { Track, Album, Artist, Playlist, HomeSection } from "../../types/music";
 import { useRenderTracker } from "@/lib/debug";
 import { perfMark, endModuleLoad } from "../../services/perf";
 
-interface HomeViewProps {
-  onNavigate: (page: StackPage) => void;
-  onPlayTrack: (track: Track) => void;
-}
+type NavigateFn = (to: string) => void;
 
 function isTrack(item: Track | Album | Artist | Playlist): item is Track {
   return "videoId" in item;
@@ -66,44 +66,50 @@ function getItemProps(item: Track | Album | Artist | Playlist) {
   return { title: "", thumbnails: [] };
 }
 
-function getItemActions(item: Track | Album | Artist | Playlist, onNavigate: (page: StackPage) => void, onPlayTrack: (track: Track) => void) {
+function getItemActions(
+  item: Track | Album | Artist | Playlist,
+  navigate: NavigateFn,
+  onPlayTrack: (track: Track) => void,
+) {
   if (isTrack(item)) {
     const firstArtistId = item.artists[0]?.id;
     const albumId = item.album?.id;
     return {
       onClick: () => onPlayTrack(item),
       onPlay: () => onPlayTrack(item),
-      onGoToArtist: firstArtistId ? () => onNavigate({ type: "artist", artistId: firstArtistId }) : undefined,
-      onGoToAlbum: albumId ? () => onNavigate({ type: "album", albumId }) : undefined,
+      onGoToArtist: firstArtistId ? () => navigate(paths.artist(firstArtistId)) : undefined,
+      onGoToAlbum: albumId ? () => navigate(paths.album(albumId)) : undefined,
     };
   }
   if (isArtist(item)) {
     return {
-      onClick: () => onNavigate({ type: "artist", artistId: item.browseId }),
-      onPlay: () => onNavigate({ type: "artist", artistId: item.browseId }),
+      onClick: () => navigate(paths.artist(item.browseId)),
+      onPlay: () => navigate(paths.artist(item.browseId)),
     };
   }
   if (isPlaylist(item)) {
     const authorId = item.author.id;
     return {
-      onClick: () => onNavigate({ type: "playlist", playlistId: item.playlistId }),
-      onPlay: () => onNavigate({ type: "playlist", playlistId: item.playlistId }),
-      onGoToArtist: authorId ? () => onNavigate({ type: "artist", artistId: authorId }) : undefined,
+      onClick: () => navigate(paths.playlist(item.playlistId)),
+      onPlay: () => navigate(paths.playlist(item.playlistId)),
+      onGoToArtist: authorId ? () => navigate(paths.artist(authorId)) : undefined,
     };
   }
   if (isAlbum(item)) {
     const firstArtistId = item.artists?.[0]?.id;
     return {
-      onClick: () => onNavigate({ type: "album", albumId: item.browseId }),
-      onPlay: () => onNavigate({ type: "album", albumId: item.browseId }),
-      onGoToArtist: firstArtistId ? () => onNavigate({ type: "artist", artistId: firstArtistId }) : undefined,
+      onClick: () => navigate(paths.album(item.browseId)),
+      onPlay: () => navigate(paths.album(item.browseId)),
+      onGoToArtist: firstArtistId ? () => navigate(paths.artist(firstArtistId)) : undefined,
     };
   }
   return {};
 }
 
-export function HomeView({ onNavigate, onPlayTrack }: HomeViewProps) {
-  useRenderTracker("HomeView", { onNavigate, onPlayTrack });
+export function HomeView() {
+  const [, navigate] = useLocation();
+  const { onPlayTrack } = useYtActions();
+  useRenderTracker("HomeView", {});
   const [sections, setSections] = useState<HomeSection[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -177,7 +183,7 @@ export function HomeView({ onNavigate, onPlayTrack }: HomeViewProps) {
           <CarouselSection key={section.title} title={section.title}>
             {section.contents.map((item, i) => {
               const props = getItemProps(item);
-              const actions = getItemActions(item, onNavigate, onPlayTrack);
+              const actions = getItemActions(item, navigate, onPlayTrack);
               return (
                 <MediaCard
                   key={i}

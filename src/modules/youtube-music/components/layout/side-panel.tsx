@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { createPortal } from "react-dom";
+import { useLocation, useRoute } from "wouter";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
@@ -41,12 +42,10 @@ import { CreatePlaylistDialog } from "../shared/create-playlist-dialog";
 import { PlaylistActionsMenu } from "../shared/playlist-actions-menu";
 import { PlaylistDestructiveDialog } from "../shared/playlist-destructive-dialog";
 import { ytGetPlaylistTrackIds, ytLoadPlaylist } from "../../services/yt-api";
+import { paths } from "../../router/paths";
 import type { PlayAllOptions, Playlist, Track } from "../../types/music";
 
 interface SidePanelProps {
-  activeView: string;
-  onViewChange: (view: string) => void;
-  onSelectPlaylist: (id: string | null) => void;
   onEditPlaylist?: (playlist: Playlist) => void;
   onPlayAll: (
     tracks: Track[],
@@ -62,9 +61,9 @@ interface SidePanelProps {
 }
 
 const NAV_ITEMS = [
-  { key: "home", label: "Início", icon: Home },
-  { key: "explore", label: "Explorar", icon: Compass },
-  { key: "library", label: "Biblioteca", icon: Library },
+  { key: "home", label: "Início", icon: Home, path: paths.home },
+  { key: "explore", label: "Explorar", icon: Compass, path: paths.explore },
+  { key: "library", label: "Biblioteca", icon: Library, path: paths.library },
 ] as const;
 
 const PLAYLIST_ROW_HEIGHT = 48;
@@ -113,6 +112,7 @@ function SidebarPlaylistRow({
   playlist,
   isPending,
   onClick,
+  active = false,
   highlighted = false,
   trailingAction,
   menuAnchor,
@@ -120,6 +120,7 @@ function SidebarPlaylistRow({
   playlist: Playlist;
   isPending: boolean;
   onClick?: () => void;
+  active?: boolean;
   highlighted?: boolean;
   trailingAction?: React.ReactNode;
   menuAnchor?: React.ReactNode;
@@ -135,6 +136,7 @@ function SidebarPlaylistRow({
       {menuAnchor}
       <SidebarMenuButton
         onClick={onClick}
+        active={active}
         tone="playlist"
         size="playlist"
         className={cn(
@@ -271,6 +273,7 @@ function SidebarPlaylistOverflowButton({
 function SidebarPlaylistMenuAnchor({
   playlist,
   isPending,
+  active,
   triggerRefCallback,
   onSelect,
   onHighlightOpen,
@@ -285,6 +288,7 @@ function SidebarPlaylistMenuAnchor({
 }: {
   playlist: Playlist;
   isPending: boolean;
+  active: boolean;
   triggerRefCallback: (node: HTMLDivElement | null) => void;
   onSelect: () => void;
   onHighlightOpen: () => void;
@@ -367,6 +371,7 @@ function SidebarPlaylistMenuAnchor({
         <SidebarPlaylistRow
           playlist={playlist}
           isPending={isPending}
+          active={active}
           onClick={onSelect}
           trailingAction={
             !playlist.isSpecial ? (
@@ -404,9 +409,6 @@ function SidebarPlaylistMenuAnchor({
 }
 
 export function SidePanel({
-  activeView,
-  onViewChange,
-  onSelectPlaylist,
   onEditPlaylist,
   onPlayAll,
   onSavePlaylist,
@@ -414,6 +416,19 @@ export function SidePanel({
   onAppendPlaylistToQueue,
   onPlaylistDeleted,
 }: SidePanelProps) {
+  const [, navigate] = useLocation();
+  const [isHomeRoute] = useRoute(paths.home);
+  const [isExploreRoute] = useRoute(paths.explore);
+  const [isLibraryRoute] = useRoute(paths.library);
+  const [isPlaylistRoute, playlistRouteParams] = useRoute<{ id: string }>("/playlist/:id");
+  const activePlaylistId = isPlaylistRoute && playlistRouteParams
+    ? decodeURIComponent(playlistRouteParams.id)
+    : null;
+  const routeMatchesByKey: Record<string, boolean> = {
+    home: isHomeRoute,
+    explore: isExploreRoute,
+    library: isLibraryRoute,
+  };
   const playlists = usePlaylistLibraryStore((s) => s.sidebarPlaylists);
   const hydrate = usePlaylistLibraryStore((s) => s.hydrateSidebar);
   const hydrated = usePlaylistLibraryStore((s) => s.sidebarHydrated);
@@ -662,17 +677,17 @@ export function SidePanel({
       <Sidebar>
         <SidebarHeader>
           <SidebarMenu>
-            {NAV_ITEMS.map(({ key, label, icon: Icon }) => {
-              const isActive = activeView === key;
+            {NAV_ITEMS.map(({ key, label, icon: Icon, path }) => {
+              const isActive = routeMatchesByKey[key] ?? false;
 
               return (
                 <SidebarMenuItem key={key}>
                   <SidebarMenuButton
                     onClick={() => {
                       console.log(
-                        `[SidePanel] nav click ${JSON.stringify({ key })}`
+                        `[SidePanel] nav click ${JSON.stringify({ key, path })}`
                       );
-                      onViewChange(key);
+                      navigate(path);
                     }}
                     active={isActive}
                     tone="nav"
@@ -735,6 +750,7 @@ export function SidePanel({
                         <SidebarPlaylistMenuAnchor
                           playlist={playlist}
                           isPending={isPending}
+                          active={activePlaylistId === playlist.playlistId}
                           triggerRefCallback={(node) => {
                             if (node) {
                               triggerRefs.current.set(playlist.playlistId, node);
@@ -750,7 +766,7 @@ export function SidePanel({
                                 index: vItem.index,
                               })}`
                             );
-                            onSelectPlaylist(playlist.playlistId);
+                            navigate(paths.playlist(playlist.playlistId));
                           }}
                           onHighlightOpen={() =>
                             syncHighlightForPlaylist(playlist.playlistId)
@@ -792,7 +808,7 @@ export function SidePanel({
         onOpenChange={setCreateDialogOpen}
         onCreated={(playlistId) => {
           if (playlistId) {
-            onSelectPlaylist(playlistId);
+            navigate(paths.playlist(playlistId));
           }
         }}
       />

@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { useLocation } from "wouter";
 import { Loader2 } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { MediaGrid } from "../shared/media-grid";
@@ -7,18 +8,14 @@ import { ytGetLibrarySongs } from "../../services/yt-api";
 import { mapLibrarySongs } from "../../services/mappers";
 import { usePlaylistLibraryStore } from "../../stores/playlist-library-store";
 import { useTrackLikeStore } from "../../stores/track-like-store";
-import type { Playlist, StackPage, Track } from "../../types/music";
+import { paths } from "../../router/paths";
+import type { Playlist, Track } from "../../types/music";
 import { useRenderTracker } from "@/lib/debug";
 import { perfMark, endModuleLoad } from "../../services/perf";
 
-interface LibraryViewProps {
-  onNavigate: (page: StackPage) => void;
-}
-
-export const LibraryView = React.memo(function LibraryView({
-  onNavigate,
-}: LibraryViewProps) {
-  useRenderTracker("LibraryView", { onNavigate });
+export const LibraryView = React.memo(function LibraryView() {
+  const [, navigate] = useLocation();
+  useRenderTracker("LibraryView", {});
 
   const playlists = usePlaylistLibraryStore((s) => s.playlists);
   const hydratePlaylists = usePlaylistLibraryStore((s) => s.hydrate);
@@ -110,8 +107,8 @@ export const LibraryView = React.memo(function LibraryView({
             typeLabel="Playlist"
             artistName={`${likedEntryCount} músicas`}
             thumbnails={likedSongs[0]?.thumbnails ?? []}
-            onClick={() => onNavigate({ type: "playlist", playlistId: "liked" })}
-            onPlay={() => onNavigate({ type: "playlist", playlistId: "liked" })}
+            onClick={() => navigate(paths.playlist("liked"))}
+            onPlay={() => navigate(paths.playlist("liked"))}
           />
 
           {visiblePlaylists.map((playlist: Playlist) => (
@@ -121,8 +118,8 @@ export const LibraryView = React.memo(function LibraryView({
               typeLabel="Playlist"
               artistName={`${playlist.author.name} • ${playlist.trackCount ?? 0} músicas`}
               thumbnails={playlist.thumbnails ?? []}
-              onClick={() => onNavigate({ type: "playlist", playlistId: playlist.playlistId })}
-              onPlay={() => onNavigate({ type: "playlist", playlistId: playlist.playlistId })}
+              onClick={() => navigate(paths.playlist(playlist.playlistId))}
+              onPlay={() => navigate(paths.playlist(playlist.playlistId))}
             />
           ))}
         </MediaGrid>

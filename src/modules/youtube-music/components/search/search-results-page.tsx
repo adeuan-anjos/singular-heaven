@@ -1,4 +1,5 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
+import { useLocation, useSearch } from "wouter";
 import { Loader2 } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
@@ -15,22 +16,9 @@ import {
   type TrackCollectionEntry,
 } from "../../services/track-collections";
 import { usePlayerStore } from "../../stores/player-store";
-import type { PlayAllOptions, Track, SearchResults, StackPage } from "../../types/music";
-
-interface SearchResultsPageProps {
-  query: string;
-  onNavigate: (page: StackPage) => void;
-  onPlayTrack: (track: Track) => void;
-  onPlayAll: (
-    tracks: Track[],
-    startIndex?: number,
-    playlistId?: string,
-    isComplete?: boolean,
-    options?: PlayAllOptions
-  ) => void;
-  onAddToQueue: (track: Track) => void;
-  onAddToPlaylist: (track: Track) => void;
-}
+import { useYtActions } from "../../router/actions-context";
+import { paths } from "../../router/paths";
+import type { SearchResults, Track } from "../../types/music";
 
 type FilterTab = "all" | "songs" | "videos" | "albums" | "artists" | "community_playlists" | "featured_playlists";
 
@@ -44,14 +32,11 @@ const FILTER_TABS: { value: FilterTab; label: string }[] = [
   { value: "featured_playlists", label: "Playlists em destaque" },
 ];
 
-export function SearchResultsPage({
-  query,
-  onNavigate,
-  onPlayTrack,
-  onPlayAll,
-  onAddToQueue,
-  onAddToPlaylist,
-}: SearchResultsPageProps) {
+export function SearchResultsPage() {
+  const [, navigate] = useLocation();
+  const searchString = useSearch();
+  const query = useMemo(() => new URLSearchParams(searchString).get("q") ?? "", [searchString]);
+  const { onPlayTrack, onPlayAll, onAddToQueue, onAddToPlaylist } = useYtActions();
   const [results, setResults] = useState<SearchResults | null>(null);
   const [songEntries, setSongEntries] = useState<TrackCollectionEntry[]>([]);
   const [loading, setLoading] = useState(true);
@@ -116,11 +101,11 @@ export function SearchResultsPage({
   console.log("[SearchResultsPage] render", { query });
 
   const handleGoToArtist = (artistId: string) => {
-    onNavigate({ type: "artist", artistId });
+    navigate(paths.artist(artistId));
   };
 
   const handleGoToAlbum = (albumId: string) => {
-    onNavigate({ type: "album", albumId });
+    navigate(paths.album(albumId));
   };
 
   const handlePlaySearchTrack = (track: Track) => {
@@ -191,8 +176,8 @@ export function SearchResultsPage({
             typeLabel="Álbum"
             artistName={album.artists.map((a) => a.name).join(", ")}
             thumbnails={album.thumbnails}
-            onClick={() => onNavigate({ type: "album", albumId: album.browseId })}
-            onPlay={() => onNavigate({ type: "album", albumId: album.browseId })}
+            onClick={() => navigate(paths.album(album.browseId))}
+            onPlay={() => navigate(paths.album(album.browseId))}
             onGoToArtist={firstArtistId ? () => handleGoToArtist(firstArtistId) : undefined}
           />
         );
@@ -209,7 +194,7 @@ export function SearchResultsPage({
           typeLabel="Artista"
           artistName={artist.subscribers ? `${artist.subscribers} inscritos` : undefined}
           thumbnails={artist.thumbnails}
-          onClick={() => onNavigate({ type: "artist", artistId: artist.browseId })}
+          onClick={() => navigate(paths.artist(artist.browseId))}
         />
       ))}
     </MediaGrid>
@@ -224,7 +209,7 @@ export function SearchResultsPage({
           typeLabel="Playlist"
           artistName={pl.author.name}
           thumbnails={pl.thumbnails}
-          onClick={() => onNavigate({ type: "playlist", playlistId: pl.playlistId })}
+          onClick={() => navigate(paths.playlist(pl.playlistId))}
         />
       ))}
     </MediaGrid>
@@ -245,7 +230,6 @@ export function SearchResultsPage({
           topResult={topResult}
           topSongs={songEntries}
           currentTrackId={currentTrackId ?? undefined}
-          onNavigate={onNavigate}
           onPlayTrack={handlePlaySearchTrack}
           onAddToQueue={onAddToQueue}
           onAddToPlaylist={onAddToPlaylist}
@@ -264,8 +248,8 @@ export function SearchResultsPage({
                 typeLabel="Álbum"
                 artistName={album.artists.map((a) => a.name).join(", ")}
                 thumbnails={album.thumbnails}
-                onClick={() => onNavigate({ type: "album", albumId: album.browseId })}
-                onPlay={() => onNavigate({ type: "album", albumId: album.browseId })}
+                onClick={() => navigate(paths.album(album.browseId))}
+                onPlay={() => navigate(paths.album(album.browseId))}
                 onGoToArtist={firstArtistId ? () => handleGoToArtist(firstArtistId) : undefined}
               />
             );
@@ -281,7 +265,7 @@ export function SearchResultsPage({
               typeLabel="Artista"
               artistName={artist.subscribers ? `${artist.subscribers} inscritos` : undefined}
               thumbnails={artist.thumbnails}
-              onClick={() => onNavigate({ type: "artist", artistId: artist.browseId })}
+              onClick={() => navigate(paths.artist(artist.browseId))}
             />
           ))}
         </CarouselSection>
@@ -295,7 +279,7 @@ export function SearchResultsPage({
               typeLabel="Playlist"
               artistName={pl.author.name}
               thumbnails={pl.thumbnails}
-              onClick={() => onNavigate({ type: "playlist", playlistId: pl.playlistId })}
+              onClick={() => navigate(paths.playlist(pl.playlistId))}
             />
           ))}
         </CarouselSection>

@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
+import { useLocation, useParams } from "wouter";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import {
@@ -22,13 +23,16 @@ import {
 import { usePlayerStore } from "../../stores/player-store";
 import { useTrackLikeStore } from "../../stores/track-like-store";
 import { usePlaylistLibraryStore } from "../../stores/playlist-library-store";
+import { usePlaylistRefreshStore } from "../../stores/playlist-refresh-store";
+import { useYtActions } from "../../router/actions-context";
+import { paths } from "../../router/paths";
 import {
   Play,
   Shuffle,
   Loader2,
   Bookmark,
 } from "lucide-react";
-import type { PlayAllOptions, Playlist, Track, StackPage } from "../../types/music";
+import type { Playlist, Track } from "../../types/music";
 import type { LoadPlaylistResponse, PlaylistWindowItem } from "../../services/yt-api";
 
 const pendingPlaylistLoads = new Map<string, Promise<LoadPlaylistResponse>>();
@@ -77,41 +81,22 @@ function mergePlaylistTracks(
     .map(([, track]) => track);
 }
 
-interface PlaylistPageProps {
-  playlistId: string;
-  refreshVersion?: number;
-  onNavigate: (page: StackPage) => void;
-  onPlayTrack: (track: Track) => void;
-  onAddToQueue: (track: Track) => void;
-  onAddToPlaylist: (track: Track) => void;
-  onEditPlaylist?: (playlist: Playlist) => void;
-  onSavePlaylist: (playlistId: string, title: string) => void;
-  onAddPlaylistNext: (tracks: Track[], queueTrackIds: string[]) => Promise<void>;
-  onAppendPlaylistToQueue: (tracks: Track[], queueTrackIds: string[]) => Promise<void>;
-  onPlaylistDeleted?: (playlistId: string) => void;
-  onPlayAll: (
-    tracks: Track[],
-    startIndex?: number,
-    playlistId?: string,
-    isComplete?: boolean,
-    options?: PlayAllOptions
-  ) => void;
-}
-
-export function PlaylistPage({
-  playlistId,
-  refreshVersion = 0,
-  onNavigate,
-  onPlayTrack,
-  onAddToQueue,
-  onAddToPlaylist,
-  onEditPlaylist,
-  onSavePlaylist,
-  onAddPlaylistNext,
-  onAppendPlaylistToQueue,
-  onPlaylistDeleted,
-  onPlayAll,
-}: PlaylistPageProps) {
+export function PlaylistPage() {
+  const params = useParams<{ id: string }>();
+  const playlistId = decodeURIComponent(params.id ?? "");
+  const [, navigate] = useLocation();
+  const {
+    onPlayTrack,
+    onAddToQueue,
+    onAddToPlaylist,
+    onEditPlaylist,
+    onSavePlaylist,
+    onAddPlaylistNext,
+    onAppendPlaylistToQueue,
+    onPlaylistDeleted,
+    onPlayAll,
+  } = useYtActions();
+  const refreshVersion = usePlaylistRefreshStore((s) => s.versions[playlistId] ?? 0);
   const [playlist, setPlaylist] = useState<Playlist | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -414,7 +399,7 @@ export function PlaylistPage({
   const playlistMenuContent = playlist.isSpecial ? undefined : (
     <PlaylistActionsMenu
       kind="dropdown"
-      showEdit={Boolean(onEditPlaylist && playlist.isOwnedByUser && playlist.isEditable)}
+      showEdit={Boolean(playlist.isOwnedByUser && playlist.isEditable)}
       showShuffle={hasTracksAvailable}
       showPlayNext
       showAppendQueue
@@ -464,7 +449,7 @@ export function PlaylistPage({
                   <button
                     type="button"
                     className="hover:underline"
-                    onClick={() => onNavigate({ type: "artist", artistId: playlist.author.id! })}
+                    onClick={() => navigate(paths.artist(playlist.author.id!))}
                   >
                     {playlist.author.name}
                   </button>
@@ -645,8 +630,8 @@ export function PlaylistPage({
                 }
               : undefined
           }
-          onGoToArtist={(id) => onNavigate({ type: "artist", artistId: id })}
-          onGoToAlbum={(id) => onNavigate({ type: "album", albumId: id })}
+          onGoToArtist={(id) => navigate(paths.artist(id))}
+          onGoToAlbum={(id) => navigate(paths.album(id))}
         />
       ) : (
         <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">

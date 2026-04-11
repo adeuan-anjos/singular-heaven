@@ -1,6 +1,7 @@
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
+import { Router, Route, Switch } from "wouter";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { LoginScreen } from "./components/auth/login-screen";
 import { AccountPicker } from "./components/auth/account-picker";
@@ -20,7 +21,14 @@ import { SearchResultsPage } from "./components/search/search-results-page";
 import { AddToPlaylistDialog } from "./components/shared/add-to-playlist-dialog";
 import { EditPlaylistDialog } from "./components/shared/edit-playlist-dialog";
 import { SavePlaylistDialog } from "./components/shared/save-playlist-dialog";
-import { useNavigation } from "./hooks/use-navigation";
+import {
+  useHistoryStore,
+  useMemoryLocation,
+  useMemorySearch,
+} from "./router/history-store";
+import { paths } from "./router/paths";
+import { YtActionsProvider, type YtActions } from "./router/actions-context";
+import { usePlaylistRefreshStore } from "./stores/playlist-refresh-store";
 import { usePlayerStore } from "./stores/player-store";
 import { useQueueStore } from "./stores/queue-store";
 import { usePlaylistLibraryStore } from "./stores/playlist-library-store";
@@ -41,7 +49,6 @@ export default function YouTubeMusicModule() {
   useDocumentHiddenClass();
   useEffect(() => { startMemoryMonitor(5000); }, []);
   const [authState, setAuthState] = useState<AuthState>("loading");
-  const [activeTab, setActiveTab] = useState("home");
   const [queueOpen, setQueueOpen] = useState(false);
   const [playlistDialogTrack, setPlaylistDialogTrack] = useState<Track | null>(null);
   const [savePlaylistDialog, setSavePlaylistDialog] = useState<{
@@ -55,9 +62,7 @@ export default function YouTubeMusicModule() {
     privacyStatus?: "PUBLIC" | "PRIVATE" | "UNLISTED" | null;
     thumbnailUrl?: string | null;
   } | null>(null);
-  const [playlistRefreshVersion, setPlaylistRefreshVersion] = useState(0);
   const queueOpenRef = useRef(queueOpen);
-  const nav = useNavigation();
 
   const playerPlay = usePlayerStore((s) => s.play);
   const playerCurrentTrackId = usePlayerStore((s) => s.currentTrackId);
@@ -76,7 +81,7 @@ export default function YouTubeMusicModule() {
   const trackLikesHydrate = useTrackLikeStore((s) => s.hydrate);
   const trackLikesClear = useTrackLikeStore((s) => s.clear);
 
-  console.log("[YouTubeMusicModule] render", { authState, activeTab, page: nav.currentPage?.type });
+  console.log("[YouTubeMusicModule] render", { authState });
 
   useEffect(() => {
     queueOpenRef.current = queueOpen;
@@ -517,124 +522,40 @@ export default function YouTubeMusicModule() {
 
   const handleOpenQueue = useCallback(() => setQueueOpen(true), []);
 
-  const handleGoToArtist = useCallback((id: string) => {
-    nav.push({ type: "artist", artistId: id });
-  }, [nav.push]);
-
-  const handleGoToAlbum = useCallback((id: string) => {
-    nav.push({ type: "album", albumId: id });
-  }, [nav.push]);
-
-  const handleSearchSubmit = useCallback((query: string) => {
-    console.log("[YouTubeMusicModule] handleSearchSubmit", { query });
-    nav.push({ type: "search", query });
-  }, [nav]);
-
-  const handleViewChange = useCallback((view: string) => {
-    nav.clear();
-    setActiveTab(view);
-  }, [nav]);
-
-  const handleSelectPlaylist = useCallback((id: string | null) => {
-    // Side panel playlist click → push playlist page onto navigation stack
-    if (id === null) {
-      // "Curtidas" in sidebar
-      nav.push({ type: "playlist", playlistId: "liked" });
-    } else {
-      nav.push({ type: "playlist", playlistId: id });
-    }
-  }, [nav]);
-
   const handlePlaylistDeleted = useCallback((playlistId: string) => {
     console.log("[YouTubeMusicModule] handlePlaylistDeleted", { playlistId });
-    if (nav.currentPage?.type === "playlist" && nav.currentPage.playlistId === playlistId) {
-      nav.clear();
-      setActiveTab("library");
+    const state = useHistoryStore.getState();
+    const currentPath = state.stack[state.index];
+    const match = currentPath.match(/^\/playlist\/([^/?]+)/);
+    if (match && decodeURIComponent(match[1]) === playlistId) {
+      state.navigate(paths.library, { replace: true });
     }
-  }, [nav]);
+  }, []);
 
-  const renderContent = () => {
-    if (nav.currentPage) {
-      switch (nav.currentPage.type) {
-        case "artist":
-          return (
-            <ArtistPage
-              artistId={nav.currentPage.artistId}
-              onNavigate={nav.push}
-              onPlayTrack={handlePlayTrack}
-              onPlayAll={handlePlayAll}
-              onAddToQueue={handleAddToQueue}
-              onAddToPlaylist={handleAddToPlaylist}
-            />
-          );
-        case "artist-songs":
-          return (
-            <ArtistSongsPage
-              artistId={nav.currentPage.artistId}
-              onNavigate={nav.push}
-              onPlayTrack={handlePlayTrack}
-              onPlayAll={handlePlayAll}
-              onAddToQueue={handleAddToQueue}
-              onAddToPlaylist={handleAddToPlaylist}
-            />
-          );
-        case "album":
-          return (
-            <AlbumPage
-              albumId={nav.currentPage.albumId}
-              onNavigate={nav.push}
-              onPlayTrack={handlePlayTrack}
-              onAddToQueue={handleAddToQueue}
-              onAddToPlaylist={handleAddToPlaylist}
-              onPlayAll={handlePlayAll}
-            />
-          );
-        case "playlist":
-          return (
-            <PlaylistPage
-              playlistId={nav.currentPage.playlistId}
-              refreshVersion={playlistRefreshVersion}
-              onNavigate={nav.push}
-              onPlayTrack={handlePlayTrack}
-              onAddToQueue={handleAddToQueue}
-              onAddToPlaylist={handleAddToPlaylist}
-              onEditPlaylist={handleEditPlaylist}
-              onSavePlaylist={handleSavePlaylist}
-              onAddPlaylistNext={handleAddPlaylistNext}
-              onAppendPlaylistToQueue={handleAppendPlaylistToQueue}
-              onPlaylistDeleted={handlePlaylistDeleted}
-              onPlayAll={handlePlayAll}
-            />
-          );
-        case "search":
-          return (
-            <SearchResultsPage
-              query={nav.currentPage.query}
-              onNavigate={nav.push}
-              onPlayTrack={handlePlayTrack}
-              onPlayAll={handlePlayAll}
-              onAddToQueue={handleAddToQueue}
-              onAddToPlaylist={handleAddToPlaylist}
-            />
-          );
-        case "mood":
-          return <ExploreView onNavigate={nav.push} onPlayTrack={handlePlayTrack} />;
-        default:
-          return null;
-      }
-    }
-
-    switch (activeTab) {
-      case "home":
-        return <HomeView onNavigate={nav.push} onPlayTrack={handlePlayTrack} />;
-      case "explore":
-        return <ExploreView onNavigate={nav.push} onPlayTrack={handlePlayTrack} />;
-      case "library":
-        return <LibraryView onNavigate={nav.push} />;
-      default:
-        return null;
-    }
-  };
+  const ytActions = useMemo<YtActions>(
+    () => ({
+      onPlayTrack: handlePlayTrack,
+      onPlayAll: handlePlayAll,
+      onAddToQueue: handleAddToQueue,
+      onAddToPlaylist: handleAddToPlaylist,
+      onEditPlaylist: handleEditPlaylist,
+      onSavePlaylist: handleSavePlaylist,
+      onAddPlaylistNext: handleAddPlaylistNext,
+      onAppendPlaylistToQueue: handleAppendPlaylistToQueue,
+      onPlaylistDeleted: handlePlaylistDeleted,
+    }),
+    [
+      handlePlayTrack,
+      handlePlayAll,
+      handleAddToQueue,
+      handleAddToPlaylist,
+      handleEditPlaylist,
+      handleSavePlaylist,
+      handleAddPlaylistNext,
+      handleAppendPlaylistToQueue,
+      handlePlaylistDeleted,
+    ],
+  );
 
   // Smart memory management: Low when idle (5s), Normal when active
   useEffect(() => {
@@ -700,80 +621,76 @@ export default function YouTubeMusicModule() {
 
   return (
     <TooltipProvider delay={0}>
-      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-        {/* Top bar — full width, splits into side-panel spacer + nav controls */}
-        <TopBar
-          onBack={nav.pop}
-          onForward={nav.forward}
-          canGoBack={nav.canGoBack}
-          canGoForward={nav.canGoForward}
-          onNavigate={nav.push}
-          onPlayTrack={handlePlayTrack}
-          onSearchSubmit={handleSearchSubmit}
-          onLogout={handleLogout}
-        />
+      <Router hook={useMemoryLocation} searchHook={useMemorySearch}>
+        <YtActionsProvider value={ytActions}>
+          <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+            <TopBar onLogout={handleLogout} />
 
-        {/* Main area */}
-        <div className="flex min-h-0 flex-1">
-        <SidePanel
-          activeView={activeTab}
-          onViewChange={handleViewChange}
-          onSelectPlaylist={handleSelectPlaylist}
-          onEditPlaylist={handleEditPlaylist}
-          onPlayAll={handlePlayAll}
-          onSavePlaylist={handleSavePlaylist}
-          onAddPlaylistNext={handleAddPlaylistNext}
-          onAppendPlaylistToQueue={handleAppendPlaylistToQueue}
-          onPlaylistDeleted={handlePlaylistDeleted}
-        />
-          <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-            {renderContent()}
+            <div className="flex min-h-0 flex-1">
+              <SidePanel
+                onEditPlaylist={handleEditPlaylist}
+                onPlayAll={handlePlayAll}
+                onSavePlaylist={handleSavePlaylist}
+                onAddPlaylistNext={handleAddPlaylistNext}
+                onAppendPlaylistToQueue={handleAppendPlaylistToQueue}
+                onPlaylistDeleted={handlePlaylistDeleted}
+              />
+              <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+                <Switch>
+                  <Route path={paths.home} component={HomeView} />
+                  <Route path={paths.explore} component={ExploreView} />
+                  <Route path={paths.library} component={LibraryView} />
+                  <Route path="/artist/:id/songs" component={ArtistSongsPage} />
+                  <Route path="/artist/:id" component={ArtistPage} />
+                  <Route path="/album/:id" component={AlbumPage} />
+                  <Route path="/playlist/:id" component={PlaylistPage} />
+                  <Route path="/search" component={SearchResultsPage} />
+                  <Route path="/mood" component={ExploreView} />
+                  <Route component={HomeView} />
+                </Switch>
+              </div>
+            </div>
+
+            <PlayerBar onOpenQueue={handleOpenQueue} />
+
+            <QueueSheet open={queueOpen} onOpenChange={setQueueOpen} />
+
+            <AddToPlaylistDialog
+              open={playlistDialogTrack !== null}
+              onOpenChange={(open) => {
+                if (!open) setPlaylistDialogTrack(null);
+              }}
+              track={playlistDialogTrack}
+            />
+
+            <SavePlaylistDialog
+              open={savePlaylistDialog !== null}
+              onOpenChange={(open) => {
+                if (!open) setSavePlaylistDialog(null);
+              }}
+              sourcePlaylistId={savePlaylistDialog?.playlistId ?? null}
+              sourcePlaylistTitle={savePlaylistDialog?.title ?? null}
+            />
+
+            <EditPlaylistDialog
+              open={editPlaylistDialog !== null}
+              onOpenChange={(open) => {
+                if (!open) setEditPlaylistDialog(null);
+              }}
+              playlistId={editPlaylistDialog?.playlistId ?? null}
+              initialTitle={editPlaylistDialog?.title}
+              initialDescription={editPlaylistDialog?.description}
+              initialPrivacyStatus={editPlaylistDialog?.privacyStatus ?? null}
+              initialThumbnailUrl={editPlaylistDialog?.thumbnailUrl ?? null}
+              onSaved={() => {
+                if (editPlaylistDialog) {
+                  usePlaylistRefreshStore.getState().bump(editPlaylistDialog.playlistId);
+                }
+              }}
+            />
           </div>
-        </div>
-
-        <PlayerBar
-          onOpenQueue={handleOpenQueue}
-          onGoToArtist={handleGoToArtist}
-          onGoToAlbum={handleGoToAlbum}
-        />
-
-        <QueueSheet
-          open={queueOpen}
-          onOpenChange={setQueueOpen}
-        />
-
-        <AddToPlaylistDialog
-          open={playlistDialogTrack !== null}
-          onOpenChange={(open) => {
-            if (!open) setPlaylistDialogTrack(null);
-          }}
-          track={playlistDialogTrack}
-        />
-
-        <SavePlaylistDialog
-          open={savePlaylistDialog !== null}
-          onOpenChange={(open) => {
-            if (!open) setSavePlaylistDialog(null);
-          }}
-          sourcePlaylistId={savePlaylistDialog?.playlistId ?? null}
-          sourcePlaylistTitle={savePlaylistDialog?.title ?? null}
-        />
-
-        <EditPlaylistDialog
-          open={editPlaylistDialog !== null}
-          onOpenChange={(open) => {
-            if (!open) setEditPlaylistDialog(null);
-          }}
-          playlistId={editPlaylistDialog?.playlistId ?? null}
-          initialTitle={editPlaylistDialog?.title}
-          initialDescription={editPlaylistDialog?.description}
-          initialPrivacyStatus={editPlaylistDialog?.privacyStatus ?? null}
-          initialThumbnailUrl={editPlaylistDialog?.thumbnailUrl ?? null}
-          onSaved={() => {
-            setPlaylistRefreshVersion((value) => value + 1);
-          }}
-        />
-      </div>
+        </YtActionsProvider>
+      </Router>
     </TooltipProvider>
   );
 }

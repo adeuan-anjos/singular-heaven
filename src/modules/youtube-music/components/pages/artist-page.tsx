@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { useLocation, useParams } from "wouter";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
 import { ButtonGroup } from "@/components/ui/button-group";
@@ -19,7 +20,9 @@ import {
   createTrackCollectionId,
   type TrackCollectionEntry,
 } from "../../services/track-collections";
-import type { Artist, PlayAllOptions, Track, StackPage } from "../../types/music";
+import { useYtActions } from "../../router/actions-context";
+import { paths } from "../../router/paths";
+import type { Artist } from "../../types/music";
 import {
   Shuffle,
   Radio,
@@ -29,29 +32,11 @@ import {
 } from "lucide-react";
 import { usePlayerStore } from "../../stores/player-store";
 
-interface ArtistPageProps {
-  artistId: string;
-  onNavigate: (page: StackPage) => void;
-  onPlayTrack: (track: Track) => void;
-  onPlayAll: (
-    tracks: Track[],
-    startIndex?: number,
-    playlistId?: string,
-    isComplete?: boolean,
-    options?: PlayAllOptions
-  ) => void;
-  onAddToQueue: (track: Track) => void;
-  onAddToPlaylist: (track: Track) => void;
-}
-
-export function ArtistPage({
-  artistId,
-  onNavigate,
-  onPlayTrack,
-  onPlayAll,
-  onAddToQueue,
-  onAddToPlaylist,
-}: ArtistPageProps) {
+export function ArtistPage() {
+  const params = useParams<{ id: string }>();
+  const artistId = decodeURIComponent(params.id ?? "");
+  const [, navigate] = useLocation();
+  const { onPlayTrack, onPlayAll, onAddToQueue, onAddToPlaylist } = useYtActions();
   const [artist, setArtist] = useState<Artist | null>(null);
   const [collectionTracks, setCollectionTracks] = useState<TrackCollectionEntry[]>([]);
   const [loading, setLoading] = useState(true);
@@ -200,13 +185,13 @@ export function ArtistPage({
               }}
               onAddToQueue={onAddToQueue}
               onAddToPlaylist={onAddToPlaylist}
-              onGoToArtist={(id) => onNavigate({ type: "artist", artistId: id })}
-              onGoToAlbum={(id) => onNavigate({ type: "album", albumId: id })}
+              onGoToArtist={(id) => navigate(paths.artist(id))}
+              onGoToAlbum={(id) => navigate(paths.album(id))}
             />
             <Button
               variant="outline"
               size="sm"
-              onClick={() => onNavigate({ type: "artist-songs", artistId })}
+              onClick={() => navigate(paths.artistSongs(artistId))}
             >
               Mostrar tudo
             </Button>
@@ -223,8 +208,8 @@ export function ArtistPage({
                 typeLabel="Álbum"
                 artistName={album.year}
                 thumbnails={album.thumbnails}
-                onClick={() => onNavigate({ type: "album", albumId: album.browseId })}
-                onPlay={() => onNavigate({ type: "album", albumId: album.browseId })}
+                onClick={() => navigate(paths.album(album.browseId))}
+                onPlay={() => navigate(paths.album(album.browseId))}
               />
             ))}
           </CarouselSection>
@@ -240,8 +225,8 @@ export function ArtistPage({
                 typeLabel="Single"
                 artistName={single.year}
                 thumbnails={single.thumbnails}
-                onClick={() => onNavigate({ type: "album", albumId: single.browseId })}
-                onPlay={() => onNavigate({ type: "album", albumId: single.browseId })}
+                onClick={() => navigate(paths.album(single.browseId))}
+                onPlay={() => navigate(paths.album(single.browseId))}
               />
             ))}
           </CarouselSection>
@@ -308,7 +293,7 @@ export function ArtistPage({
                 title={a.name}
                 typeLabel="Artista"
                 thumbnails={a.thumbnails}
-                onClick={() => onNavigate({ type: "artist", artistId: a.browseId })}
+                onClick={() => navigate(paths.artist(a.browseId))}
               />
             ))}
           </CarouselSection>
