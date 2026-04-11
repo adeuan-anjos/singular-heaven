@@ -1,5 +1,6 @@
 import { createContext, useContext, type ReactNode } from "react";
 import type { PlayAllOptions, Playlist, Track } from "../types/music";
+import type { RadioSeedKind } from "../services/yt-api";
 
 export interface YtActions {
   onPlayTrack: (track: Track) => void | Promise<void>;
@@ -17,6 +18,7 @@ export interface YtActions {
   onAddPlaylistNext: (tracks: Track[], queueTrackIds: string[]) => void | Promise<void>;
   onAppendPlaylistToQueue: (tracks: Track[], queueTrackIds: string[]) => void | Promise<void>;
   onPlaylistDeleted: (playlistId: string) => void;
+  onStartRadio: (seed: { kind: RadioSeedKind; id: string }) => Promise<void>;
 }
 
 const YtActionsContext = createContext<YtActions | null>(null);

@@ -34,7 +34,7 @@ import { useQueueStore } from "./stores/queue-store";
 import { usePlaylistLibraryStore } from "./stores/playlist-library-store";
 import { useTrackCacheStore } from "./stores/track-cache-store";
 import { useTrackLikeStore } from "./stores/track-like-store";
-import { ytGetCachedTracks, ytAuthLogout, type QueueSnapshot } from "./services/yt-api";
+import { ytGetCachedTracks, ytAuthLogout, ytRadioStart, type QueueSnapshot, type RadioSeedKind } from "./services/yt-api";
 import { mapLibraryPlaylists } from "./services/mappers";
 import type { PlayAllOptions, Playlist, Track } from "./types/music";
 import { useRenderTracker, useLeakDetector, startMemoryMonitor } from "@/lib/debug";
@@ -542,6 +542,41 @@ export default function YouTubeMusicModule() {
     [playerCurrentTrackId, playerPlay, queueAppendCollection, trackCachePut]
   );
 
+  const handleStartRadio = useCallback(
+    async (seed: { kind: RadioSeedKind; id: string }) => {
+      console.log("[YouTubeMusicModule] handleStartRadio", seed);
+      try {
+        const response = await ytRadioStart(seed.kind, seed.id);
+        console.log("[YouTubeMusicModule] handleStartRadio response", {
+          trackId: response.trackId,
+          totalLoaded: response.snapshot.totalLoaded,
+          isRadio: response.snapshot.isRadio,
+        });
+        queueSyncSnapshot(response.snapshot);
+        const targetTrackId = response.trackId;
+        if (targetTrackId) {
+          if (!useTrackCacheStore.getState().getTrack(targetTrackId)) {
+            try {
+              const resolvedTracks = await ytGetCachedTracks([targetTrackId]);
+              if (resolvedTracks.length > 0) {
+                trackCachePut(resolvedTracks);
+              }
+            } catch (error) {
+              console.error(
+                "[YouTubeMusicModule] failed to resolve track for radio start",
+                error,
+              );
+            }
+          }
+          playerPlay(targetTrackId);
+        }
+      } catch (err) {
+        console.error("[YouTubeMusicModule] handleStartRadio failed", err);
+      }
+    },
+    [playerPlay, queueSyncSnapshot, trackCachePut],
+  );
+
   const handleOpenQueue = useCallback(() => setQueueOpen(true), []);
 
   const handlePlaylistDeleted = useCallback((playlistId: string) => {
@@ -565,6 +600,7 @@ export default function YouTubeMusicModule() {
       onAddPlaylistNext: handleAddPlaylistNext,
       onAppendPlaylistToQueue: handleAppendPlaylistToQueue,
       onPlaylistDeleted: handlePlaylistDeleted,
+      onStartRadio: handleStartRadio,
     }),
     [
       handlePlayTrack,
@@ -576,6 +612,7 @@ export default function YouTubeMusicModule() {
       handleAddPlaylistNext,
       handleAppendPlaylistToQueue,
       handlePlaylistDeleted,
+      handleStartRadio,
     ],
   );
 
