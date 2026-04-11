@@ -8,6 +8,10 @@ use ytmusic_api::types::common::LikeStatus;
 use ytmusic_api::YtMusicClient;
 
 use super::client::YtMusicState;
+use super::session::{
+    self, is_session_expired, refresh_cookies_and_rebuild_state, with_session_refresh,
+    SessionActivity,
+};
 use crate::playback_queue::{PlaybackQueue, QueueCommandResponse, QueueSnapshot, QueueWindowResponse};
 use crate::playlist_cache::{self, CachedCollectionMeta, CachedPlaylistMeta, CachedTrack, PlaylistCache};
 
@@ -144,82 +148,6 @@ pub struct PlaylistItemRemoveInput {
 }
 
 // ---------------------------------------------------------------------------
-// Cookie extraction helpers
-// ---------------------------------------------------------------------------
-
-/// Extract YouTube cookies from a specific browser using the `rookie` crate.
-/// Returns the cookie string in "key1=val1; key2=val2" format, or None if no cookies found.
-fn extract_cookies_from_browser(browser: &str) -> Result<Option<String>, String> {
-    println!("[extract_cookies] Trying browser: {browser}");
-
-    let domains = Some(vec![".youtube.com".to_string()]);
-
-    let cookies = match browser {
-        "chrome" => rookie::chrome(domains.clone()),
-        "firefox" => rookie::firefox(domains.clone()),
-        "edge" => rookie::edge(domains.clone()),
-        "brave" => rookie::brave(domains.clone()),
-        "chromium" => rookie::chromium(domains.clone()),
-        "opera" => rookie::opera(domains.clone()),
-        "vivaldi" => rookie::vivaldi(domains.clone()),
-        _ => return Err(format!("[extract_cookies] Unknown browser: {browser}")),
-    };
-
-    match cookies {
-        Ok(cookie_list) => {
-            println!(
-                "[extract_cookies] {browser}: found {} cookies",
-                cookie_list.len()
-            );
-            if cookie_list.is_empty() {
-                return Ok(None);
-            }
-            // Format as "key1=val1; key2=val2; ..."
-            let cookie_string: String = cookie_list
-                .iter()
-                .map(|c| format!("{}={}", c.name, c.value))
-                .collect::<Vec<_>>()
-                .join("; ");
-            println!(
-                "[extract_cookies] {browser}: cookie string length = {} chars",
-                cookie_string.len()
-            );
-            Ok(Some(cookie_string))
-        }
-        Err(e) => {
-            println!("[extract_cookies] {browser}: error reading cookies: {e}");
-            Err(format!(
-                "[extract_cookies] Failed to read {browser} cookies: {e}"
-            ))
-        }
-    }
-}
-
-/// Try browsers in priority order until one yields YouTube cookies.
-fn extract_cookies_auto() -> Result<(String, String), String> {
-    let browsers = ["edge", "chrome", "firefox", "brave", "chromium", "opera", "vivaldi"];
-
-    println!("[extract_cookies_auto] Trying browsers in order: {browsers:?}");
-
-    for browser in browsers {
-        match extract_cookies_from_browser(browser) {
-            Ok(Some(cookies)) => {
-                println!("[extract_cookies_auto] Success with {browser}");
-                return Ok((browser.to_string(), cookies));
-            }
-            Ok(None) => {
-                println!("[extract_cookies_auto] {browser}: no YouTube cookies");
-            }
-            Err(e) => {
-                println!("[extract_cookies_auto] {browser}: skipped ({e})");
-            }
-        }
-    }
-
-    Err("[extract_cookies_auto] No browser with YouTube cookies found".to_string())
-}
-
-// ---------------------------------------------------------------------------
 // Search
 // ---------------------------------------------------------------------------
 
@@ -227,12 +155,24 @@ fn extract_cookies_auto() -> Result<(String, String), String> {
 pub async fn yt_search(
     query: String,
     filter: Option<String>,
+    app: AppHandle,
     state: State<'_, Arc<RwLock<YtMusicState>>>,
+    activity: State<'_, Arc<SessionActivity>>,
 ) -> Result<String, String> {
     println!("[yt_search] query={query} filter={filter:?}");
-    let state = state.read().await;
-    let result = state.client.search(&query, filter.as_deref()).await
-        .map_err(|e| format!("[yt_search] {e}"))?;
+    let result = with_session_refresh(
+        &state,
+        &app,
+        &activity,
+        "yt_search",
+        |client| {
+            let q = query.clone();
+            let f = filter.clone();
+            async move { client.search(&q, f.as_deref()).await }
+        },
+    )
+    .await
+    .map_err(|e| format!("[yt_search] {e}"))?;
     serde_json::to_string(&result)
         .map_err(|e| format!("[yt_search] serialization: {e}"))
 }
@@ -257,13 +197,21 @@ pub async fn yt_search_suggestions(
 #[tauri::command]
 pub async fn yt_get_home(
     limit: Option<usize>,
+    app: AppHandle,
     state: State<'_, Arc<RwLock<YtMusicState>>>,
+    activity: State<'_, Arc<SessionActivity>>,
 ) -> Result<String, String> {
     let limit = limit.unwrap_or(6);
     println!("[yt_get_home] limit={limit}");
-    let state = state.read().await;
-    let result = state.client.get_home(limit).await
-        .map_err(|e| format!("[yt_get_home] {e}"))?;
+    let result = with_session_refresh(
+        &state,
+        &app,
+        &activity,
+        "yt_get_home",
+        |client| async move { client.get_home(limit).await },
+    )
+    .await
+    .map_err(|e| format!("[yt_get_home] {e}"))?;
     serde_json::to_string(&result)
         .map_err(|e| format!("[yt_get_home] serialization: {e}"))
 }
@@ -271,12 +219,23 @@ pub async fn yt_get_home(
 #[tauri::command]
 pub async fn yt_get_artist(
     browse_id: String,
+    app: AppHandle,
     state: State<'_, Arc<RwLock<YtMusicState>>>,
+    activity: State<'_, Arc<SessionActivity>>,
 ) -> Result<String, String> {
     println!("[yt_get_artist] browse_id={browse_id}");
-    let state = state.read().await;
-    let result = state.client.get_artist(&browse_id).await
-        .map_err(|e| format!("[yt_get_artist] {e}"))?;
+    let result = with_session_refresh(
+        &state,
+        &app,
+        &activity,
+        "yt_get_artist",
+        |client| {
+            let id = browse_id.clone();
+            async move { client.get_artist(&id).await }
+        },
+    )
+    .await
+    .map_err(|e| format!("[yt_get_artist] {e}"))?;
     serde_json::to_string(&result)
         .map_err(|e| format!("[yt_get_artist] serialization: {e}"))
 }
@@ -284,12 +243,23 @@ pub async fn yt_get_artist(
 #[tauri::command]
 pub async fn yt_get_album(
     browse_id: String,
+    app: AppHandle,
     state: State<'_, Arc<RwLock<YtMusicState>>>,
+    activity: State<'_, Arc<SessionActivity>>,
 ) -> Result<String, String> {
     println!("[yt_get_album] browse_id={browse_id}");
-    let state = state.read().await;
-    let result = state.client.get_album(&browse_id).await
-        .map_err(|e| format!("[yt_get_album] {e}"))?;
+    let result = with_session_refresh(
+        &state,
+        &app,
+        &activity,
+        "yt_get_album",
+        |client| {
+            let id = browse_id.clone();
+            async move { client.get_album(&id).await }
+        },
+    )
+    .await
+    .map_err(|e| format!("[yt_get_album] {e}"))?;
     serde_json::to_string(&result)
         .map_err(|e| format!("[yt_get_album] serialization: {e}"))
 }
@@ -300,24 +270,40 @@ pub async fn yt_get_album(
 
 #[tauri::command]
 pub async fn yt_get_explore(
+    app: AppHandle,
     state: State<'_, Arc<RwLock<YtMusicState>>>,
+    activity: State<'_, Arc<SessionActivity>>,
 ) -> Result<String, String> {
     println!("[yt_get_explore]");
-    let state = state.read().await;
-    let result = state.client.get_explore().await
-        .map_err(|e| format!("[yt_get_explore] {e}"))?;
+    let result = with_session_refresh(
+        &state,
+        &app,
+        &activity,
+        "yt_get_explore",
+        |client| async move { client.get_explore().await },
+    )
+    .await
+    .map_err(|e| format!("[yt_get_explore] {e}"))?;
     serde_json::to_string(&result)
         .map_err(|e| format!("[yt_get_explore] serialization: {e}"))
 }
 
 #[tauri::command]
 pub async fn yt_get_mood_categories(
+    app: AppHandle,
     state: State<'_, Arc<RwLock<YtMusicState>>>,
+    activity: State<'_, Arc<SessionActivity>>,
 ) -> Result<String, String> {
     println!("[yt_get_mood_categories]");
-    let state = state.read().await;
-    let result = state.client.get_mood_categories().await
-        .map_err(|e| format!("[yt_get_mood_categories] {e}"))?;
+    let result = with_session_refresh(
+        &state,
+        &app,
+        &activity,
+        "yt_get_mood_categories",
+        |client| async move { client.get_mood_categories().await },
+    )
+    .await
+    .map_err(|e| format!("[yt_get_mood_categories] {e}"))?;
     serde_json::to_string(&result)
         .map_err(|e| format!("[yt_get_mood_categories] serialization: {e}"))
 }
@@ -328,34 +314,49 @@ pub async fn yt_get_mood_categories(
 
 #[tauri::command]
 pub async fn yt_get_library_playlists(
+    app: AppHandle,
     state: State<'_, Arc<RwLock<YtMusicState>>>,
+    activity: State<'_, Arc<SessionActivity>>,
 ) -> Result<String, String> {
     println!("[yt_get_library_playlists]");
-    let state = state.read().await;
-    let result = state.client.get_library_playlists().await
-        .map_err(|e| format!("[yt_get_library_playlists] {e}"))?;
+    let result = with_session_refresh(
+        &state,
+        &app,
+        &activity,
+        "yt_get_library_playlists",
+        |client| async move { client.get_library_playlists().await },
+    )
+    .await
+    .map_err(|e| format!("[yt_get_library_playlists] {e}"))?;
     serde_json::to_string(&result)
         .map_err(|e| format!("[yt_get_library_playlists] serialization: {e}"))
 }
 
 #[tauri::command]
 pub async fn yt_get_sidebar_playlists(
+    app: AppHandle,
     state: State<'_, Arc<RwLock<YtMusicState>>>,
+    activity: State<'_, Arc<SessionActivity>>,
 ) -> Result<String, String> {
     println!("[yt_get_sidebar_playlists]");
-    let state = state.read().await;
-    let result = state
-        .client
-        .get_sidebar_playlists()
-        .await
-        .map_err(|e| format!("[yt_get_sidebar_playlists] {e}"))?;
+    let result = with_session_refresh(
+        &state,
+        &app,
+        &activity,
+        "yt_get_sidebar_playlists",
+        |client| async move { client.get_sidebar_playlists().await },
+    )
+    .await
+    .map_err(|e| format!("[yt_get_sidebar_playlists] {e}"))?;
     serde_json::to_string(&result)
         .map_err(|e| format!("[yt_get_sidebar_playlists] serialization: {e}"))
 }
 
 #[tauri::command]
 pub async fn yt_get_sidebar_playlists_cached(
+    app: AppHandle,
     state: State<'_, Arc<RwLock<YtMusicState>>>,
+    activity: State<'_, Arc<SessionActivity>>,
     cache: State<'_, Arc<tokio::sync::Mutex<PlaylistCache>>>,
 ) -> Result<String, String> {
     println!("[yt_get_sidebar_playlists_cached] start");
@@ -367,8 +368,6 @@ pub async fn yt_get_sidebar_playlists_cached(
             .map_err(|e| format!("[yt_get_sidebar_playlists_cached] cache read: {e}"))?
     };
 
-    let st = state.read().await;
-
     let result = if let Some((json_data, _cached_at)) = cached_json {
         // Cache hit — deserialize and use the fast path (guide-only)
         let cached_library: Vec<ytmusic_api::types::library::LibraryPlaylist> =
@@ -378,17 +377,30 @@ pub async fn yt_get_sidebar_playlists_cached(
             "[yt_get_sidebar_playlists_cached] cache hit, {} library playlists, using fast path",
             cached_library.len()
         );
-        st.client
-            .get_sidebar_playlists_with_library(cached_library)
-            .await
-            .map_err(|e| format!("[yt_get_sidebar_playlists_cached] {e}"))?
+        with_session_refresh(
+            &state,
+            &app,
+            &activity,
+            "yt_get_sidebar_playlists_cached:fast",
+            |client| {
+                let lib = cached_library.clone();
+                async move { client.get_sidebar_playlists_with_library(lib).await }
+            },
+        )
+        .await
+        .map_err(|e| format!("[yt_get_sidebar_playlists_cached] {e}"))?
     } else {
         // No cache — fall back to full fetch
         println!("[yt_get_sidebar_playlists_cached] no cache, falling back to full fetch");
-        st.client
-            .get_sidebar_playlists()
-            .await
-            .map_err(|e| format!("[yt_get_sidebar_playlists_cached] {e}"))?
+        with_session_refresh(
+            &state,
+            &app,
+            &activity,
+            "yt_get_sidebar_playlists_cached:full",
+            |client| async move { client.get_sidebar_playlists().await },
+        )
+        .await
+        .map_err(|e| format!("[yt_get_sidebar_playlists_cached] {e}"))?
     };
 
     serde_json::to_string(&result)
@@ -397,27 +409,40 @@ pub async fn yt_get_sidebar_playlists_cached(
 
 #[tauri::command]
 pub async fn yt_get_library_songs(
+    app: AppHandle,
     state: State<'_, Arc<RwLock<YtMusicState>>>,
+    activity: State<'_, Arc<SessionActivity>>,
 ) -> Result<String, String> {
     println!("[yt_get_library_songs]");
-    let state = state.read().await;
-    let result = state.client.get_library_songs().await
-        .map_err(|e| format!("[yt_get_library_songs] {e}"))?;
+    let result = with_session_refresh(
+        &state,
+        &app,
+        &activity,
+        "yt_get_library_songs",
+        |client| async move { client.get_library_songs().await },
+    )
+    .await
+    .map_err(|e| format!("[yt_get_library_songs] {e}"))?;
     serde_json::to_string(&result)
         .map_err(|e| format!("[yt_get_library_songs] serialization: {e}"))
 }
 
 #[tauri::command]
 pub async fn yt_get_liked_track_ids(
+    app: AppHandle,
     state: State<'_, Arc<RwLock<YtMusicState>>>,
+    activity: State<'_, Arc<SessionActivity>>,
 ) -> Result<Vec<String>, String> {
     println!("[yt_get_liked_track_ids]");
-    let state = state.read().await;
-    state
-        .client
-        .get_liked_track_ids()
-        .await
-        .map_err(|e| format!("[yt_get_liked_track_ids] {e}"))
+    with_session_refresh(
+        &state,
+        &app,
+        &activity,
+        "yt_get_liked_track_ids",
+        |client| async move { client.get_liked_track_ids().await },
+    )
+    .await
+    .map_err(|e| format!("[yt_get_liked_track_ids] {e}"))
 }
 
 // ---------------------------------------------------------------------------
@@ -454,6 +479,7 @@ struct LibraryPlaylistsUpdated {
 #[tauri::command]
 pub async fn yt_get_liked_track_ids_cached(
     state: State<'_, Arc<RwLock<YtMusicState>>>,
+    activity: State<'_, Arc<SessionActivity>>,
     cache: State<'_, Arc<tokio::sync::Mutex<PlaylistCache>>>,
     app: AppHandle,
 ) -> Result<Vec<String>, String> {
@@ -492,15 +518,20 @@ pub async fn yt_get_liked_track_ids_cached(
             if can_refresh.is_ok() {
                 println!("[yt_get_liked_track_ids_cached] spawning background refresh");
                 let state_arc = Arc::clone(&*state);
+                let activity_arc = Arc::clone(&*activity);
                 let cache_arc = Arc::clone(&*cache);
                 let app_clone = app.clone();
                 tokio::spawn(async move {
                     let _guard = AtomicBoolGuard(&LIKED_IDS_REFRESHING);
 
-                    let fresh_ids = {
-                        let st = state_arc.read().await;
-                        st.client.get_liked_track_ids().await
-                    };
+                    let fresh_ids = with_session_refresh(
+                        &state_arc,
+                        &app_clone,
+                        &activity_arc,
+                        "yt_get_liked_track_ids_cached:bg",
+                        |client| async move { client.get_liked_track_ids().await },
+                    )
+                    .await;
                     match fresh_ids {
                         Ok(ids) => {
                             let json = match serde_json::to_string(&ids) {
@@ -541,13 +572,15 @@ pub async fn yt_get_liked_track_ids_cached(
 
     // 2. Cold start — fetch synchronously
     println!("[yt_get_liked_track_ids_cached] cold start, fetching from API");
-    let ids = {
-        let st = state.read().await;
-        st.client
-            .get_liked_track_ids()
-            .await
-            .map_err(|e| format!("[yt_get_liked_track_ids_cached] fetch: {e}"))?
-    };
+    let ids = with_session_refresh(
+        &state,
+        &app,
+        &activity,
+        "yt_get_liked_track_ids_cached:cold",
+        |client| async move { client.get_liked_track_ids().await },
+    )
+    .await
+    .map_err(|e| format!("[yt_get_liked_track_ids_cached] fetch: {e}"))?;
 
     // Save to cache
     let json = serde_json::to_string(&ids)
@@ -568,6 +601,7 @@ pub async fn yt_get_liked_track_ids_cached(
 #[tauri::command]
 pub async fn yt_get_library_playlists_cached(
     state: State<'_, Arc<RwLock<YtMusicState>>>,
+    activity: State<'_, Arc<SessionActivity>>,
     cache: State<'_, Arc<tokio::sync::Mutex<PlaylistCache>>>,
     app: AppHandle,
 ) -> Result<String, String> {
@@ -603,15 +637,20 @@ pub async fn yt_get_library_playlists_cached(
             if can_refresh.is_ok() {
                 println!("[yt_get_library_playlists_cached] spawning background refresh");
                 let state_arc = Arc::clone(&*state);
+                let activity_arc = Arc::clone(&*activity);
                 let cache_arc = Arc::clone(&*cache);
                 let app_clone = app.clone();
                 tokio::spawn(async move {
                     let _guard = AtomicBoolGuard(&LIBRARY_PLAYLISTS_REFRESHING);
 
-                    let fresh = {
-                        let st = state_arc.read().await;
-                        st.client.get_library_playlists().await
-                    };
+                    let fresh = with_session_refresh(
+                        &state_arc,
+                        &app_clone,
+                        &activity_arc,
+                        "yt_get_library_playlists_cached:bg",
+                        |client| async move { client.get_library_playlists().await },
+                    )
+                    .await;
                     match fresh {
                         Ok(playlists) => {
                             let json = match serde_json::to_string(&playlists) {
@@ -658,13 +697,15 @@ pub async fn yt_get_library_playlists_cached(
 
     // 2. Cold start — fetch synchronously
     println!("[yt_get_library_playlists_cached] cold start, fetching from API");
-    let playlists = {
-        let st = state.read().await;
-        st.client
-            .get_library_playlists()
-            .await
-            .map_err(|e| format!("[yt_get_library_playlists_cached] fetch: {e}"))?
-    };
+    let playlists = with_session_refresh(
+        &state,
+        &app,
+        &activity,
+        "yt_get_library_playlists_cached:cold",
+        |client| async move { client.get_library_playlists().await },
+    )
+    .await
+    .map_err(|e| format!("[yt_get_library_playlists_cached] fetch: {e}"))?;
 
     let json = serde_json::to_string(&playlists)
         .map_err(|e| format!("[yt_get_library_playlists_cached] serialize: {e}"))?;
@@ -687,19 +728,28 @@ pub async fn yt_get_library_playlists_cached(
 pub async fn yt_rate_song(
     video_id: String,
     rating: TrackLikeStatusInput,
+    app: AppHandle,
     state: State<'_, Arc<RwLock<YtMusicState>>>,
+    activity: State<'_, Arc<SessionActivity>>,
 ) -> Result<TrackLikeStatusResponse, String> {
     let like_status: LikeStatus = rating.into();
     println!(
         "[yt_rate_song] video_id={} like_status={:?}",
         video_id, like_status
     );
-    let state = state.read().await;
-    state
-        .client
-        .rate_song(&video_id, like_status.clone())
-        .await
-        .map_err(|e| format!("[yt_rate_song] {e}"))?;
+    with_session_refresh(
+        &state,
+        &app,
+        &activity,
+        "yt_rate_song",
+        |client| {
+            let id = video_id.clone();
+            let status = like_status.clone();
+            async move { client.rate_song(&id, status).await }
+        },
+    )
+    .await
+    .map_err(|e| format!("[yt_rate_song] {e}"))?;
     Ok(TrackLikeStatusResponse {
         video_id,
         like_status,
@@ -710,19 +760,28 @@ pub async fn yt_rate_song(
 pub async fn yt_rate_playlist(
     playlist_id: String,
     rating: PlaylistLikeStatusInput,
+    app: AppHandle,
     state: State<'_, Arc<RwLock<YtMusicState>>>,
+    activity: State<'_, Arc<SessionActivity>>,
 ) -> Result<PlaylistLikeStatusResponse, String> {
     let like_status: LikeStatus = rating.into();
     println!(
         "[yt_rate_playlist] playlist_id={} like_status={:?}",
         playlist_id, like_status
     );
-    let state = state.read().await;
-    state
-        .client
-        .rate_playlist(&playlist_id, like_status.clone())
-        .await
-        .map_err(|e| format!("[yt_rate_playlist] {e}"))?;
+    with_session_refresh(
+        &state,
+        &app,
+        &activity,
+        "yt_rate_playlist",
+        |client| {
+            let id = playlist_id.clone();
+            let status = like_status.clone();
+            async move { client.rate_playlist(&id, status).await }
+        },
+    )
+    .await
+    .map_err(|e| format!("[yt_rate_playlist] {e}"))?;
     Ok(PlaylistLikeStatusResponse {
         playlist_id,
         like_status,
@@ -744,16 +803,27 @@ fn resolve_remote_playlist_id(playlist_id: &str) -> &str {
 #[tauri::command]
 pub async fn yt_get_playlist(
     playlist_id: String,
+    app: AppHandle,
     state: State<'_, Arc<RwLock<YtMusicState>>>,
+    activity: State<'_, Arc<SessionActivity>>,
 ) -> Result<String, String> {
     let remote_playlist_id = resolve_remote_playlist_id(&playlist_id).to_string();
     println!(
         "[yt_get_playlist] playlist_id={} remote_playlist_id={}",
         playlist_id, remote_playlist_id
     );
-    let state = state.read().await;
-    let (playlist, continuation) = state.client.get_playlist(&remote_playlist_id).await
-        .map_err(|e| format!("[yt_get_playlist] {e}"))?;
+    let (playlist, continuation) = with_session_refresh(
+        &state,
+        &app,
+        &activity,
+        "yt_get_playlist",
+        |client| {
+            let id = remote_playlist_id.clone();
+            async move { client.get_playlist(&id).await }
+        },
+    )
+    .await
+    .map_err(|e| format!("[yt_get_playlist] {e}"))?;
     let response = serde_json::json!({
         "playlist": serde_json::to_value(&playlist).unwrap_or_default(),
         "continuation": continuation,
@@ -765,12 +835,23 @@ pub async fn yt_get_playlist(
 #[tauri::command]
 pub async fn yt_get_playlist_continuation(
     continuation_token: String,
+    app: AppHandle,
     state: State<'_, Arc<RwLock<YtMusicState>>>,
+    activity: State<'_, Arc<SessionActivity>>,
 ) -> Result<String, String> {
     println!("[yt_get_playlist_continuation]");
-    let state = state.read().await;
-    let (tracks, next_token) = state.client.get_playlist_continuation(&continuation_token).await
-        .map_err(|e| format!("[yt_get_playlist_continuation] {e}"))?;
+    let (tracks, next_token) = with_session_refresh(
+        &state,
+        &app,
+        &activity,
+        "yt_get_playlist_continuation",
+        |client| {
+            let token = continuation_token.clone();
+            async move { client.get_playlist_continuation(&token).await }
+        },
+    )
+    .await
+    .map_err(|e| format!("[yt_get_playlist_continuation] {e}"))?;
     let response = serde_json::json!({
         "tracks": serde_json::to_value(&tracks).unwrap_or_default(),
         "continuation": next_token,
@@ -786,12 +867,23 @@ pub async fn yt_get_playlist_continuation(
 #[tauri::command]
 pub async fn yt_get_watch_playlist(
     video_id: String,
+    app: AppHandle,
     state: State<'_, Arc<RwLock<YtMusicState>>>,
+    activity: State<'_, Arc<SessionActivity>>,
 ) -> Result<String, String> {
     println!("[yt_get_watch_playlist] video_id={video_id}");
-    let state = state.read().await;
-    let result = state.client.get_watch_playlist(&video_id).await
-        .map_err(|e| format!("[yt_get_watch_playlist] {e}"))?;
+    let result = with_session_refresh(
+        &state,
+        &app,
+        &activity,
+        "yt_get_watch_playlist",
+        |client| {
+            let id = video_id.clone();
+            async move { client.get_watch_playlist(&id).await }
+        },
+    )
+    .await
+    .map_err(|e| format!("[yt_get_watch_playlist] {e}"))?;
     serde_json::to_string(&result)
         .map_err(|e| format!("[yt_get_watch_playlist] serialization: {e}"))
 }
@@ -799,12 +891,23 @@ pub async fn yt_get_watch_playlist(
 #[tauri::command]
 pub async fn yt_get_lyrics(
     browse_id: String,
+    app: AppHandle,
     state: State<'_, Arc<RwLock<YtMusicState>>>,
+    activity: State<'_, Arc<SessionActivity>>,
 ) -> Result<String, String> {
     println!("[yt_get_lyrics] browse_id={browse_id}");
-    let state = state.read().await;
-    let result = state.client.get_lyrics(&browse_id).await
-        .map_err(|e| format!("[yt_get_lyrics] {e}"))?;
+    let result = with_session_refresh(
+        &state,
+        &app,
+        &activity,
+        "yt_get_lyrics",
+        |client| {
+            let id = browse_id.clone();
+            async move { client.get_lyrics(&id).await }
+        },
+    )
+    .await
+    .map_err(|e| format!("[yt_get_lyrics] {e}"))?;
     serde_json::to_string(&result)
         .map_err(|e| format!("[yt_get_lyrics] serialization: {e}"))
 }
@@ -816,12 +919,23 @@ pub async fn yt_get_lyrics(
 #[tauri::command]
 pub async fn yt_get_stream_url(
     video_id: String,
+    app: AppHandle,
     state: State<'_, Arc<RwLock<YtMusicState>>>,
+    activity: State<'_, Arc<SessionActivity>>,
 ) -> Result<String, String> {
     println!("[yt_get_stream_url] Fetching stream URL for {video_id}");
-    let state = state.read().await;
-    let stream_data = state.client.get_stream_url(&video_id).await
-        .map_err(|e| format!("[yt_get_stream_url] {e}"))?;
+    let stream_data = with_session_refresh(
+        &state,
+        &app,
+        &activity,
+        "yt_get_stream_url",
+        |client| {
+            let id = video_id.clone();
+            async move { client.get_stream_url(&id).await }
+        },
+    )
+    .await
+    .map_err(|e| format!("[yt_get_stream_url] {e}"))?;
     println!("[yt_get_stream_url] Got URL, mime: {}, bitrate: {}", stream_data.mime_type, stream_data.bitrate);
     serde_json::to_string(&stream_data)
         .map_err(|e| format!("[yt_get_stream_url] serialization: {e}"))
@@ -833,12 +947,20 @@ pub async fn yt_get_stream_url(
 
 #[tauri::command]
 pub async fn yt_get_accounts(
+    app: AppHandle,
     state: State<'_, Arc<RwLock<YtMusicState>>>,
+    activity: State<'_, Arc<SessionActivity>>,
 ) -> Result<String, String> {
     println!("[yt_get_accounts]");
-    let state = state.read().await;
-    let result = state.client.get_accounts().await
-        .map_err(|e| format!("[yt_get_accounts] {e}"))?;
+    let result = with_session_refresh(
+        &state,
+        &app,
+        &activity,
+        "yt_get_accounts",
+        |client| async move { client.get_accounts().await },
+    )
+    .await
+    .map_err(|e| format!("[yt_get_accounts] {e}"))?;
     serde_json::to_string(&result)
         .map_err(|e| format!("[yt_get_accounts] serialization: {e}"))
 }
@@ -848,6 +970,7 @@ pub async fn yt_switch_account(
     page_id: Option<String>,
     app: AppHandle,
     state: State<'_, Arc<RwLock<YtMusicState>>>,
+    activity: State<'_, Arc<SessionActivity>>,
 ) -> Result<String, String> {
     println!("[yt_switch_account] page_id={page_id:?}");
 
@@ -866,12 +989,16 @@ pub async fn yt_switch_account(
         }
     }
 
-    // Read lock: fetch updated account info (can run concurrently with other readers)
-    let result = {
-        let st = state.read().await;
-        st.client.get_accounts().await
-            .map_err(|e| format!("[yt_switch_account] {e}"))?
-    };
+    // Read lock: fetch updated account info via the retry wrapper.
+    let result = with_session_refresh(
+        &state,
+        &app,
+        &activity,
+        "yt_switch_account",
+        |client| async move { client.get_accounts().await },
+    )
+    .await
+    .map_err(|e| format!("[yt_switch_account] {e}"))?;
     serde_json::to_string(&result)
         .map_err(|e| format!("[yt_switch_account] serialization: {e}"))
 }
@@ -889,7 +1016,7 @@ pub async fn yt_detect_browsers() -> Result<Vec<BrowserInfo>, String> {
     let mut results = Vec::new();
 
     for browser in browsers {
-        let (has_cookies, cookie_count) = match extract_cookies_from_browser(browser) {
+        let (has_cookies, cookie_count) = match session::extract_cookies_from_browser(browser) {
             Ok(Some(cookie_str)) => {
                 let count = cookie_str.matches(';').count() + 1;
                 (true, count)
@@ -946,9 +1073,9 @@ pub async fn yt_auth_from_browser(
 
     // 1. Extract cookies
     let (used_browser, cookie_string) = if browser == "auto" {
-        extract_cookies_auto()?
+        session::extract_cookies_auto()?
     } else {
-        let cookies = extract_cookies_from_browser(&browser)?
+        let cookies = session::extract_cookies_from_browser(&browser)?
             .ok_or_else(|| format!("[yt_auth_from_browser] No YouTube cookies found in {browser}"))?;
         (browser.clone(), cookies)
     };
@@ -1005,18 +1132,15 @@ pub async fn yt_auth_status(
 pub async fn yt_ensure_session(
     app: AppHandle,
     state: State<'_, Arc<RwLock<YtMusicState>>>,
+    activity: State<'_, Arc<SessionActivity>>,
 ) -> Result<AuthStatusResponse, String> {
     // 1. Check if authenticated at all
-    let (is_auth, auth_user, obu) = {
+    let (is_auth, has_page_id) = {
         let s = state.read().await;
-        (
-            s.is_authenticated(),
-            s.client.auth_user(),
-            s.client.on_behalf_of_user().map(|s| s.to_string()),
-        )
+        (s.is_authenticated(), s.client.on_behalf_of_user().is_some())
     };
 
-    println!("[yt_ensure_session] authenticated={is_auth}, auth_user={auth_user}, has_page_id={}", obu.is_some());
+    println!("[yt_ensure_session] authenticated={is_auth}, has_page_id={has_page_id}");
 
     if !is_auth {
         println!("[yt_ensure_session] branch: not authenticated — skipping validation, returning unauthenticated");
@@ -1027,28 +1151,26 @@ pub async fn yt_ensure_session(
         });
     }
 
-    // 2. Test session with a lightweight API call (drop lock before network I/O)
+    // 2. Test session with a lightweight API call. Clone the client so we don't
+    //    hold the read lock during the network round trip.
     println!("[yt_ensure_session] testing session validity via get_accounts...");
-    let test_result = {
-        let s = state.read().await;
-        s.client.get_accounts().await
-    };
+    let test_client = { state.read().await.client.clone() };
+    let test_result = test_client.get_accounts().await;
 
     let needs_refresh = match &test_result {
         Err(e) => {
-            let err_str = format!("{e}");
-            let is_401 = err_str.contains("401") || err_str.contains("Unauthorized");
-            println!("[yt_ensure_session] test result: error=\"{err_str}\" is_401={is_401}");
-            is_401
+            let expired = is_session_expired(e);
+            println!("[yt_ensure_session] test result: error=\"{e}\" expired={expired}");
+            expired
         }
         Ok(accounts) => {
             println!("[yt_ensure_session] test result: valid=true account_count={}", accounts.len());
+            activity.mark_success();
             false
         }
     };
 
     if !needs_refresh {
-        let has_page_id = obu.is_some();
         println!("[yt_ensure_session] branch: session valid — returning authenticated (has_page_id={has_page_id})");
         return Ok(AuthStatusResponse {
             authenticated: true,
@@ -1057,60 +1179,43 @@ pub async fn yt_ensure_session(
         });
     }
 
-    // 3. Session expired — try silent refresh from browser
-    println!("[yt_ensure_session] branch: session expired (401) — attempting silent cookie refresh...");
+    // 3. Session expired — delegate to the shared refresh helper.
+    println!("[yt_ensure_session] branch: session expired — attempting silent cookie refresh...");
 
-    let fresh_cookies = match extract_cookies_auto() {
-        Ok((browser, cookies)) => {
-            println!("[yt_ensure_session] branch: refresh success — browser=\"{browser}\" cookie_len={}", cookies.len());
-            cookies
+    match refresh_cookies_and_rebuild_state(&app, &state, &activity).await {
+        Ok(()) => {
+            // Re-read has_page_id in case the refresh restored it.
+            let has_page_id = state.read().await.client.on_behalf_of_user().is_some();
+            println!("[yt_ensure_session] branch: silent refresh complete (has_page_id={has_page_id})");
+            Ok(AuthStatusResponse {
+                authenticated: true,
+                method: "cookie".to_string(),
+                has_page_id,
+            })
         }
         Err(e) => {
-            println!("[yt_ensure_session] branch: refresh failed — no browser cookies available: {e}");
+            println!("[yt_ensure_session] branch: refresh failed — {e}");
             println!("[yt_ensure_session] deleting stale credentials and reverting to unauthenticated");
-            // Can't refresh — delete stale cookies and report as unauthenticated
-            let app_data_dir = app.path().app_data_dir()
+            let app_data_dir = app
+                .path()
+                .app_data_dir()
                 .map_err(|e| format!("[yt_ensure_session] {e}"))?;
             YtMusicState::delete_cookies(&app_data_dir)?;
             YtMusicState::delete_page_id(&app_data_dir);
             YtMusicState::delete_auth_user(&app_data_dir);
             let new_state = YtMusicState::new_unauthenticated()?;
-            let mut guard = state.write().await;
-            *guard = new_state;
+            {
+                let mut guard = state.write().await;
+                *guard = new_state;
+            }
             println!("[yt_ensure_session] reverted to unauthenticated — returning unauthenticated");
-            return Ok(AuthStatusResponse {
+            Ok(AuthStatusResponse {
                 authenticated: false,
                 method: "none".to_string(),
                 has_page_id: false,
-            });
+            })
         }
-    };
-
-    // 4. Create new state with fresh cookies, preserving auth_user and on_behalf_of_user
-    println!("[yt_ensure_session] rebuilding client with fresh cookies (auth_user={auth_user}, preserve_obu={})", obu.is_some());
-    let mut new_state = YtMusicState::new_from_cookies(fresh_cookies.clone(), auth_user)?;
-    if let Some(ref obu) = obu {
-        new_state.client.set_on_behalf_of_user(Some(obu.clone()));
-        println!("[yt_ensure_session] restored on_behalf_of_user={obu}");
     }
-
-    // 5. Save refreshed cookies to disk
-    let app_data_dir = app.path().app_data_dir()
-        .map_err(|e| format!("[yt_ensure_session] {e}"))?;
-    YtMusicState::save_cookies(&app_data_dir, &fresh_cookies)?;
-
-    // 6. Replace state
-    let mut guard = state.write().await;
-    *guard = new_state;
-
-    let has_page_id = obu.is_some();
-    println!("[yt_ensure_session] branch: silent refresh complete (auth_user={auth_user}, has_page_id={has_page_id})");
-
-    Ok(AuthStatusResponse {
-        authenticated: true,
-        method: "cookie".to_string(),
-        has_page_id,
-    })
 }
 
 /// Delete saved cookies and revert to unauthenticated client.
@@ -1151,6 +1256,75 @@ pub async fn yt_auth_logout(
         method: "none".to_string(),
         has_page_id: false,
     })
+}
+
+// ---------------------------------------------------------------------------
+// Debug-only commands for testing the session refresh wrapper without
+// waiting for cookies to expire naturally. Compiled out in release builds.
+// ---------------------------------------------------------------------------
+
+#[cfg(debug_assertions)]
+#[tauri::command]
+pub async fn yt_dev_corrupt_cookies(
+    state: State<'_, Arc<RwLock<YtMusicState>>>,
+) -> Result<String, String> {
+    println!("[yt_dev_corrupt_cookies] replacing in-memory cookies with garbage so the next authenticated call returns 401");
+    let obu = {
+        let s = state.read().await;
+        s.client.on_behalf_of_user().map(String::from)
+    };
+    let auth_user = { state.read().await.client.auth_user() };
+    let mut new_state = YtMusicState::new_from_cookies(
+        "SAPISID=invalid_for_testing_dev_only; SID=fake_dev_only".to_string(),
+        auth_user,
+    )?;
+    if let Some(pid) = obu {
+        new_state.client.set_on_behalf_of_user(Some(pid));
+    }
+    {
+        let mut g = state.write().await;
+        *g = new_state;
+    }
+    println!("[yt_dev_corrupt_cookies] done — next authenticated call should hit 401 → refresh → retry");
+    Ok("ok".to_string())
+}
+
+#[cfg(debug_assertions)]
+#[tauri::command]
+pub async fn yt_dev_backdate_activity(
+    seconds_ago: Option<u64>,
+    activity: State<'_, Arc<SessionActivity>>,
+) -> Result<String, String> {
+    let secs = seconds_ago.unwrap_or(2400); // default: 40 minutes ago (> 30min threshold)
+    println!("[yt_dev_backdate_activity] backdating last_success to {secs}s ago");
+    activity.set_seconds_ago(secs);
+    Ok(format!("backdated to {secs}s ago"))
+}
+
+#[cfg(debug_assertions)]
+#[tauri::command]
+pub async fn yt_dev_session_stats(
+    state: State<'_, Arc<RwLock<YtMusicState>>>,
+    activity: State<'_, Arc<SessionActivity>>,
+) -> Result<String, String> {
+    let (authenticated, has_page_id, auth_user) = {
+        let s = state.read().await;
+        (
+            s.is_authenticated(),
+            s.client.on_behalf_of_user().is_some(),
+            s.client.auth_user(),
+        )
+    };
+    let secs = activity.seconds_since();
+    let stale = secs
+        .map(|s| s > super::session::STALE_THRESHOLD_SECS)
+        .unwrap_or(false);
+    let report = format!(
+        "authenticated={authenticated} auth_user={auth_user} has_page_id={has_page_id} seconds_since={secs:?} stale={stale} (threshold={}s)",
+        super::session::STALE_THRESHOLD_SECS
+    );
+    println!("[yt_dev_session_stats] {report}");
+    Ok(report)
 }
 
 // ---------------------------------------------------------------------------
@@ -1499,6 +1673,7 @@ fn persist_collection_snapshot(
 pub async fn yt_load_playlist(
     playlist_id: String,
     state: State<'_, Arc<RwLock<YtMusicState>>>,
+    activity: State<'_, Arc<SessionActivity>>,
     cache: State<'_, Arc<tokio::sync::Mutex<PlaylistCache>>>,
     playlist_loads: State<'_, Arc<tokio::sync::Mutex<HashSet<String>>>>,
     app: AppHandle,
@@ -1546,11 +1721,18 @@ pub async fn yt_load_playlist(
     }
 
     // 1. Fetch first page from InnerTube
-    let (page, continuation) = {
-        let st = state.read().await;
-        st.client.get_playlist(&remote_playlist_id).await
-            .map_err(|e| format!("[yt_load_playlist] API error: {e}"))?
-    };
+    let (page, continuation) = with_session_refresh(
+        &state,
+        &app,
+        &activity,
+        "yt_load_playlist",
+        |client| {
+            let id = remote_playlist_id.clone();
+            async move { client.get_playlist(&id).await }
+        },
+    )
+    .await
+    .map_err(|e| format!("[yt_load_playlist] API error: {e}"))?;
 
     println!(
         "[yt_load_playlist] Got page: title={} tracks={} continuation={}",
@@ -1624,6 +1806,7 @@ pub async fn yt_load_playlist(
 
         if should_spawn {
         let state_arc = state.inner().clone();
+        let activity_arc = activity.inner().clone();
         let cache_arc = cache.inner().clone();
         let loads_arc = playlist_loads.inner().clone();
         let queue_arc = app.state::<Arc<tokio::sync::Mutex<PlaybackQueue>>>().inner().clone();
@@ -1653,10 +1836,17 @@ pub async fn yt_load_playlist(
                 tokio::time::sleep(std::time::Duration::from_millis(300)).await;
 
                 println!("[yt_load_playlist:bg] Fetching continuation for {pid} offset={offset}");
-                let fetch_result = {
-                    let st = state_arc.read().await;
-                    st.client.get_playlist_continuation(&token).await
-                };
+                let fetch_result = with_session_refresh(
+                    &state_arc,
+                    &app_handle,
+                    &activity_arc,
+                    "yt_load_playlist:bg",
+                    |client| {
+                        let t = token.clone();
+                        async move { client.get_playlist_continuation(&t).await }
+                    },
+                )
+                .await;
 
                 match fetch_result {
                     Ok((tracks, next_token)) => {
@@ -1971,7 +2161,9 @@ pub async fn yt_get_collection_track_ids(
 #[tauri::command]
 pub async fn yt_create_playlist(
     input: CreatePlaylistInput,
+    app: AppHandle,
     state: State<'_, Arc<RwLock<YtMusicState>>>,
+    activity: State<'_, Arc<SessionActivity>>,
 ) -> Result<String, String> {
     println!(
         "[yt_create_playlist] title=\"{}\" privacy={:?} video_ids={}",
@@ -1979,17 +2171,29 @@ pub async fn yt_create_playlist(
         input.privacy_status,
         input.video_ids.as_ref().map(|ids| ids.len()).unwrap_or(0)
     );
-    let state = state.read().await;
-    let response = state
-        .client
-        .create_playlist(
-            &input.title,
-            input.description.as_deref().unwrap_or(""),
-            input.privacy_status.as_deref().unwrap_or("PRIVATE"),
-            input.video_ids.as_deref().unwrap_or(&[]),
-        )
-        .await
-        .map_err(|e| format!("[yt_create_playlist] {e}"))?;
+    let title = input.title.clone();
+    let description = input.description.clone().unwrap_or_default();
+    let privacy = input.privacy_status.clone().unwrap_or_else(|| "PRIVATE".to_string());
+    let video_ids = input.video_ids.clone().unwrap_or_default();
+    let response = with_session_refresh(
+        &state,
+        &app,
+        &activity,
+        "yt_create_playlist",
+        |client| {
+            let title = title.clone();
+            let description = description.clone();
+            let privacy = privacy.clone();
+            let video_ids = video_ids.clone();
+            async move {
+                client
+                    .create_playlist(&title, &description, &privacy, &video_ids)
+                    .await
+            }
+        },
+    )
+    .await
+    .map_err(|e| format!("[yt_create_playlist] {e}"))?;
     serde_json::to_string(&response)
         .map_err(|e| format!("[yt_create_playlist] serialization: {e}"))
 }
@@ -1997,15 +2201,23 @@ pub async fn yt_create_playlist(
 #[tauri::command]
 pub async fn yt_delete_playlist(
     playlist_id: String,
+    app: AppHandle,
     state: State<'_, Arc<RwLock<YtMusicState>>>,
+    activity: State<'_, Arc<SessionActivity>>,
 ) -> Result<String, String> {
     println!("[yt_delete_playlist] playlist_id={}", playlist_id);
-    let state = state.read().await;
-    let response = state
-        .client
-        .delete_playlist(&playlist_id)
-        .await
-        .map_err(|e| format!("[yt_delete_playlist] {e}"))?;
+    let response = with_session_refresh(
+        &state,
+        &app,
+        &activity,
+        "yt_delete_playlist",
+        |client| {
+            let id = playlist_id.clone();
+            async move { client.delete_playlist(&id).await }
+        },
+    )
+    .await
+    .map_err(|e| format!("[yt_delete_playlist] {e}"))?;
     serde_json::to_string(&response)
         .map_err(|e| format!("[yt_delete_playlist] serialization: {e}"))
 }
@@ -2013,7 +2225,9 @@ pub async fn yt_delete_playlist(
 #[tauri::command]
 pub async fn yt_edit_playlist(
     input: EditPlaylistInput,
+    app: AppHandle,
     state: State<'_, Arc<RwLock<YtMusicState>>>,
+    activity: State<'_, Arc<SessionActivity>>,
     cache: State<'_, Arc<tokio::sync::Mutex<PlaylistCache>>>,
 ) -> Result<String, String> {
     println!(
@@ -2024,26 +2238,49 @@ pub async fn yt_edit_playlist(
         input.privacy_status
     );
 
-    let updated_page = {
-        let state = state.read().await;
-        state
-            .client
-            .edit_playlist(
-                &input.playlist_id,
-                input.title.as_deref(),
-                input.description.as_deref(),
-                input.privacy_status.as_deref(),
-            )
-            .await
-            .map_err(|e| format!("[yt_edit_playlist] edit: {e}"))?;
+    let pid = input.playlist_id.clone();
+    let title = input.title.clone();
+    let description = input.description.clone();
+    let privacy = input.privacy_status.clone();
 
-        state
-            .client
-            .get_playlist(&input.playlist_id)
-            .await
-            .map_err(|e| format!("[yt_edit_playlist] refresh: {e}"))?
-            .0
-    };
+    with_session_refresh(
+        &state,
+        &app,
+        &activity,
+        "yt_edit_playlist:edit",
+        |client| {
+            let pid = pid.clone();
+            let title = title.clone();
+            let description = description.clone();
+            let privacy = privacy.clone();
+            async move {
+                client
+                    .edit_playlist(
+                        &pid,
+                        title.as_deref(),
+                        description.as_deref(),
+                        privacy.as_deref(),
+                    )
+                    .await
+            }
+        },
+    )
+    .await
+    .map_err(|e| format!("[yt_edit_playlist] edit: {e}"))?;
+
+    let updated_page = with_session_refresh(
+        &state,
+        &app,
+        &activity,
+        "yt_edit_playlist:refresh",
+        |client| {
+            let pid = pid.clone();
+            async move { client.get_playlist(&pid).await }
+        },
+    )
+    .await
+    .map_err(|e| format!("[yt_edit_playlist] refresh: {e}"))?
+    .0;
 
     {
         let db = cache.lock().await;
@@ -2087,7 +2324,9 @@ pub async fn yt_edit_playlist(
 #[tauri::command]
 pub async fn yt_set_playlist_thumbnail(
     input: SetPlaylistThumbnailInput,
+    app: AppHandle,
     state: State<'_, Arc<RwLock<YtMusicState>>>,
+    activity: State<'_, Arc<SessionActivity>>,
     cache: State<'_, Arc<tokio::sync::Mutex<PlaylistCache>>>,
 ) -> Result<String, String> {
     println!(
@@ -2116,21 +2355,38 @@ pub async fn yt_set_playlist_thumbnail(
         ));
     }
 
-    let updated_page = {
-        let state = state.read().await;
-        state
-            .client
-            .set_playlist_thumbnail(&input.playlist_id, &input.image_bytes, &input.mime_type)
-            .await
-            .map_err(|e| format!("[yt_set_playlist_thumbnail] apply: {e}"))?;
+    let pid = input.playlist_id.clone();
+    let image_bytes = input.image_bytes.clone();
+    let mime_type = input.mime_type.clone();
 
-        state
-            .client
-            .get_playlist(&input.playlist_id)
-            .await
-            .map_err(|e| format!("[yt_set_playlist_thumbnail] refresh: {e}"))?
-            .0
-    };
+    with_session_refresh(
+        &state,
+        &app,
+        &activity,
+        "yt_set_playlist_thumbnail:apply",
+        |client| {
+            let pid = pid.clone();
+            let bytes = image_bytes.clone();
+            let mime = mime_type.clone();
+            async move { client.set_playlist_thumbnail(&pid, &bytes, &mime).await }
+        },
+    )
+    .await
+    .map_err(|e| format!("[yt_set_playlist_thumbnail] apply: {e}"))?;
+
+    let updated_page = with_session_refresh(
+        &state,
+        &app,
+        &activity,
+        "yt_set_playlist_thumbnail:refresh",
+        |client| {
+            let pid = pid.clone();
+            async move { client.get_playlist(&pid).await }
+        },
+    )
+    .await
+    .map_err(|e| format!("[yt_set_playlist_thumbnail] refresh: {e}"))?
+    .0;
 
     {
         let db = cache.lock().await;
@@ -2174,7 +2430,9 @@ pub async fn yt_add_playlist_items(
     playlist_id: String,
     video_ids: Vec<String>,
     source_playlist_id: Option<String>,
+    app: AppHandle,
     state: State<'_, Arc<RwLock<YtMusicState>>>,
+    activity: State<'_, Arc<SessionActivity>>,
 ) -> Result<String, String> {
     validate_vec_len(&video_ids, MAX_PLAYLIST_ITEMS, "yt_add_playlist_items")?;
     println!(
@@ -2183,12 +2441,24 @@ pub async fn yt_add_playlist_items(
         video_ids.len(),
         source_playlist_id
     );
-    let state = state.read().await;
-    let response = state
-        .client
-        .add_playlist_items(&playlist_id, &video_ids, source_playlist_id.as_deref())
-        .await
-        .map_err(|e| format!("[yt_add_playlist_items] {e}"))?;
+    let response = with_session_refresh(
+        &state,
+        &app,
+        &activity,
+        "yt_add_playlist_items",
+        |client| {
+            let pid = playlist_id.clone();
+            let vids = video_ids.clone();
+            let src = source_playlist_id.clone();
+            async move {
+                client
+                    .add_playlist_items(&pid, &vids, src.as_deref())
+                    .await
+            }
+        },
+    )
+    .await
+    .map_err(|e| format!("[yt_add_playlist_items] {e}"))?;
     serde_json::to_string(&response)
         .map_err(|e| format!("[yt_add_playlist_items] serialization: {e}"))
 }
@@ -2197,7 +2467,9 @@ pub async fn yt_add_playlist_items(
 pub async fn yt_remove_playlist_items(
     playlist_id: String,
     items: Vec<PlaylistItemRemoveInput>,
+    app: AppHandle,
     state: State<'_, Arc<RwLock<YtMusicState>>>,
+    activity: State<'_, Arc<SessionActivity>>,
 ) -> Result<String, String> {
     println!(
         "[yt_remove_playlist_items] playlist_id={} items={}",
@@ -2208,12 +2480,19 @@ pub async fn yt_remove_playlist_items(
         .into_iter()
         .map(|item| (item.video_id, item.set_video_id))
         .collect();
-    let state = state.read().await;
-    let response = state
-        .client
-        .remove_playlist_items(&playlist_id, &items)
-        .await
-        .map_err(|e| format!("[yt_remove_playlist_items] {e}"))?;
+    let response = with_session_refresh(
+        &state,
+        &app,
+        &activity,
+        "yt_remove_playlist_items",
+        |client| {
+            let pid = playlist_id.clone();
+            let items = items.clone();
+            async move { client.remove_playlist_items(&pid, &items).await }
+        },
+    )
+    .await
+    .map_err(|e| format!("[yt_remove_playlist_items] {e}"))?;
     serde_json::to_string(&response)
         .map_err(|e| format!("[yt_remove_playlist_items] serialization: {e}"))
 }

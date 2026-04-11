@@ -7,6 +7,7 @@ use crate::error::{Error, Result};
 use crate::types::streaming::{StreamingData, StreamingFormat};
 
 /// YouTube Music API client.
+#[derive(Clone)]
 pub struct YtMusicClient {
     http: reqwest::Client,
     cookies: Option<String>,

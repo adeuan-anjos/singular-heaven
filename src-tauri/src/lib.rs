@@ -9,6 +9,7 @@ use tauri::Manager;
 use tokio::sync::RwLock;
 
 use youtube_music::client::YtMusicState;
+use youtube_music::session::SessionActivity;
 
 #[tauri::command]
 fn yt_set_memory_level(window: tauri::WebviewWindow, low: bool) {
@@ -312,6 +313,11 @@ pub fn run() {
 
             println!("[setup] Initializing YtMusicState...");
 
+            // Session activity tracker — last successful authenticated call timestamp
+            // and refresh serialization mutex. Independent of auth state.
+            app.manage(Arc::new(SessionActivity::new()));
+            println!("[setup] SessionActivity added to managed state.");
+
             let app_data_dir = app.handle().path().app_data_dir().ok();
 
             // Initialize playlist cache (SQLite)
@@ -449,16 +455,62 @@ pub fn run() {
             youtube_music::commands::yt_queue_toggle_shuffle,
             youtube_music::commands::yt_queue_cycle_repeat,
             youtube_music::commands::yt_queue_clear,
+            #[cfg(debug_assertions)]
+            youtube_music::commands::yt_dev_corrupt_cookies,
+            #[cfg(debug_assertions)]
+            youtube_music::commands::yt_dev_backdate_activity,
+            #[cfg(debug_assertions)]
+            youtube_music::commands::yt_dev_session_stats,
         ])
         .on_window_event(|window, event| {
-            #[cfg(target_os = "windows")]
-            match event {
-                tauri::WindowEvent::Focused(focused) => {
-                    if let Some(ww) = window.get_webview_window(window.label()) {
-                        set_webview_memory_level(&ww, !focused);
-                    }
+            if let tauri::WindowEvent::Focused(focused) = event {
+                // Memory level (Windows-only — existing behavior)
+                #[cfg(target_os = "windows")]
+                if let Some(ww) = window.get_webview_window(window.label()) {
+                    set_webview_memory_level(&ww, !focused);
                 }
-                _ => {}
+
+                // Proactive session refresh (cross-platform — new behavior).
+                // When the window regains focus and the session has been idle for
+                // longer than `STALE_THRESHOLD_SECS`, kick off a refresh in the
+                // background so that the user's first authenticated action after
+                // returning to the app does not pay the retry-after-401 cost.
+                if *focused {
+                    let app = window.app_handle().clone();
+                    tauri::async_runtime::spawn(async move {
+                        let activity = app.state::<Arc<SessionActivity>>();
+                        let state = app.state::<Arc<RwLock<YtMusicState>>>();
+
+                        let stale = activity
+                            .seconds_since()
+                            .map(|s| s > youtube_music::session::STALE_THRESHOLD_SECS)
+                            .unwrap_or(false);
+                        println!(
+                            "[focus] proactive check: seconds_since={:?} stale={stale}",
+                            activity.seconds_since()
+                        );
+                        if !stale {
+                            return;
+                        }
+                        if !state.read().await.is_authenticated() {
+                            println!("[focus] not authenticated — skipping proactive refresh");
+                            return;
+                        }
+
+                        println!("[focus] stale session — proactive refresh");
+                        if let Err(e) = youtube_music::session::refresh_cookies_and_rebuild_state(
+                            &app,
+                            state.inner(),
+                            activity.inner(),
+                        )
+                        .await
+                        {
+                            println!("[focus] proactive refresh failed: {e}");
+                        } else {
+                            println!("[focus] proactive refresh complete");
+                        }
+                    });
+                }
             }
         })
         .run(tauri::generate_context!())
