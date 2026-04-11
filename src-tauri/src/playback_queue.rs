@@ -19,6 +19,7 @@ pub struct QueueSnapshot {
     pub is_complete: bool,
     pub shuffle: bool,
     pub repeat: String,
+    pub is_radio: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -68,6 +69,49 @@ impl RepeatMode {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RadioSeedKind {
+    Video,
+    Playlist,
+    Album,
+    Artist,
+}
+
+impl RadioSeedKind {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Video => "video",
+            Self::Playlist => "playlist",
+            Self::Album => "album",
+            Self::Artist => "artist",
+        }
+    }
+
+    pub fn parse(s: &str) -> Option<Self> {
+        match s {
+            "video" => Some(Self::Video),
+            "playlist" => Some(Self::Playlist),
+            "album" => Some(Self::Album),
+            "artist" => Some(Self::Artist),
+            _ => None,
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct RadioSeed {
+    pub kind: RadioSeedKind,
+    pub id: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct RadioState {
+    pub seed: RadioSeed,
+    pub continuation: Option<String>,
+    pub pool_exhausted: bool,
+    pub loaded_count: usize,
+}
+
 #[derive(Debug, Clone)]
 struct QueueEntry {
     item_id: u64,
@@ -87,6 +131,7 @@ pub struct PlaybackQueue {
     history_item_ids: Vec<u64>,
     queued_next_item_ids: Vec<u64>,
     rng_state: u64,
+    radio_state: Option<RadioState>,
 }
 
 impl PlaybackQueue {
@@ -98,6 +143,43 @@ impl PlaybackQueue {
             is_complete: self.is_complete,
             shuffle: self.shuffle,
             repeat: self.repeat.as_str().to_string(),
+            is_radio: self.radio_state.is_some(),
+        }
+    }
+
+    pub fn set_radio_state(&mut self, state: RadioState) {
+        println!(
+            "[PlaybackQueue] set_radio_state kind={} id={} loaded={} continuation={}",
+            state.seed.kind.as_str(),
+            state.seed.id,
+            state.loaded_count,
+            state.continuation.is_some(),
+        );
+        self.radio_state = Some(state);
+    }
+
+    pub fn radio_state(&self) -> Option<&RadioState> {
+        self.radio_state.as_ref()
+    }
+
+    pub fn radio_state_mut(&mut self) -> Option<&mut RadioState> {
+        self.radio_state.as_mut()
+    }
+
+    pub fn clear_radio(&mut self) {
+        if self.radio_state.is_some() {
+            println!("[PlaybackQueue] clear_radio");
+        }
+        self.radio_state = None;
+    }
+
+    /// Quantas faixas sobram depois da posição atual. Usado pelo trigger de continuation.
+    pub fn remaining_after_current(&self) -> usize {
+        match self.current_index {
+            Some(idx) if idx < self.playback_items.len() => {
+                self.playback_items.len().saturating_sub(idx + 1)
+            }
+            _ => 0,
         }
     }
 
@@ -116,6 +198,7 @@ impl PlaybackQueue {
         self.playlist_id = playlist_id;
         self.is_complete = is_complete;
         self.shuffle = shuffle;
+        self.radio_state = None;
         self.reset_rng_state();
 
         for video_id in track_ids {
@@ -609,6 +692,7 @@ impl PlaybackQueue {
         self.shuffle = false;
         self.repeat = RepeatMode::Off;
         self.rng_state = 0;
+        self.radio_state = None;
         self.log_state("clear");
 
         QueueCommandResponse {
