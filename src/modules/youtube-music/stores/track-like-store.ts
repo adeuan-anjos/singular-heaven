@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import type { Track } from "../types/music";
 import {
-  ytGetLikedTrackIds,
+  ytGetLikedTrackIdsCached,
   ytRateSong,
   type TrackLikeStatus,
 } from "../services/yt-api";
@@ -85,7 +85,7 @@ export const useTrackLikeStore = create<TrackLikeStore>()((set, get) => ({
     }
 
     set({ hydrating: true });
-    hydrationPromise = ytGetLikedTrackIds()
+    hydrationPromise = ytGetLikedTrackIdsCached()
       .then((videoIds) => {
         lastHydratedAt = Date.now();
         console.log(

@@ -21,7 +21,7 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' thumb: data: https://*.ytimg.com https://*.ggpht.com https://*.googleusercontent.com https://*.gstatic.com; media-src 'self' stream:; connect-src 'self' ipc: http://ipc.localhost; font-src 'self' data:; object-src 'none'; base-uri 'self'"
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' thumb: http://thumb.localhost data: https://*.ytimg.com https://*.ggpht.com https://*.googleusercontent.com https://*.gstatic.com; media-src 'self' stream: http://stream.localhost; connect-src 'self' ipc: http://ipc.localhost; font-src 'self' data:; object-src 'none'; base-uri 'self'"
     }
   },
   "bundle": {

@@ -27,14 +27,18 @@ import { usePlaylistLibraryStore } from "./stores/playlist-library-store";
 import { useTrackCacheStore } from "./stores/track-cache-store";
 import { useTrackLikeStore } from "./stores/track-like-store";
 import { ytGetCachedTracks, ytAuthLogout, type QueueSnapshot } from "./services/yt-api";
+import { mapLibraryPlaylists } from "./services/mappers";
 import type { PlayAllOptions, Playlist, Track } from "./types/music";
 import { useRenderTracker, useLeakDetector, startMemoryMonitor } from "@/lib/debug";
+import { useDocumentHiddenClass } from "@/lib/hooks/use-document-hidden-class";
+import { perfMark, startModuleLoad } from "./services/perf";
 
 type AuthState = "loading" | "unauthenticated" | "google-account-select" | "account-select" | "authenticated";
 
 export default function YouTubeMusicModule() {
   useRenderTracker("YouTubeMusicModule", {});
   useLeakDetector("YouTubeMusicModule");
+  useDocumentHiddenClass();
   useEffect(() => { startMemoryMonitor(5000); }, []);
   const [authState, setAuthState] = useState<AuthState>("loading");
   const [activeTab, setActiveTab] = useState("home");
@@ -80,9 +84,11 @@ export default function YouTubeMusicModule() {
 
   useEffect(() => {
     console.log("[YouTubeMusicModule] mounted — checking auth status");
+    startModuleLoad();
     let cancelled = false;
 
     async function checkAuth() {
+      const authMark = perfMark("yt_ensure_session", "AUTH");
       try {
         // yt_ensure_session validates cookies and silently refreshes if expired
         console.log("[YouTubeMusicModule] invoking yt_ensure_session...");
@@ -91,6 +97,7 @@ export default function YouTubeMusicModule() {
           method: string;
           hasPageId: boolean;
         }>("yt_ensure_session");
+        authMark.end({ authenticated: status.authenticated, hasPageId: status.hasPageId });
         console.log("[YouTubeMusicModule] yt_ensure_session result", JSON.stringify(status));
         if (!cancelled) {
           if (status.authenticated && status.hasPageId) {
@@ -130,8 +137,11 @@ export default function YouTubeMusicModule() {
   useEffect(() => {
     if (authState !== "authenticated") return;
 
-    void trackLikesHydrate(true, "auth-ready");
-    void playlistLibraryHydrate(true, "auth-ready");
+    const hydrationMark = perfMark("post-auth-hydration", "HYDRATE");
+    void Promise.all([
+      trackLikesHydrate(true, "auth-ready"),
+      playlistLibraryHydrate(true, "auth-ready"),
+    ]).then(() => hydrationMark.end());
 
     const refreshSessionData = () => {
       if (document.visibilityState === "hidden") return;
@@ -236,6 +246,40 @@ export default function YouTubeMusicModule() {
       unlisten?.();
     };
   }, [queueSyncSnapshot]);
+
+  // SWR: listen for background refresh of liked track IDs
+  useEffect(() => {
+    let cancelled = false;
+    let unlisten: UnlistenFn | null = null;
+
+    listen<{ videoIds: string[] }>("liked-track-ids-updated", (event) => {
+      if (cancelled) return;
+      console.log("[YouTubeMusicModule] liked-track-ids-updated (SWR)", { count: event.payload.videoIds.length });
+      useTrackLikeStore.getState().replaceLikedTrackIds(event.payload.videoIds);
+    }).then((fn) => {
+      if (cancelled) { fn(); } else { unlisten = fn; }
+    });
+
+    return () => { cancelled = true; unlisten?.(); };
+  }, []);
+
+  // SWR: listen for background refresh of library playlists
+  useEffect(() => {
+    let cancelled = false;
+    let unlisten: UnlistenFn | null = null;
+
+    listen<{ playlistsJson: string }>("library-playlists-updated", (event) => {
+      if (cancelled) return;
+      const apiPlaylists = JSON.parse(event.payload.playlistsJson);
+      const playlists = mapLibraryPlaylists(apiPlaylists);
+      console.log("[YouTubeMusicModule] library-playlists-updated (SWR)", { count: playlists.length });
+      usePlaylistLibraryStore.getState().replaceLibraryPlaylists(playlists);
+    }).then((fn) => {
+      if (cancelled) { fn(); } else { unlisten = fn; }
+    });
+
+    return () => { cancelled = true; unlisten?.(); };
+  }, []);
 
   const handleAuthenticated = useCallback(() => {
     console.log("[YouTubeMusicModule] handleAuthenticated: browser cookies accepted", {

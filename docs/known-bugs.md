@@ -204,8 +204,9 @@ Lista de bugs e dívidas técnicas já observados no projeto e deixados para cor
 - Impacto:
   - Nenhum funcional imediato, mas suja validação técnica.
 - Área afetada:
-  - [thumb_cache.rs](/./src-tauri/src/thumb_cache.rs)
   - [client.rs](/./src-tauri/src/youtube_music/client.rs)
+- Observação:
+  - `is_cached` em `thumb_cache.rs` foi removido (dead code).
 
 ## Features futuras
 
@@ -228,3 +229,9 @@ Lista de bugs e dívidas técnicas já observados no projeto e deixados para cor
 - A sidebar de playlists agora usa composição shadcn-first mantendo a ordem backend-first via `guide`.
 - Cookies expirados agora são re-extraídos silenciosamente do browser via `yt_ensure_session`.
 - Multi-conta Google implementado com seleção de email e canal.
+- Performance: `Arc<Mutex>` → `Arc<RwLock>` — chamadas API agora rodam em paralelo (10.3s → 1.36s).
+- Cache SWR para liked track IDs e library playlists — warm start instantâneo do SQLite.
+- Sidebar otimizada — usa cache de library playlists + 1 request guide (eliminado fetch duplicado).
+- Manifesto UAC adicionado para build Windows (necessário para `rookie` com Chromium 130+ appbound encryption).
+- CSP corrigido para incluir `http://thumb.localhost` e `http://stream.localhost` (fix imagens quebradas em build).
+- Dead code `is_cached` removido de `thumb_cache.rs`.

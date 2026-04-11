@@ -74,9 +74,23 @@ O header `X-Goog-AuthUser` determina qual conta Google e usada. O Google suporta
 
 Apos selecionar a conta Google, o campo `onBehalfOfUser` no contexto InnerTube e o header `X-Goog-PageId` determinam qual canal e usado. Persistido como `page_id`.
 
+## Permissoes no Windows (UAC)
+
+No Windows, o build de producao requer **privilegios de administrador** para extrair cookies de browsers Chromium (Chrome, Brave, Edge). Dois motivos:
+
+1. **Appbound encryption (Chromium 130+)** — cookies sao criptografados com DPAPI do SYSTEM. Descriptografar exige abrir `lsass.exe` e duplicar seu token, o que requer admin.
+2. **File lock bypass** — enquanto o browser esta aberto, o arquivo de cookies esta travado. O `rookie` usa acesso direto ao disco (`\\.\C:`) via `rawcopy-rs-next` para copiar o arquivo, o que requer admin.
+
+O manifesto UAC (`requireAdministrator`) esta configurado em `src-tauri/build.rs`. O Windows mostra um prompt UAC ao abrir o app.
+
+Em dev mode, o processo herda a elevacao do terminal — se o terminal roda como admin, funciona sem prompt.
+
+Firefox nao usa appbound encryption e nao precisa de admin para leitura de cookies.
+
 ## Limitacoes conhecidas
 
 - Email da conta Google nao e acessivel via InnerTube — so nome e foto
 - Cookies expiram eventualmente (rotacao do Google) — o `yt_ensure_session` mitiga isso
 - Se o browser tambem nao tem cookies validos, o usuario precisa logar no browser primeiro
 - Modo "sem login" removido por estar incompleto — feature futura
+- Build de producao no Windows exige admin (UAC) para extracao de cookies

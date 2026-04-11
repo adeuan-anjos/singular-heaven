@@ -161,7 +161,13 @@ impl PlaylistCache {
              );
 
              CREATE INDEX IF NOT EXISTS idx_collection_tracks_video_id
-                 ON collection_tracks(video_id);",
+                 ON collection_tracks(video_id);
+
+             CREATE TABLE IF NOT EXISTS swr_json_cache (
+                 cache_key TEXT PRIMARY KEY,
+                 json_data TEXT NOT NULL,
+                 cached_at INTEGER NOT NULL
+             );",
         )?;
 
         let playlist_has_set_video_id = {
@@ -837,6 +843,45 @@ impl PlaylistCache {
             tracks_by_id.insert(track.video_id.clone(), track);
         }
         Ok(tracks_by_id)
+    }
+
+    // ── SWR JSON cache ──
+
+    /// Get cached JSON data and its timestamp for a given cache key.
+    /// Returns None if no cached entry exists.
+    pub fn get_swr_json(&self, cache_key: &str) -> SqlResult<Option<(String, i64)>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT json_data, cached_at FROM swr_json_cache WHERE cache_key = ?1",
+        )?;
+        let mut rows = stmt.query(params![cache_key])?;
+        let Some(row) = rows.next()? else {
+            println!("[PlaylistCache] get_swr_json key={} miss", cache_key);
+            return Ok(None);
+        };
+        let json_data: String = row.get(0)?;
+        let cached_at: i64 = row.get(1)?;
+        println!(
+            "[PlaylistCache] get_swr_json key={} hit cached_at={}",
+            cache_key, cached_at
+        );
+        Ok(Some((json_data, cached_at)))
+    }
+
+    /// Upsert cached JSON data with the current timestamp.
+    pub fn save_swr_json(&self, cache_key: &str, json_data: &str) -> SqlResult<()> {
+        let now = now_timestamp();
+        self.conn.execute(
+            "INSERT OR REPLACE INTO swr_json_cache (cache_key, json_data, cached_at)
+             VALUES (?1, ?2, ?3)",
+            params![cache_key, json_data, now],
+        )?;
+        println!(
+            "[PlaylistCache] save_swr_json key={} len={} cached_at={}",
+            cache_key,
+            json_data.len(),
+            now
+        );
+        Ok(())
     }
 }
 

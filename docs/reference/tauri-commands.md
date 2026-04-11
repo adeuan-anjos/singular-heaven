@@ -33,6 +33,7 @@ Referência curta dos comandos mais importantes do módulo YouTube Music.
 
 - `yt_rate_song`
 - `yt_get_liked_track_ids`
+- `yt_get_liked_track_ids_cached` — SWR: retorna do cache SQLite instantaneamente, refresh em background se stale (>5min)
 
 ## Playlist Management
 
@@ -44,7 +45,9 @@ Referência curta dos comandos mais importantes do módulo YouTube Music.
 - `yt_add_playlist_items`
 - `yt_remove_playlist_items`
 - `yt_get_library_playlists`
+- `yt_get_library_playlists_cached` — SWR: retorna do cache SQLite, refresh em background se stale (>5min)
 - `yt_get_sidebar_playlists`
+- `yt_get_sidebar_playlists_cached` — usa cache de library playlists + apenas 1 request guide para ordenação
 
 ## Auth
 

@@ -23,6 +23,10 @@ O projeto favorece backend-first. O frontend mantém projeção visual e estado 
   - `track-like-store`
 - Cache auxiliar:
   - `track-cache-store`
+- Cache SWR (SQLite):
+  - tabela `swr_json_cache` com `cache_key = "liked_track_ids"`
+  - hydration usa `yt_get_liked_track_ids_cached` que retorna do cache e faz refresh em background se stale (>5min)
+  - evento `liked-track-ids-updated` atualiza a store quando o refresh completa
 
 ## Playlist library
 
@@ -31,6 +35,11 @@ O projeto favorece backend-first. O frontend mantém projeção visual e estado 
   - backend `FEmusic_liked_playlists` para Biblioteca
 - Store frontend:
   - `playlist-library-store`
+- Cache SWR (SQLite):
+  - tabela `swr_json_cache` com `cache_key = "library_playlists"`
+  - hydration usa `yt_get_library_playlists_cached` (SWR)
+  - sidebar usa `yt_get_sidebar_playlists_cached` (lê cache + 1 request guide)
+  - evento `library-playlists-updated` atualiza a store quando o refresh completa
 
 ## Track metadata
 

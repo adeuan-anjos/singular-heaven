@@ -6,7 +6,7 @@ mod youtube_music;
 use std::collections::HashSet;
 use std::sync::Arc;
 use tauri::Manager;
-use tokio::sync::Mutex;
+use tokio::sync::RwLock;
 
 use youtube_music::client::YtMusicState;
 
@@ -273,9 +273,9 @@ pub fn run() {
                     return;
                 }
 
-                let state = app.state::<Arc<Mutex<YtMusicState>>>();
+                let state = app.state::<Arc<RwLock<YtMusicState>>>();
                 let result = {
-                    let st = state.lock().await;
+                    let st = state.read().await;
                     st.client.fetch_audio_bytes(video_id).await
                 };
 
@@ -362,7 +362,7 @@ pub fn run() {
                         if let Some(ref pid) = restored_page_id {
                             println!("[setup] FINAL STATE SUMMARY: page_id={pid}");
                         }
-                        app.manage(Arc::new(Mutex::new(state)));
+                        app.manage(Arc::new(RwLock::new(state)));
                         println!("[setup] YtMusicState added to managed state.");
                         return Ok(());
                     }
@@ -386,7 +386,7 @@ pub fn run() {
                 }
             };
 
-            app.manage(Arc::new(Mutex::new(state)));
+            app.manage(Arc::new(RwLock::new(state)));
             println!("[setup] YtMusicState added to managed state.");
             Ok(())
         })
@@ -401,8 +401,11 @@ pub fn run() {
             youtube_music::commands::yt_get_mood_categories,
             youtube_music::commands::yt_get_library_playlists,
             youtube_music::commands::yt_get_sidebar_playlists,
+            youtube_music::commands::yt_get_sidebar_playlists_cached,
             youtube_music::commands::yt_get_library_songs,
             youtube_music::commands::yt_get_liked_track_ids,
+            youtube_music::commands::yt_get_liked_track_ids_cached,
+            youtube_music::commands::yt_get_library_playlists_cached,
             youtube_music::commands::yt_rate_song,
             youtube_music::commands::yt_rate_playlist,
             youtube_music::commands::yt_get_playlist,

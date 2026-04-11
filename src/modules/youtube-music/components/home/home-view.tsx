@@ -11,6 +11,7 @@ import {
 } from "../../services/track-collections";
 import type { Track, Album, Artist, Playlist, HomeSection, StackPage } from "../../types/music";
 import { useRenderTracker } from "@/lib/debug";
+import { perfMark, endModuleLoad } from "../../services/perf";
 
 interface HomeViewProps {
   onNavigate: (page: StackPage) => void;
@@ -111,6 +112,7 @@ export function HomeView({ onNavigate, onPlayTrack }: HomeViewProps) {
     let cancelled = false;
 
     async function fetchHome() {
+      const viewMark = perfMark("HomeView fetch", "VIEW");
       console.log("[HomeView] Fetching home sections...");
       setLoading(true);
       setError(null);
@@ -118,6 +120,8 @@ export function HomeView({ onNavigate, onPlayTrack }: HomeViewProps) {
         const apiSections = await ytGetHome(6);
         if (cancelled) return;
         const mapped = mapHomeSections(apiSections);
+        viewMark.end({ sections: mapped.length });
+        endModuleLoad();
         console.log("[HomeView] Loaded home sections:", mapped.length);
         mapped.forEach((section, index) => {
           const tracks = section.contents.filter(isTrack);

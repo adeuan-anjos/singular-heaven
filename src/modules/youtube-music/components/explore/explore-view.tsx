@@ -13,6 +13,7 @@ import {
   createTrackCollectionId,
 } from "../../services/track-collections";
 import type { Track, ExploreData, ChartTrack, StackPage } from "../../types/music";
+import { perfMark, endModuleLoad } from "../../services/perf";
 
 interface ExploreViewProps {
   onNavigate: (page: StackPage) => void;
@@ -29,6 +30,7 @@ export function ExploreView({ onNavigate, onPlayTrack }: ExploreViewProps) {
     let cancelled = false;
 
     async function fetchExplore() {
+      const viewMark = perfMark("ExploreView fetch", "VIEW");
       console.log("[ExploreView] Fetching explore data...");
       setLoading(true);
       setError(null);
@@ -37,6 +39,8 @@ export function ExploreView({ onNavigate, onPlayTrack }: ExploreViewProps) {
         if (cancelled) return;
         const mapped = mapExplorePage(apiData);
         const charts = apiData.topSongs.map((s, i) => mapExploreSongToChart(s, i));
+        viewMark.end({ newReleases: mapped.newReleases.length, trending: mapped.trending.length, charts: charts.length });
+        endModuleLoad();
         console.log("[ExploreView] Loaded explore data:", {
           newReleases: mapped.newReleases.length,
           trending: mapped.trending.length,

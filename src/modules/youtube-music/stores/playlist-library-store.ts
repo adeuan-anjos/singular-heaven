@@ -4,8 +4,8 @@ import {
   ytCreatePlaylist,
   ytDeletePlaylist,
   ytEditPlaylist,
-  ytGetLibraryPlaylists,
-  ytGetSidebarPlaylists,
+  ytGetLibraryPlaylistsCached,
+  ytGetSidebarPlaylistsCached,
   type PlaylistPrivacyStatus,
   ytRatePlaylist,
   ytSetPlaylistThumbnail,
@@ -107,7 +107,7 @@ export const usePlaylistLibraryStore = create<PlaylistLibraryStore>()((set, get)
     }
 
     set({ hydrating: true });
-    hydrationPromise = ytGetLibraryPlaylists()
+    hydrationPromise = ytGetLibraryPlaylistsCached()
       .then((apiPlaylists) => {
         const playlists = mapLibraryPlaylists(apiPlaylists);
         lastHydratedAt = Date.now();
@@ -158,7 +158,7 @@ export const usePlaylistLibraryStore = create<PlaylistLibraryStore>()((set, get)
     }
 
     set({ sidebarHydrating: true });
-    sidebarHydrationPromise = ytGetSidebarPlaylists()
+    sidebarHydrationPromise = ytGetSidebarPlaylistsCached()
       .then((apiPlaylists) => {
         const playlists = mapLibraryPlaylists(apiPlaylists);
         lastSidebarHydratedAt = Date.now();

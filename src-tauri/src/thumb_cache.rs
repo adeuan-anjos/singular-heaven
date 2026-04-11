@@ -19,11 +19,6 @@ pub fn cached_path(app_data_dir: &PathBuf, url: &str, size: u32) -> PathBuf {
     cache_dir(app_data_dir).join(cache_key(url, size))
 }
 
-/// Check if a thumbnail is already cached
-pub fn is_cached(app_data_dir: &PathBuf, url: &str, size: u32) -> bool {
-    cached_path(app_data_dir, url, size).exists()
-}
-
 /// Save bytes to cache
 pub fn save(app_data_dir: &PathBuf, url: &str, size: u32, bytes: &[u8]) -> std::io::Result<()> {
     let dir = cache_dir(app_data_dir);

@@ -13,6 +13,44 @@ use crate::types::common::LikeStatus;
 use crate::types::library::{LibraryPlaylist, LibrarySong};
 
 impl YtMusicClient {
+    /// Get sidebar playlists using pre-fetched library data for metadata merge.
+    /// Avoids the slow paginated `get_library_playlists()` call by accepting
+    /// cached library data directly.
+    pub async fn get_sidebar_playlists_with_library(
+        &self,
+        cached_library: Vec<LibraryPlaylist>,
+    ) -> Result<Vec<LibraryPlaylist>> {
+        println!("[ytmusic-api] get_sidebar_playlists_with_library()");
+
+        let response = self.post_innertube("guide", json!({})).await?;
+        let mut playlists = parse_sidebar_playlists_response(&response)?;
+        let library_by_id: HashMap<String, LibraryPlaylist> = cached_library
+            .into_iter()
+            .map(|playlist| (playlist.playlist_id.clone(), playlist))
+            .collect();
+
+        for playlist in &mut playlists {
+            if let Some(meta) = library_by_id.get(&playlist.playlist_id) {
+                playlist.is_owned_by_user = meta.is_owned_by_user;
+                playlist.is_editable = meta.is_editable;
+                playlist.is_special = meta.is_special;
+                if playlist.subtitle.is_none() {
+                    playlist.subtitle = meta.subtitle.clone();
+                }
+                if playlist.thumbnails.is_empty() {
+                    playlist.thumbnails = meta.thumbnails.clone();
+                }
+            }
+        }
+
+        println!(
+            "[ytmusic-api] get_sidebar_playlists_with_library returned {} playlists total",
+            playlists.len()
+        );
+
+        Ok(playlists)
+    }
+
     /// Get playlists in the same order shown in the YouTube Music guide/sidebar.
     pub async fn get_sidebar_playlists(&self) -> Result<Vec<LibraryPlaylist>> {
         println!("[ytmusic-api] get_sidebar_playlists()");

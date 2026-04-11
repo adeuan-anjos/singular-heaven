@@ -9,6 +9,7 @@ import { usePlaylistLibraryStore } from "../../stores/playlist-library-store";
 import { useTrackLikeStore } from "../../stores/track-like-store";
 import type { Playlist, StackPage, Track } from "../../types/music";
 import { useRenderTracker } from "@/lib/debug";
+import { perfMark, endModuleLoad } from "../../services/perf";
 
 interface LibraryViewProps {
   onNavigate: (page: StackPage) => void;
@@ -36,6 +37,7 @@ export const LibraryView = React.memo(function LibraryView({
     let cancelled = false;
 
     async function fetchLibrary() {
+      const viewMark = perfMark("LibraryView fetch", "VIEW");
       console.log("[LibraryView] Fetching library data...");
       setError(null);
       setLoadingSongs(true);
@@ -47,6 +49,8 @@ export const LibraryView = React.memo(function LibraryView({
         ]);
         if (cancelled) return;
         const mappedSongs = mapLibrarySongs(apiSongs);
+        viewMark.end({ songs: mappedSongs.length });
+        endModuleLoad();
         setLikedSongs(mappedSongs);
       } catch (err) {
         if (cancelled) return;
