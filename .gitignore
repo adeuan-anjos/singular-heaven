@@ -33,3 +33,6 @@ SECURITY-AUDIT-*.md
 # Rust
 target/
 .playwright-mcp/
+
+# Git worktrees
+.worktrees/
