@@ -24,6 +24,7 @@ export interface Track {
 
 export interface Album {
   browseId: string;
+  audioPlaylistId?: string;
   title: string;
   artists: ArtistBasic[];
   year?: string;

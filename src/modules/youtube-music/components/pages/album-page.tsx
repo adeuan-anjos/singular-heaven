@@ -173,7 +173,15 @@ export function AlbumPage() {
               </Button>
               <Button
                 variant="outline"
-                onClick={() => void onStartRadio({ kind: "album", id: album.browseId })}
+                onClick={() => {
+                  if (!album.audioPlaylistId) {
+                    console.warn(
+                      "[album-page] audioPlaylistId missing, falling back to browseId — radio may not work",
+                    );
+                  }
+                  const seedId = album.audioPlaylistId ?? album.browseId;
+                  void onStartRadio({ kind: "album", id: seedId });
+                }}
               >
                 <Radio data-icon="inline-start" />
                 Iniciar rádio

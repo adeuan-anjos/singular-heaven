@@ -63,6 +63,7 @@ pub struct SimilarArtist {
 pub struct AlbumPage {
     pub title: String,
     pub browse_id: String,
+    pub audio_playlist_id: Option<String>,
     pub album_type: Option<String>,
     pub year: Option<String>,
     pub artists: Vec<ArtistRef>,

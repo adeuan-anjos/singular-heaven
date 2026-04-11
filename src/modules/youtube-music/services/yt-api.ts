@@ -162,6 +162,7 @@ export interface ApiSimilarArtist {
 export interface ApiAlbumPage {
   title: string;
   browseId: string;
+  audioPlaylistId: string | null;
   albumType: string | null;
   year: string | null;
   artists: ApiArtistRef[];

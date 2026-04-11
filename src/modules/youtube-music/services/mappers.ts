@@ -206,6 +206,7 @@ export function mapAlbumPage(page: ApiAlbumPage): Album {
   const albumThumbnails = mapThumbnails(page.thumbnails);
   return {
     browseId: page.browseId,
+    audioPlaylistId: page.audioPlaylistId ?? undefined,
     title: page.title,
     artists: albumArtists,
     year: page.year ?? undefined,

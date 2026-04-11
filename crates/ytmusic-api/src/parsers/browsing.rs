@@ -319,6 +319,34 @@ pub fn parse_album_response(response: &Value, browse_id: &str) -> Result<AlbumPa
 
     let thumbnails = h.map(|h| parse_thumbnails(h)).unwrap_or_default();
 
+    // audioPlaylistId (OLAK5...) from play button's watchEndpoint.
+    // New layout: header.buttons[].musicPlayButtonRenderer.playNavigationEndpoint
+    // Old layout: header.playButton.buttonRenderer.navigationEndpoint
+    let audio_playlist_id = h.and_then(|h| {
+        // New layout: search buttons array for musicPlayButtonRenderer
+        if let Some(buttons) = h.get("buttons").and_then(|b| b.as_array()) {
+            for btn in buttons {
+                if let Some(mpb) = btn.get("musicPlayButtonRenderer") {
+                    if let Some(id) = nav_str(mpb, &[
+                        "playNavigationEndpoint", "watchPlaylistEndpoint", "playlistId",
+                    ]).or_else(|| nav_str(mpb, &[
+                        "playNavigationEndpoint", "watchEndpoint", "playlistId",
+                    ])) {
+                        return Some(id);
+                    }
+                }
+            }
+        }
+        // Old layout fallback
+        nav_str(h, &[
+            "playButton", "buttonRenderer", "navigationEndpoint",
+            "watchPlaylistEndpoint", "playlistId",
+        ]).or_else(|| nav_str(h, &[
+            "playButton", "buttonRenderer", "navigationEndpoint",
+            "watchEndpoint", "playlistId",
+        ]))
+    });
+
     // Tracks — new layout: secondaryContents
     let tracks_array = nav_array(response, &[
         "contents", "twoColumnBrowseResultsRenderer", "secondaryContents",
@@ -360,6 +388,7 @@ pub fn parse_album_response(response: &Value, browse_id: &str) -> Result<AlbumPa
     Ok(AlbumPage {
         title,
         browse_id: browse_id.to_string(),
+        audio_playlist_id,
         album_type,
         year,
         artists,
