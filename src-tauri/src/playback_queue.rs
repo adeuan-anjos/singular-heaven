@@ -198,7 +198,7 @@ impl PlaybackQueue {
         self.playlist_id = playlist_id;
         self.is_complete = is_complete;
         self.shuffle = shuffle;
-        self.radio_state = None;
+        self.clear_radio();
         self.reset_rng_state();
 
         for video_id in track_ids {
@@ -692,7 +692,7 @@ impl PlaybackQueue {
         self.shuffle = false;
         self.repeat = RepeatMode::Off;
         self.rng_state = 0;
-        self.radio_state = None;
+        self.clear_radio();
         self.log_state("clear");
 
         QueueCommandResponse {

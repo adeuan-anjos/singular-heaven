@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { Router, Route, Switch } from "wouter";
+import { toast } from "sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { LoginScreen } from "./components/auth/login-screen";
 import { AccountPicker } from "./components/auth/account-picker";
@@ -572,6 +573,7 @@ export default function YouTubeMusicModule() {
         }
       } catch (err) {
         console.error("[YouTubeMusicModule] handleStartRadio failed", err);
+        toast.error("Não foi possível iniciar o rádio.");
       }
     },
     [playerPlay, queueSyncSnapshot, trackCachePut],
