@@ -18,6 +18,7 @@ Autenticacao 100% via cookies extraidos do browser pelo crate `rookie` (Rust). O
 4. Cookies + `auth_user` + `page_id` sao persistidos em disco
 5. No startup, se tudo esta salvo, pula direto para o app
 6. `yt_ensure_session` valida cookies no startup e re-extrai silenciosamente se expirados (401)
+7. Durante uptime, todo comando Tauri autenticado passa pelo wrapper `with_session_refresh` que detecta 401, dispara refresh e retenta uma vez. Trigger proativo tambem roda no `WindowEvent::Focused` apos 30 min idle.
 
 ### Limitacoes aceitas
 
@@ -34,3 +35,7 @@ Autenticacao 100% via cookies extraidos do browser pelo crate `rookie` (Rust). O
 - Startup com credenciais salvas pula todos os pickers
 - Logout limpa os tres arquivos e volta para `unauthenticated`
 - Modo "sem login" removido da UI por estar incompleto (feature futura)
+- `YtMusicClient` implementa `Clone` para permitir o wrapper `with_session_refresh` clonar o client sob read lock e soltar o lock antes de network I/O
+- `SessionActivity` vive no managed state como `Arc<SessionActivity>` com `AtomicU64` (last success timestamp) + `tokio::sync::Mutex` (refresh serialization)
+- Refreshes concorrentes sao serializados e bypassam extracao duplicada via double-check — N comandos paralelos pegando 401 disparam apenas uma invocacao de `rookie`
+- Detalhes de implementacao em [`docs/explanation/youtube-music-auth.md`](../explanation/youtube-music-auth.md#refresh-de-sessao)

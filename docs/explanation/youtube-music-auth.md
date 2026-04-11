@@ -38,17 +38,52 @@ No startup, se os tres existem, o app pula todos os pickers e vai direto para a 
 
 No Unix, arquivos de credencial sao escritos com permissao `0600` (owner-only).
 
-## Validacao de sessao (yt_ensure_session)
+## Refresh de sessao
 
-No startup, antes de reportar o status de autenticacao ao frontend:
+O YouTube rotaciona cookies de sessao (SIDCC, __Secure-1PSIDCC, e similares) silenciosamente. Se o app roda por horas sem refrescar, a proxima chamada autenticada volta `HTTP 401` mesmo com o `yt_cookies.txt` em disco aparentemente valido. O refresh e tratado em tres camadas que se complementam:
+
+### 1. Validacao de startup (`yt_ensure_session`)
+
+Antes de reportar o status de autenticacao ao frontend:
 
 1. Testa os cookies salvos com uma chamada leve (`get_accounts`)
-2. Se retorna 401 → cookies expiraram
-3. Re-extrai cookies do browser silenciosamente via `extract_cookies_auto`
-4. Atualiza estado e salva novos cookies em disco
-5. Se re-extracao falha (browser sem cookies validos) → reverte para nao-autenticado
+2. Se retorna 401 → delega para `refresh_cookies_and_rebuild_state`
+3. Se re-extracao falha (browser sem cookies validos) → deleta credenciais e reverte para nao-autenticado
 
-O usuario nunca ve o 401. O refresh e transparente.
+### 2. Retry reativo em 401 (`with_session_refresh`)
+
+Todo comando Tauri autenticado (ex: `yt_load_playlist`, `yt_get_home`, `yt_rate_song`) passa por um wrapper generico:
+
+1. Clona o `YtMusicClient` sob read lock, solta o lock, executa a operacao
+2. Se o erro classifica como "session expired" (`is_session_expired` — matches `NotAuthenticated` ou string contem `401`/`Unauthorized`):
+   - Dispara `refresh_cookies_and_rebuild_state`
+   - Clona um client fresco do state atualizado
+   - Retenta a operacao **uma unica vez**
+3. Sucesso em qualquer tentativa atualiza o timestamp de ultima atividade (`SessionActivity::mark_success`)
+4. Outro erro que nao seja 401 propaga direto
+
+O usuario nunca ve o 401 — o fluxo e transparente. Se o retry tambem falhar com 401, o erro propaga; a proxima chamada recomeca do zero.
+
+### 3. Refresh proativo no foco da janela
+
+Quando a janela Tauri ganha foco (`WindowEvent::Focused(true)`) e a sessao esta ociosa ha mais que `STALE_THRESHOLD_SECS` (1800s = 30 min), o handler dispara `refresh_cookies_and_rebuild_state` em background via `tauri::async_runtime::spawn`. Isso garante que quando o usuario volta ao app depois de horas idle, a primeira acao dele nao paga o custo do retry reativo — os cookies ja foram renovados em paralelo enquanto ele estava clicando.
+
+O trigger roda cross-platform (o handler de memory level do WebView2 continua Windows-only).
+
+### Serializacao de refresh concorrente (thundering herd)
+
+`refresh_cookies_and_rebuild_state` e protegida por uma `tokio::sync::Mutex` interna em `SessionActivity`. Quando N comandos paralelos pegam 401 simultaneamente:
+
+1. O primeiro adquire o lock e faz a extracao completa via `rookie`
+2. Os outros N-1 ficam na fila do lock
+3. Ao adquirirem, fazem um double-check rapido (`client.clone().get_accounts().await`) — se o state ja foi substituido pelo primeiro task, retornam `Ok(())` sem chamar `rookie` de novo
+4. Cada task entao retenta sua operacao original com o client fresco
+
+Custo: N chamadas `get_accounts` (baratas) em vez de N invocacoes paralelas de `rookie` (caras — abre disk-raw no Windows, descriptografa DPAPI).
+
+### Por que playback continua tocando mesmo com cookies stale
+
+`fetch_audio_bytes` (em `crates/ytmusic-api/src/client.rs`) cria um cliente `reqwest` proprio **sem cookies** para baixar o stream URL pre-assinado. Ou seja, uma musica que ja comecou a tocar nao e afetada por cookies stale — so chamadas InnerTube autenticadas (que e onde moram playlist fetch, library, likes, etc.) falham. E o motivo de o bug original ter se manifestado como "musica toca a noite toda, abrir playlist de manha quebra".
 
 ## Logout
 
@@ -89,10 +124,28 @@ Em dev mode, o processo herda a elevacao do terminal — se o terminal roda como
 
 Firefox nao usa appbound encryption e nao precisa de admin para leitura de cookies.
 
+## Comandos de teste (debug-only)
+
+Gateados por `#[cfg(debug_assertions)]` — nao existem em build de producao. Servem para validar o refresh sem esperar expiracao real:
+
+- `yt_dev_session_stats` — retorna `authenticated`, `auth_user`, `has_page_id`, `seconds_since` e flag `stale` contra `STALE_THRESHOLD_SECS`
+- `yt_dev_corrupt_cookies` — substitui os cookies em memoria por lixo. Proxima chamada autenticada pega 401 e exercita o fluxo de retry
+- `yt_dev_backdate_activity` — antedata o timestamp de `last_success` (default 40min atras). Forca o focus handler a entender que a sessao esta stale e disparar refresh proativo quando a janela ganhar foco
+
+Uso tipico no devtools console:
+
+```js
+await window.__TAURI_INTERNALS__.invoke('yt_dev_corrupt_cookies');
+await window.__TAURI_INTERNALS__.invoke('yt_get_accounts'); // → 401 → refresh → retry
+```
+
+Logs relevantes aparecem no terminal do `npm run tauri dev` (`[with_session_refresh]`, `[refresh_cookies_and_rebuild_state]`, `[focus] proactive check`).
+
 ## Limitacoes conhecidas
 
 - Email da conta Google nao e acessivel via InnerTube — so nome e foto
-- Cookies expiram eventualmente (rotacao do Google) — o `yt_ensure_session` mitiga isso
-- Se o browser tambem nao tem cookies validos, o usuario precisa logar no browser primeiro
+- Se o browser nao tem cookies validos em nenhum dos 7 browsers suportados (edge, chrome, firefox, brave, chromium, opera, vivaldi), o refresh reativo falha e o usuario precisa fazer login no browser novamente
+- Maximo de 10 contas simultaneas por browser (limite do Google)
+- Contas sem YouTube Music retornam 403 e sao puladas no probing
 - Modo "sem login" removido por estar incompleto — feature futura
 - Build de producao no Windows exige admin (UAC) para extracao de cookies

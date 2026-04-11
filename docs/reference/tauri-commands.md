@@ -51,7 +51,7 @@ Referência curta dos comandos mais importantes do módulo YouTube Music.
 
 ## Auth
 
-- `yt_ensure_session` — valida cookies e re-extrai silenciosamente se expirados (401)
+- `yt_ensure_session` — valida cookies no startup e re-extrai silenciosamente se expirados (401). Delega para `refresh_cookies_and_rebuild_state`.
 - `yt_auth_status` — retorna `{ authenticated, method, hasPageId }`
 - `yt_detect_browsers` — lista browsers com cookies do YouTube
 - `yt_auth_from_browser` — extrai cookies do browser selecionado (aceita `authUser`)
@@ -59,6 +59,22 @@ Referência curta dos comandos mais importantes do módulo YouTube Music.
 - `yt_get_accounts` — lista canais/brand accounts da conta Google ativa
 - `yt_switch_account` — seleciona canal via `pageId`, persiste em disco
 - `yt_auth_logout` — deleta credenciais e reverte para nao-autenticado
+
+## Debug only (`#[cfg(debug_assertions)]`)
+
+Nao existem em build de producao. Chamar via `window.__TAURI_INTERNALS__.invoke(...)` no devtools console.
+
+- `yt_dev_session_stats` — retorna `authenticated`, `auth_user`, `has_page_id`, `seconds_since`, `stale`
+- `yt_dev_corrupt_cookies` — substitui cookies em memoria por lixo para forcar 401 na proxima chamada autenticada
+- `yt_dev_backdate_activity` — antedata o timestamp de `SessionActivity::last_success` (default 2400s). Forca o focus handler a disparar refresh proativo quando a janela ganhar foco
+
+Uso detalhado em [youtube-music-auth.md](../explanation/youtube-music-auth.md#comandos-de-teste-debug-only).
+
+## Wrapper de retry de sessao
+
+Todo comando autenticado nas secoes `Collections / Playback`, `Track Likes`, `Playlist Management` e `Auth` (exceto `yt_ensure_session`, `yt_auth_status`, `yt_detect_browsers` e `yt_auth_logout`) passa pelo wrapper `with_session_refresh`. Se a chamada falhar com 401, o wrapper dispara refresh de cookies e retenta uma unica vez — transparente para o frontend.
+
+Comandos locais (cache SQLite, queue, collection windows) nao passam pelo wrapper porque nao chamam a API.
 
 ## Rule
 

@@ -8,6 +8,11 @@ O formato segue o espírito de [Keep a Changelog](https://keepachangelog.com/), 
 
 ### Added
 
+- Refresh de sessao mid-uptime: wrapper `with_session_refresh` envelopa todos os ~30 comandos Tauri autenticados do YouTube Music. Detecta 401, dispara re-extracao de cookies via `rookie`, substitui o state e retenta uma vez. Transparente para o frontend — nenhum toast ou dialog.
+- Trigger proativo no `WindowEvent::Focused`: quando a janela ganha foco apos 30 min idle, refresh roda em background antes do usuario interagir. Elimina a latencia extra do retry reativo no caminho feliz pos-idle.
+- `SessionActivity` em managed state (`AtomicU64` para timestamp + `tokio::sync::Mutex` para serializacao de refresh concorrente). Evita thundering herd — N comandos paralelos pegando 401 disparam apenas uma invocacao de `rookie`, os outros usam double-check via `get_accounts`.
+- Modulo `src-tauri/src/youtube_music/session.rs` centraliza `is_session_expired`, `refresh_cookies_and_rebuild_state`, `with_session_refresh`, `extract_cookies_auto`, `extract_cookies_from_browser`. `yt_ensure_session` foi refatorada para reusar o mesmo helper.
+- Comandos debug-only gateados por `#[cfg(debug_assertions)]`: `yt_dev_session_stats`, `yt_dev_corrupt_cookies`, `yt_dev_backdate_activity`. Permitem validar os fluxos de refresh sem esperar expiracao real — documentados em [youtube-music-auth.md](explanation/youtube-music-auth.md#comandos-de-teste-debug-only).
 - Componentes shadcn `Item` (list row composition) e `Spinner` instalados via CLI e usados nos pickers de auth.
 - Performance: `Arc<Mutex>` → `Arc<RwLock>` — todas as chamadas API rodam em paralelo (startup 10.3s → 1.36s).
 - Cache SWR (stale-while-revalidate) em SQLite para liked track IDs e library playlists — warm start instantâneo (~21ms vs 5-8s).
@@ -31,6 +36,7 @@ O formato segue o espírito de [Keep a Changelog](https://keepachangelog.com/), 
 
 ### Fixed
 
+- Sessao `HTTP 401` apos uptime prolongado (8-10h+): o app mantinha cookies extraidos uma unica vez no startup/login e nunca refrescava durante uptime. Quando o Google rotacionava SIDCC/sessao em background, a proxima chamada autenticada (ex: abrir playlist) retornava `401 Unauthorized` enquanto a musica que ja estava tocando continuava normal (porque `fetch_audio_bytes` usa stream URL pre-assinada sem cookies). Fix: `with_session_refresh` wrapper detecta 401, dispara refresh via `rookie` e retenta — transparente para o usuario. Focus-triggered refresh antecipa o mesmo fluxo quando a janela volta ao foco apos idle > 30 min. Detalhes em [youtube-music-auth.md](explanation/youtube-music-auth.md#refresh-de-sessao).
 - CSP corrigido para incluir `http://thumb.localhost` e `http://stream.localhost` (imagens e áudio quebrados em build de produção).
 - Dead code `is_cached` removido de `thumb_cache.rs`.
 - Indicador de "tocando agora" (barrinhas do equalizer no `TrackTableRow`) consumia 3-6% de CPU do WebView2 na tela de playlist e ~6.5% com o app minimizado. A animação CSS usava `height` (não-composable, força style+layout+paint a cada frame × 144Hz × 3 spans) e o Chromium não pausa CSS animations automaticamente enquanto há áudio reproduzindo. Fix troca a animação para `transform: scaleY` (composable, roda só no compositor thread da GPU) e adiciona um hook `useDocumentHiddenClass` em `src/lib/hooks/` que sincroniza uma classe `document-hidden` no `<html>` via `visibilitychange` — uma regra CSS (`html.document-hidden .equalizer span { animation-play-state: paused }`) pausa completamente a animação quando o app está minimizado. Aplica-se a qualquer animação `infinite` visível durante playback: usar apenas `transform`/`opacity` e pausar em `document-hidden`.

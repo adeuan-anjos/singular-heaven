@@ -27,11 +27,17 @@ Lista de bugs e dívidas técnicas já observados no projeto e deixados para cor
 ### Paths pessoais com username em docs
 
 - Descrição:
-  - `docs/README.md` contém 20+ paths absolutos com `~\...`.
+  - Qualquer arquivo em `docs/` (ou em outras fontes versionadas) que contenha paths absolutos com `~\...` ou similares vaza PII (username do sistema) para quem clonar o repo.
 - Impacto:
-  - Vaza PII (username do sistema) para qualquer pessoa que leia a doc.
-- Fix necessário:
-  - Substituir por paths relativos ou genéricos.
+  - Vaza PII. Um path absoluto também quebra em qualquer máquina diferente da do autor.
+- Status atual:
+  - `docs/README.md` foi convertido para paths relativos (sessão 2026-04-11).
+  - Outros arquivos ainda podem conter paths absolutos — auditar antes de cada release ou push público.
+- Fix necessário sempre que reaparecer:
+  - Substituir por paths relativos à raiz do repo (ou ao arquivo que contém o link).
+  - Grep sugerido: `rg "C:[\\/]Users[\\/]" docs/` antes de abrir PR.
+- Por que o item fica aberto:
+  - Serve como guardrail permanente: novas docs podem reintroduzir paths absolutos sem querer. Só remover deste arquivo se a regra for automatizada (lint/CI).
 
 ### PII em debug logs (emails e page_ids)
 
@@ -221,6 +227,7 @@ Lista de bugs e dívidas técnicas já observados no projeto e deixados para cor
 
 ## Encerrados recentemente
 
+- Sessão `HTTP 401` após uptime prolongado (8-10h+) agora se recupera transparente via `with_session_refresh` wrapper em todos os comandos autenticados, mais focus-triggered refresh proativo após 30 min idle. O bug se manifestava como "música toca a noite toda, mas abrir playlist de manhã retorna 401"; o fix mantém o usuário sem ver erro algum. Ver [youtube-music-auth.md](explanation/youtube-music-auth.md#refresh-de-sessao).
 - Likes de track agora são backend-first e usam a conta real via cookies.
 - Alias `liked -> LM` corrigido no backend.
 - Queue e playlist seguem ordem coerente com a fonte real.
