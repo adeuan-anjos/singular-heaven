@@ -21,9 +21,10 @@ interface TrackRowProps {
   onRemoveFromPlaylist?: (track: Track) => void;
   onGoToArtist?: (artistId: string) => void;
   onGoToAlbum?: (albumId: string) => void;
+  onStartRadio?: (track: Track) => void;
 }
 
-export function TrackRow({ track, index, isPlaying, onPlay, onAddToQueue, onAddToPlaylist, onRemoveFromPlaylist, onGoToArtist, onGoToAlbum }: TrackRowProps) {
+export function TrackRow({ track, index, isPlaying, onPlay, onAddToQueue, onAddToPlaylist, onRemoveFromPlaylist, onGoToArtist, onGoToAlbum, onStartRadio }: TrackRowProps) {
   const liked = useTrackLikeStore((s) =>
     (s.likeStatuses[track.videoId] ?? track.likeStatus ?? "INDIFFERENT") === "LIKE"
   );
@@ -129,6 +130,7 @@ export function TrackRow({ track, index, isPlaying, onPlay, onAddToQueue, onAddT
             onRemoveFromPlaylist={onRemoveFromPlaylist}
             onGoToArtist={onGoToArtist}
             onGoToAlbum={onGoToAlbum}
+            onStartRadio={onStartRadio}
           />
         </DropdownMenuContent>
       </DropdownMenu>

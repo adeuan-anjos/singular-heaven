@@ -32,7 +32,7 @@ export function ArtistSongsPage() {
   const params = useParams<{ id: string }>();
   const artistId = decodeURIComponent(params.id ?? "");
   const [, navigate] = useLocation();
-  const { onPlayTrack, onPlayAll, onAddToQueue, onAddToPlaylist } = useYtActions();
+  const { onPlayTrack, onPlayAll, onAddToQueue, onAddToPlaylist, onStartRadio } = useYtActions();
   const [artist, setArtist] = useState<Artist | null>(null);
   const [collectionTracks, setCollectionTracks] = useState<TrackCollectionEntry[]>([]);
   const [loading, setLoading] = useState(true);
@@ -211,6 +211,7 @@ export function ArtistSongsPage() {
           onAddToPlaylist={onAddToPlaylist}
           onGoToArtist={(id) => navigate(paths.artist(id))}
           onGoToAlbum={(id) => navigate(paths.album(id))}
+          onStartRadio={(track) => onStartRadio({ kind: "video", id: track.videoId })}
         />
 
         {filter && filteredSongs.length === 0 && (

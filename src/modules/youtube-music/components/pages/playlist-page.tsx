@@ -636,6 +636,7 @@ export function PlaylistPage() {
           }
           onGoToArtist={(id) => navigate(paths.artist(id))}
           onGoToAlbum={(id) => navigate(paths.album(id))}
+          onStartRadio={(track) => onStartRadio({ kind: "video", id: track.videoId })}
         />
       ) : (
         <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">

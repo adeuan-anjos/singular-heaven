@@ -15,6 +15,7 @@ interface TrackContextMenuProps {
   onRemoveFromPlaylist?: (track: Track) => void;
   onGoToArtist?: (artistId: string) => void;
   onGoToAlbum?: (albumId: string) => void;
+  onStartRadio?: (track: Track) => void;
 }
 
 export function TrackContextMenu({
@@ -26,6 +27,7 @@ export function TrackContextMenu({
   onRemoveFromPlaylist,
   onGoToArtist,
   onGoToAlbum,
+  onStartRadio,
 }: TrackContextMenuProps) {
   return (
     <ContextMenu>
@@ -40,6 +42,7 @@ export function TrackContextMenu({
           onRemoveFromPlaylist={onRemoveFromPlaylist}
           onGoToArtist={onGoToArtist}
           onGoToAlbum={onGoToAlbum}
+          onStartRadio={onStartRadio}
         />
       </ContextMenuContent>
     </ContextMenu>

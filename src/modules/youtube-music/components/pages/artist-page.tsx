@@ -187,6 +187,7 @@ export function ArtistPage() {
               onAddToPlaylist={onAddToPlaylist}
               onGoToArtist={(id) => navigate(paths.artist(id))}
               onGoToAlbum={(id) => navigate(paths.album(id))}
+              onStartRadio={(track) => onStartRadio({ kind: "video", id: track.videoId })}
             />
             <Button
               variant="outline"

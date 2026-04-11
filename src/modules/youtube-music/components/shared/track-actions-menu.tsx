@@ -8,7 +8,7 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
-import { Disc3, ListEnd, Play, PlusSquare, Trash2, User } from "lucide-react";
+import { Disc3, ListEnd, Play, PlusSquare, Radio, Trash2, User } from "lucide-react";
 import type { Track } from "../../types/music";
 
 type MenuKind = "dropdown" | "context";
@@ -22,6 +22,7 @@ interface TrackActionsMenuProps {
   onRemoveFromPlaylist?: (track: Track) => void;
   onGoToArtist?: (artistId: string) => void;
   onGoToAlbum?: (albumId: string) => void;
+  onStartRadio?: (track: Track) => void;
 }
 
 export function TrackActionsMenu({
@@ -33,6 +34,7 @@ export function TrackActionsMenu({
   onRemoveFromPlaylist,
   onGoToArtist,
   onGoToAlbum,
+  onStartRadio,
 }: TrackActionsMenuProps) {
   const Group = kind === "dropdown" ? DropdownMenuGroup : ContextMenuGroup;
   const Item = kind === "dropdown" ? DropdownMenuItem : ContextMenuItem;
@@ -52,6 +54,12 @@ export function TrackActionsMenu({
           <ListEnd />
           Tocar a seguir
         </Item>
+        {onStartRadio ? (
+          <Item onClick={() => onStartRadio(track)}>
+            <Radio />
+            Iniciar rádio
+          </Item>
+        ) : null}
       </Group>
 
       {hasPlaylistActions ? <Separator /> : null}

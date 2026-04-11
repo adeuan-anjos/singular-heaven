@@ -36,6 +36,7 @@ interface TrackTableProps {
   onRemoveFromPlaylist?: (track: Track) => void;
   onGoToArtist?: (artistId: string) => void;
   onGoToAlbum?: (albumId: string) => void;
+  onStartRadio?: (track: Track) => void;
 }
 
 // Col 1: # (2.5rem) | Col 2: thumb (2.5rem) | Col 3: title+actions (1fr)
@@ -98,6 +99,7 @@ interface TrackTableRowProps {
   onRemoveFromPlaylist?: (track: Track) => void;
   onGoToArtist?: (artistId: string) => void;
   onGoToAlbum?: (albumId: string) => void;
+  onStartRadio?: (track: Track) => void;
 }
 
 const TrackTableRow = React.memo(function TrackTableRow({
@@ -113,6 +115,7 @@ const TrackTableRow = React.memo(function TrackTableRow({
   onRemoveFromPlaylist,
   onGoToArtist,
   onGoToAlbum,
+  onStartRadio,
 }: TrackTableRowProps) {
   const liked = useTrackLikeStore((s) =>
     (s.likeStatuses[track.videoId] ?? track.likeStatus ?? "INDIFFERENT") === "LIKE"
@@ -137,6 +140,7 @@ const TrackTableRow = React.memo(function TrackTableRow({
       onRemoveFromPlaylist={onRemoveFromPlaylist}
       onGoToArtist={onGoToArtist}
       onGoToAlbum={onGoToAlbum}
+      onStartRadio={onStartRadio}
     >
       <div
         className={`group items-center gap-x-3 rounded-md px-2 py-1.5 hover:bg-accent/50 ${isCurrent ? "bg-accent/50" : ""}`}
@@ -238,6 +242,7 @@ const TrackTableRow = React.memo(function TrackTableRow({
                 onRemoveFromPlaylist={onRemoveFromPlaylist}
                 onGoToArtist={onGoToArtist}
                 onGoToAlbum={onGoToAlbum}
+                onStartRadio={onStartRadio}
               />
             </DropdownMenuContent>
           </DropdownMenu>
@@ -311,6 +316,7 @@ export function TrackTable({
   onRemoveFromPlaylist,
   onGoToArtist,
   onGoToAlbum,
+  onStartRadio,
 }: TrackTableProps) {
   if (tracks.length === 0) return null;
 
@@ -337,6 +343,7 @@ export function TrackTable({
               onRemoveFromPlaylist={onRemoveFromPlaylist}
               onGoToArtist={onGoToArtist}
               onGoToAlbum={onGoToAlbum}
+              onStartRadio={onStartRadio}
             />
           ))}
         </div>
@@ -361,6 +368,7 @@ export function TrackTable({
       onRemoveFromPlaylist={onRemoveFromPlaylist}
       onGoToArtist={onGoToArtist}
       onGoToAlbum={onGoToAlbum}
+      onStartRadio={onStartRadio}
     />
   );
 }
@@ -381,6 +389,7 @@ function VirtualizedTrackTable({
   onRemoveFromPlaylist,
   onGoToArtist,
   onGoToAlbum,
+  onStartRadio,
 }: {
   tracks: Track[];
   currentTrackId?: string;
@@ -396,6 +405,7 @@ function VirtualizedTrackTable({
   onRemoveFromPlaylist?: (track: Track) => void;
   onGoToArtist?: (artistId: string) => void;
   onGoToAlbum?: (albumId: string) => void;
+  onStartRadio?: (track: Track) => void;
 }) {
   // containerRef wraps the scroll element — ResizeObserver measures its height so
   // the scroll container always gets an explicit pixel height regardless of the flex chain.
@@ -511,6 +521,7 @@ function VirtualizedTrackTable({
                   onRemoveFromPlaylist={onRemoveFromPlaylist}
                   onGoToArtist={onGoToArtist}
                   onGoToAlbum={onGoToAlbum}
+                  onStartRadio={onStartRadio}
                 />
               </div>
             );
