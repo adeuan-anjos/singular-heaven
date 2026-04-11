@@ -15,7 +15,7 @@ use super::session::{
 };
 use crate::playback_queue::{
     PlaybackQueue, QueueCommandResponse, QueueSnapshot, QueueWindowResponse, RadioSeed,
-    RadioSeedKind,
+    RadioSeedKind, RadioState,
 };
 use crate::playlist_cache::{
     self, CachedAlbum, CachedArtist, CachedCollectionMeta, CachedPlaylistMeta, CachedThumbnail,
@@ -2962,4 +2962,108 @@ pub async fn continue_radio_background(app: AppHandle) {
     // 5. Notify frontend.
     let _ = app.emit("radio-extended", ());
     println!("[continue_radio] done — added {added} tracks");
+}
+
+// ---------------------------------------------------------------------------
+// Radio commands (Task 8)
+// ---------------------------------------------------------------------------
+
+/// Starts a radio from any seed (video/playlist/album/artist): fetches the
+/// first page, writes the radio cache, resets the queue, and installs
+/// `RadioState` so continuation and re-roll know the seed. Returns the queue
+/// command response as a JSON string.
+#[tauri::command]
+pub async fn yt_radio_start(
+    seed_kind: String,
+    seed_id: String,
+    app: AppHandle,
+    state: State<'_, Arc<RwLock<YtMusicState>>>,
+    activity: State<'_, Arc<SessionActivity>>,
+    queue: State<'_, Arc<tokio::sync::Mutex<PlaybackQueue>>>,
+) -> Result<String, String> {
+    println!("[yt_radio_start] seed_kind={seed_kind} seed_id={seed_id}");
+
+    validate_string_len(&seed_kind, MAX_STRING_LEN, "yt_radio_start seed_kind")?;
+    validate_string_len(&seed_id, MAX_STRING_LEN, "yt_radio_start seed_id")?;
+    if seed_id.is_empty() {
+        return Err("[yt_radio_start] seed_id is empty".into());
+    }
+
+    let kind = RadioSeedKind::parse(&seed_kind)
+        .ok_or_else(|| format!("[yt_radio_start] invalid seed_kind={seed_kind}"))?;
+    let seed = RadioSeed {
+        kind,
+        id: seed_id.clone(),
+    };
+
+    // First page — request 50 tracks for low-latency start.
+    let page = session::with_session_refresh(
+        &state,
+        &app,
+        &activity,
+        "yt_radio_start",
+        |client| {
+            let r = radio_request(&seed, 50);
+            async move { client.get_watch_playlist(r).await }
+        },
+    )
+    .await
+    .map_err(|e| format!("[yt_radio_start] {e}"))?;
+
+    let track_ids: Vec<String> = page.tracks.iter().map(|t| t.video_id.clone()).collect();
+    if track_ids.is_empty() {
+        return Err("[yt_radio_start] radio returned no tracks".into());
+    }
+
+    let cached: Vec<CachedTrack> = page.tracks.iter().map(cached_from_watch).collect();
+    let collection_id = format!("{}:{}", kind.as_str(), seed_id);
+
+    // Best-effort cache write — failure to cache is logged but not fatal.
+    {
+        let cache_state = app.state::<Arc<tokio::sync::Mutex<PlaylistCache>>>();
+        let cache_guard = cache_state.lock().await;
+        let rows = playlist_cache::cached_tracks_to_rows(&cached);
+        // Fresh start — overwrite any previous radio rows for this seed from
+        // position 0.
+        if let Err(e) = cache_guard.save_collection_tracks("radio", &collection_id, 0, &rows) {
+            println!("[yt_radio_start] save_collection_tracks error: {e}");
+        }
+    }
+
+    let loaded_count = track_ids.len();
+    let continuation = page.continuation.clone();
+    let response = {
+        let mut q = queue.lock().await;
+        // `set_queue` clears radio_state automatically (Task 5 behavior), so we
+        // install the fresh RadioState immediately after.
+        let resp = q.set_queue(
+            track_ids,
+            0,
+            None,
+            /* is_complete */ false,
+            /* shuffle */ false,
+        );
+        q.set_radio_state(RadioState {
+            seed,
+            continuation,
+            pool_exhausted: false,
+            loaded_count,
+        });
+        // Rebuild the response so `snapshot.is_radio` reflects the installed
+        // RadioState.
+        QueueCommandResponse {
+            track_id: resp.track_id,
+            snapshot: q.snapshot(),
+        }
+    };
+
+    emit_queue_state_updated(&app, &response.snapshot);
+
+    println!(
+        "[yt_radio_start] loaded {} tracks, is_radio={}",
+        loaded_count, response.snapshot.is_radio
+    );
+
+    serde_json::to_string(&response)
+        .map_err(|e| format!("[yt_radio_start] serialization: {e}"))
 }
