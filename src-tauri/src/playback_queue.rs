@@ -701,6 +701,66 @@ impl PlaybackQueue {
         }
     }
 
+    /// Descarta as faixas depois do currentIndex, tanto na ordem linear quanto na shuffled.
+    /// Preserva a faixa atual, o histórico e as marcações de priority-next.
+    /// Retorna quantas faixas foram removidas.
+    pub fn truncate_after_current(&mut self) -> usize {
+        let Some(current_idx) = self.current_index else {
+            return 0;
+        };
+
+        let total = self.playback_items.len();
+        if current_idx + 1 >= total {
+            return 0;
+        }
+
+        let removed_entries: Vec<QueueEntry> =
+            self.playback_items.drain(current_idx + 1..).collect();
+        let removed_ids: HashSet<u64> =
+            removed_entries.iter().map(|e| e.item_id).collect();
+
+        self.source_items
+            .retain(|e| !removed_ids.contains(&e.item_id));
+        self.queued_next_item_ids
+            .retain(|id| !removed_ids.contains(id));
+
+        let removed = removed_entries.len();
+        println!(
+            "[PlaybackQueue] truncate_after_current removed={} kept_before={} current={}",
+            removed,
+            current_idx + 1,
+            current_idx
+        );
+        removed
+    }
+
+    /// Anexa track_ids ao fim da playback_items (após posição atual) e também
+    /// ao source_items. Usado para continuation de rádio e para a segunda metade
+    /// do re-roll. Retorna a quantidade anexada.
+    pub fn append_radio_batch(&mut self, track_ids: &[String]) -> usize {
+        for video_id in track_ids {
+            let item_id = self.alloc_item_id();
+            let entry = QueueEntry {
+                item_id,
+                video_id: video_id.clone(),
+            };
+            self.source_items.push(entry.clone());
+            self.playback_items.push(entry);
+        }
+
+        if self.current_index.is_none() && !self.playback_items.is_empty() {
+            self.current_index = Some(0);
+        }
+
+        println!(
+            "[PlaybackQueue] append_radio_batch added={} total={} current={:?}",
+            track_ids.len(),
+            self.playback_items.len(),
+            self.current_index
+        );
+        track_ids.len()
+    }
+
     fn current_track_id(&self) -> Option<String> {
         self.current_index
             .and_then(|index| self.playback_items.get(index))
@@ -1049,7 +1109,7 @@ fn next_random_u64(rng_state: &mut u64) -> u64 {
 
 #[cfg(test)]
 mod tests {
-    use super::PlaybackQueue;
+    use super::{PlaybackQueue, RadioSeed, RadioSeedKind, RadioState};
 
     fn track_ids(queue: &PlaybackQueue) -> Vec<&str> {
         queue
@@ -1196,5 +1256,50 @@ mod tests {
         assert!(ids[2..].contains(&"z"));
         assert_eq!(queue.playlist_id, None);
         assert!(queue.is_complete);
+    }
+
+    #[test]
+    fn truncate_after_current_preserves_current_and_history() {
+        let mut queue = PlaybackQueue::default();
+        queue.set_queue(
+            vec!["a".into(), "b".into(), "c".into(), "d".into(), "e".into()],
+            0,
+            None,
+            false,
+            false,
+        );
+        queue.play_index(2);
+        let removed = queue.truncate_after_current();
+        assert_eq!(removed, 2);
+        assert_eq!(queue.playback_items.len(), 3);
+        assert_eq!(queue.current_index, Some(2));
+        assert_eq!(queue.current_track_id().as_deref(), Some("c"));
+    }
+
+    #[test]
+    fn append_radio_batch_grows_queue() {
+        let mut queue = PlaybackQueue::default();
+        queue.set_queue(vec!["a".into()], 0, None, false, false);
+        let added = queue.append_radio_batch(&["b".to_string(), "c".to_string()]);
+        assert_eq!(added, 2);
+        assert_eq!(queue.playback_items.len(), 3);
+        assert_eq!(queue.remaining_after_current(), 2);
+    }
+
+    #[test]
+    fn set_queue_clears_radio_state() {
+        let mut queue = PlaybackQueue::default();
+        queue.set_radio_state(RadioState {
+            seed: RadioSeed {
+                kind: RadioSeedKind::Video,
+                id: "x".into(),
+            },
+            continuation: Some("tok".into()),
+            pool_exhausted: false,
+            loaded_count: 10,
+        });
+        assert!(queue.radio_state().is_some());
+        queue.set_queue(vec!["a".into()], 0, None, true, false);
+        assert!(queue.radio_state().is_none());
     }
 }
