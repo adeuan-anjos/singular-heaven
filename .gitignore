@@ -32,3 +32,4 @@ SECURITY-AUDIT-*.md
 
 # Rust
 target/
+.playwright-mcp/

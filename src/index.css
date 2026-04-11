@@ -171,7 +171,17 @@
   background-clip: content-box;
 }
 
-/* Animated equalizer bars for now-playing indicator */
+/* Animated equalizer bars for now-playing indicator.
+ *
+ * Perf: animate `transform: scaleY` (composited, GPU-only) instead of `height`
+ * (forces full style+layout+paint per frame, ~1000x more expensive at 144Hz).
+ * Spans are sized to the full container height; scaleY shrinks them from the
+ * bottom, preserving the visual look without any layout work.
+ *
+ * Also paused via `html.document-hidden` when the app is minimized — Chromium
+ * does NOT throttle CSS animations while audio is playing, so without this
+ * the equalizer keeps burning CPU even when no one can see it. The class is
+ * toggled by the `useDocumentHiddenClass` hook. */
 .equalizer {
   display: flex;
   align-items: flex-end;
@@ -182,10 +192,11 @@
 .equalizer span {
   display: block;
   width: 2.5px;
+  height: 100%;
   border-radius: 2px;
   background: var(--primary);
   transform-origin: bottom;
-  will-change: height;
+  will-change: transform;
   animation: equalizer-bounce ease-in-out infinite;
 }
 
@@ -194,6 +205,10 @@
 .equalizer span:nth-child(3) { animation-duration: 1.6s; animation-delay: 0.4s; }
 
 @keyframes equalizer-bounce {
-  0%, 100% { height: 25%; }
-  50% { height: 100%; }
+  0%, 100% { transform: scaleY(0.25); }
+  50%      { transform: scaleY(1); }
+}
+
+html.document-hidden .equalizer span {
+  animation-play-state: paused;
 }
