@@ -11,10 +11,9 @@ pub fn parse_watch_response(response: &Value) -> Result<WatchPlaylist> {
         "tabbedRenderer", "watchNextTabbedResultsRenderer", "tabs",
     ]);
 
-    let mut tracks = Vec::new();
     let mut continuation: Option<String> = None;
 
-    if let Some(tab0) = tabs.first() {
+    let tracks = if let Some(tab0) = tabs.first() {
         let panel = tab0
             .get("tabRenderer")
             .and_then(|r| r.get("content"))
@@ -23,24 +22,15 @@ pub fn parse_watch_response(response: &Value) -> Result<WatchPlaylist> {
             .and_then(|c| c.get("playlistPanelRenderer"));
 
         if let Some(panel) = panel {
-            if let Some(contents) = panel.get("contents").and_then(|c| c.as_array()) {
-                for item in contents {
-                    let renderer = item
-                        .get("playlistPanelVideoWrapperRenderer")
-                        .and_then(|w| w.get("primaryRenderer"))
-                        .and_then(|p| p.get("playlistPanelVideoRenderer"))
-                        .or_else(|| item.get("playlistPanelVideoRenderer"));
-
-                    if let Some(r) = renderer {
-                        if let Some(track) = parse_watch_track(r) {
-                            tracks.push(track);
-                        }
-                    }
-                }
-            }
+            let tracks = parse_panel_tracks(panel);
             continuation = extract_continuation_token(panel);
+            tracks
+        } else {
+            Vec::new()
         }
-    }
+    } else {
+        Vec::new()
+    };
 
     let lyrics_browse_id = tabs.get(1)
         .and_then(|t| nav_str(t, &[
@@ -62,27 +52,15 @@ pub fn parse_watch_continuation_response(response: &Value) -> Result<WatchPlayli
         .get("continuationContents")
         .and_then(|c| c.get("playlistPanelContinuation"));
 
-    let mut tracks = Vec::new();
     let mut continuation: Option<String> = None;
 
-    if let Some(panel) = panel {
-        if let Some(contents) = panel.get("contents").and_then(|c| c.as_array()) {
-            for item in contents {
-                let renderer = item
-                    .get("playlistPanelVideoWrapperRenderer")
-                    .and_then(|w| w.get("primaryRenderer"))
-                    .and_then(|p| p.get("playlistPanelVideoRenderer"))
-                    .or_else(|| item.get("playlistPanelVideoRenderer"));
-
-                if let Some(r) = renderer {
-                    if let Some(track) = parse_watch_track(r) {
-                        tracks.push(track);
-                    }
-                }
-            }
-        }
+    let tracks = if let Some(panel) = panel {
+        let tracks = parse_panel_tracks(panel);
         continuation = extract_continuation_token(panel);
-    }
+        tracks
+    } else {
+        Vec::new()
+    };
 
     Ok(WatchPlaylist {
         tracks,
@@ -191,6 +169,28 @@ fn extract_continuation_token(container: &Value) -> Option<String> {
         }
     }
     None
+}
+
+/// Itera `panel.contents[]` e parseia cada `playlistPanelVideoRenderer` (possivelmente
+/// embrulhado em `playlistPanelVideoWrapperRenderer.primaryRenderer`) em `WatchTrack`.
+fn parse_panel_tracks(panel: &Value) -> Vec<WatchTrack> {
+    let mut tracks = Vec::new();
+    if let Some(contents) = panel.get("contents").and_then(|c| c.as_array()) {
+        for item in contents {
+            let renderer = item
+                .get("playlistPanelVideoWrapperRenderer")
+                .and_then(|w| w.get("primaryRenderer"))
+                .and_then(|p| p.get("playlistPanelVideoRenderer"))
+                .or_else(|| item.get("playlistPanelVideoRenderer"));
+
+            if let Some(r) = renderer {
+                if let Some(track) = parse_watch_track(r) {
+                    tracks.push(track);
+                }
+            }
+        }
+    }
+    tracks
 }
 
 /// Extrai `LikeStatus` do menu do track. Olha para os `toggleMenuServiceItemRenderer`
