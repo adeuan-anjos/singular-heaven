@@ -229,3 +229,79 @@ pub(crate) fn build_watch_body(req: &WatchPlaylistRequest<'_>) -> Result<serde_j
 
     Ok(body)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::types::watch::WatchPlaylistRequest;
+
+    #[test]
+    fn rejects_both_missing() {
+        let req = WatchPlaylistRequest {
+            video_id: None,
+            playlist_id: None,
+            radio: false,
+            shuffle: false,
+            limit: 25,
+        };
+        assert!(build_watch_body(&req).is_err());
+    }
+
+    #[test]
+    fn rejects_radio_plus_shuffle() {
+        let req = WatchPlaylistRequest {
+            video_id: Some("abc"),
+            playlist_id: None,
+            radio: true,
+            shuffle: true,
+            limit: 25,
+        };
+        assert!(build_watch_body(&req).is_err());
+    }
+
+    #[test]
+    fn video_only_falls_back_to_rdamvm() {
+        let req = WatchPlaylistRequest::for_video_radio("abc123", 100);
+        let body = build_watch_body(&req).unwrap();
+        assert_eq!(body["videoId"], "abc123");
+        assert_eq!(body["playlistId"], "RDAMVMabc123");
+        assert_eq!(body["params"], "wAEB");
+        assert!(body.get("watchEndpointMusicSupportedConfigs").is_none());
+    }
+
+    #[test]
+    fn playlist_radio_uses_raw_id() {
+        let req = WatchPlaylistRequest::for_playlist_radio("PLabcdef", 50);
+        let body = build_watch_body(&req).unwrap();
+        assert_eq!(body["playlistId"], "PLabcdef");
+        assert_eq!(body["params"], "wAEB");
+        assert!(body.get("videoId").is_none());
+    }
+
+    #[test]
+    fn normal_watch_adds_music_supported_configs() {
+        let req = WatchPlaylistRequest {
+            video_id: Some("xyz"),
+            playlist_id: None,
+            radio: false,
+            shuffle: false,
+            limit: 25,
+        };
+        let body = build_watch_body(&req).unwrap();
+        assert!(body.get("watchEndpointMusicSupportedConfigs").is_some());
+        assert!(body.get("params").is_none());
+    }
+
+    #[test]
+    fn shuffle_playlist_uses_shuffle_params() {
+        let req = WatchPlaylistRequest {
+            video_id: None,
+            playlist_id: Some("PLabcdef"),
+            radio: false,
+            shuffle: true,
+            limit: 50,
+        };
+        let body = build_watch_body(&req).unwrap();
+        assert_eq!(body["params"], "wAEB8gECKAE%3D");
+    }
+}
