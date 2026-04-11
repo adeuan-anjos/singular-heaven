@@ -17,6 +17,7 @@ import {
   VolumeX,
   List,
   Heart,
+  Radio,
 } from "lucide-react";
 import { usePlayerStore } from "../../stores/player-store";
 import { useQueueStore } from "../../stores/queue-store";
@@ -50,6 +51,7 @@ export const PlayerBar = React.memo(function PlayerBar({ onOpenQueue }: PlayerBa
   const volume = usePlayerStore((s) => s.volume);
   const shuffleOn = useQueueStore((s) => s.shuffle);
   const repeat = useQueueStore((s) => s.repeat);
+  const isRadio = useQueueStore((s) => s.isRadio);
 
   const togglePlay = usePlayerStore((s) => s.togglePlay);
   const seek = usePlayerStore((s) => s.seek);
@@ -100,7 +102,15 @@ export const PlayerBar = React.memo(function PlayerBar({ onOpenQueue }: PlayerBa
           </Avatar>
         </button>
         <div className="min-w-0">
-          <p className="truncate text-sm font-medium text-foreground">{track.title}</p>
+          <div className="flex items-center gap-2">
+            <p className="truncate text-sm font-medium text-foreground">{track.title}</p>
+            {isRadio && (
+              <span className="inline-flex items-center gap-1 shrink-0 rounded-full bg-accent px-2 py-0.5 text-xs text-accent-foreground">
+                <Radio className="size-3" />
+                Rádio
+              </span>
+            )}
+          </div>
           <p className="truncate text-xs text-muted-foreground">
             <button
               type="button"
