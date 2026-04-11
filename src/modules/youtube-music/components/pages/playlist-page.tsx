@@ -1,5 +1,4 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import {
@@ -9,6 +8,7 @@ import {
   CollectionHeaderContent,
   CollectionHeaderActions,
   CollectionHeaderMenu,
+  CollectionHeaderFilter,
 } from "../shared/collection-header";
 import { ButtonGroup } from "@/components/ui/button-group";
 import { PlaylistDestructiveDialog } from "../shared/playlist-destructive-dialog";
@@ -26,7 +26,6 @@ import { usePlaylistLibraryStore } from "../../stores/playlist-library-store";
 import {
   Play,
   Shuffle,
-  Search,
   Loader2,
   Bookmark,
 } from "lucide-react";
@@ -443,7 +442,7 @@ export function PlaylistPage({
   );
 
   const headerContent = (
-    <div className="space-y-6 p-4">
+    <div className="space-y-4 p-4">
       <CollectionHeader>
         <CollectionHeaderInfo>
           <CollectionHeaderThumbnail
@@ -545,15 +544,11 @@ export function PlaylistPage({
         </CollectionHeaderActions>
       </CollectionHeader>
 
-      <div className="relative">
-        <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-        <Input
-          value={filter}
-          onChange={(e) => setFilter(e.target.value)}
-          placeholder="Filtrar a playlist por título, artista ou álbum"
-          className="pl-8"
-        />
-      </div>
+      <CollectionHeaderFilter
+        value={filter}
+        onChange={(e) => setFilter(e.target.value)}
+        placeholder="Filtrar a playlist por título, artista ou álbum"
+      />
     </div>
   );
 

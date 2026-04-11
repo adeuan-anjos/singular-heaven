@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef } from "react";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { ButtonGroup } from "@/components/ui/button-group";
 import {
@@ -9,6 +8,7 @@ import {
   CollectionHeaderThumbnail,
   CollectionHeaderContent,
   CollectionHeaderActions,
+  CollectionHeaderFilter,
 } from "../shared/collection-header";
 import { TrackTable } from "../shared/track-table";
 import { ytGetArtist } from "../../services/yt-api";
@@ -22,7 +22,6 @@ import { usePlayerStore } from "../../stores/player-store";
 import {
   Shuffle,
   Radio,
-  Search,
   Loader2,
 } from "lucide-react";
 import type { Artist, PlayAllOptions, Track, StackPage } from "../../types/music";
@@ -196,16 +195,11 @@ export function ArtistSongsPage({
           </CollectionHeaderActions>
         </CollectionHeader>
 
-        {/* Filter */}
-        <div className="relative">
-          <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            value={filter}
-            onChange={(e) => setFilter(e.target.value)}
-            placeholder="Filtrar por título, artista ou álbum"
-            className="pl-8"
-          />
-        </div>
+        <CollectionHeaderFilter
+          value={filter}
+          onChange={(e) => setFilter(e.target.value)}
+          placeholder="Filtrar por título, artista ou álbum"
+        />
 
         {/* Músicas heading */}
         <h2 className="text-lg font-semibold text-foreground">Músicas</h2>

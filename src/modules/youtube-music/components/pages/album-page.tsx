@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef } from "react";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { ButtonGroup } from "@/components/ui/button-group";
 import {
@@ -9,6 +8,7 @@ import {
   CollectionHeaderThumbnail,
   CollectionHeaderContent,
   CollectionHeaderActions,
+  CollectionHeaderFilter,
 } from "../shared/collection-header";
 import { TrackTable } from "../shared/track-table";
 import { ytGetAlbum } from "../../services/yt-api";
@@ -19,7 +19,7 @@ import {
   type TrackCollectionEntry,
 } from "../../services/track-collections";
 import { usePlayerStore } from "../../stores/player-store";
-import { Play, Shuffle, Search, Loader2 } from "lucide-react";
+import { Play, Shuffle, Loader2 } from "lucide-react";
 import type { Album, PlayAllOptions, Track, StackPage } from "../../types/music";
 
 interface AlbumPageProps {
@@ -187,15 +187,11 @@ export function AlbumPage({
           </CollectionHeaderActions>
         </CollectionHeader>
 
-        <div className="relative">
-          <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            value={filter}
-            onChange={(e) => setFilter(e.target.value)}
-            placeholder="Filtrar por título ou artista"
-            className="pl-8"
-          />
-        </div>
+        <CollectionHeaderFilter
+          value={filter}
+          onChange={(e) => setFilter(e.target.value)}
+          placeholder="Filtrar por título ou artista"
+        />
 
         <TrackTable
           tracks={filteredTracks}

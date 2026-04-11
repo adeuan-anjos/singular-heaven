@@ -3,11 +3,16 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { ButtonGroup } from "@/components/ui/button-group";
 import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupInput,
+} from "@/components/ui/input-group";
+import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Ellipsis } from "lucide-react";
+import { Ellipsis, Search } from "lucide-react";
 
 function CollectionHeader({
   className,
@@ -116,6 +121,20 @@ function CollectionHeaderMenu({
   );
 }
 
+function CollectionHeaderFilter({
+  className,
+  ...props
+}: React.ComponentProps<typeof InputGroupInput>) {
+  return (
+    <InputGroup data-slot="collection-header-filter">
+      <InputGroupAddon align="inline-start">
+        <Search />
+      </InputGroupAddon>
+      <InputGroupInput className={className} {...props} />
+    </InputGroup>
+  );
+}
+
 export {
   CollectionHeader,
   CollectionHeaderInfo,
@@ -123,4 +142,5 @@ export {
   CollectionHeaderContent,
   CollectionHeaderActions,
   CollectionHeaderMenu,
+  CollectionHeaderFilter,
 };
