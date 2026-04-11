@@ -36,7 +36,7 @@ export function ArtistPage() {
   const params = useParams<{ id: string }>();
   const artistId = decodeURIComponent(params.id ?? "");
   const [, navigate] = useLocation();
-  const { onPlayTrack, onPlayAll, onAddToQueue, onAddToPlaylist } = useYtActions();
+  const { onPlayTrack, onPlayAll, onAddToQueue, onAddToPlaylist, onStartRadio } = useYtActions();
   const [artist, setArtist] = useState<Artist | null>(null);
   const [collectionTracks, setCollectionTracks] = useState<TrackCollectionEntry[]>([]);
   const [loading, setLoading] = useState(true);
@@ -141,7 +141,7 @@ export function ArtistPage() {
                 </Button>
               )}
               {artist.radioId && (
-                <Button variant="outline" onClick={() => {}}>
+                <Button variant="outline" onClick={() => onStartRadio({ kind: "artist", id: artist.radioId! })}>
                   <Radio data-icon="inline-start" />
                   Rádio
                 </Button>
