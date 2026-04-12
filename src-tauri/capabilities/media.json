@@ -1,0 +1,9 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "media-controls",
+  "description": "Media session controls for OS integration",
+  "windows": ["main"],
+  "permissions": [
+    "media:default"
+  ]
+}
