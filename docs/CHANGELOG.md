@@ -22,6 +22,7 @@ O formato segue o espírito de [Keep a Changelog](https://keepachangelog.com/), 
 - Cache SWR (stale-while-revalidate) em SQLite para liked track IDs e library playlists — warm start instantâneo (~21ms vs 5-8s).
 - Sidebar otimizada: usa cache de library playlists + 1 request `guide` (elimina fetch duplicado de 6-8s).
 - Instrumentação de performance (`services/perf.ts`) com timeline, waterfall e `__perfDump()` no console.
+- **Single-instance**: `tauri-plugin-single-instance` impede múltiplas instâncias do app. Quando o usuário tenta abrir uma segunda instância, a existente é trazida ao foco (show + unminimize + focus). Plugin registrado como primeiro no builder para garantir prioridade. Bug anterior: o minimize-to-tray permitia abrir instâncias duplicadas.
 - Manifesto UAC no build Windows (`requireAdministrator`) para compatibilidade com Chromium 130+ appbound encryption.
 - Novos comandos cached: `yt_get_liked_track_ids_cached`, `yt_get_library_playlists_cached`, `yt_get_sidebar_playlists_cached`.
 - Eventos Tauri `liked-track-ids-updated` e `library-playlists-updated` para refresh silencioso de dados cached.
