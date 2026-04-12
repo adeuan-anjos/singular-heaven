@@ -67,7 +67,7 @@ interface QueueActions {
   removeFromQueue: (index: number) => Promise<void>;
   toggleShuffle: () => Promise<void>;
   cycleRepeat: () => Promise<void>;
-  applyRadioExtended: () => void;
+  applyRadioExtended: (snapshot: QueueSnapshot) => void;
   cleanup: () => Promise<void>;
 }
 
@@ -486,11 +486,14 @@ export const useQueueStore = create<QueueStore>()((set, get) => ({
     }));
   },
 
-  applyRadioExtended: () => {
-    console.log("[QueueStore] radio-extended event → invalidate pages");
-    set((state) => ({
-      pages: emptyPages(),
-      pagesVersion: state.pagesVersion + 1,
+  applyRadioExtended: (snapshot: QueueSnapshot) => {
+    console.log("[QueueStore] radio-extended event → applying snapshot", {
+      totalLoaded: snapshot.totalLoaded,
+      isComplete: snapshot.isComplete,
+    });
+    set(() => ({
+      ...applySnapshot(snapshot),
+      // DO NOT touch `pages` — existing cached windows are still valid.
     }));
   },
 

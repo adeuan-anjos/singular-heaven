@@ -2964,10 +2964,20 @@ pub async fn continue_radio_background(app: AppHandle) {
         added
     };
 
-    // 5. Notify frontend.
-    let _ = app.emit("radio-extended", ());
+    // 5. Notify frontend with the current snapshot so it can sync
+    //    totalLoaded/isComplete without invalidating cached pages.
+    let snapshot_payload = {
+        let q = queue.lock().await;
+        q.snapshot()
+    };
+    let _ = app.emit("radio-extended", &snapshot_payload);
     println!("[continue_radio] done — added {added} tracks");
 }
+
+/// Maximum tracks the background radio loop will accumulate before stopping.
+/// Prevents runaway memory and network usage when the YT API keeps returning
+/// continuation tokens indefinitely.
+const MAX_RADIO_QUEUE_SIZE: usize = 2000;
 
 /// Background loop that keeps fetching radio continuation pages until the pool
 /// is exhausted, the queue leaves radio mode, or the seed changes. Mirrors the
@@ -2980,7 +2990,7 @@ pub async fn continue_radio_background(app: AppHandle) {
 /// and the new radio's loop takes over.
 async fn continue_radio_loop(app: AppHandle, expected_seed_id: String) {
     println!("[continue_radio_loop] starting for seed={expected_seed_id}");
-    const THROTTLE_MS: u64 = 400;
+    const THROTTLE_MS: u64 = 800;
 
     loop {
         // Brief pause between iterations. The first iteration also waits so
@@ -2989,42 +2999,70 @@ async fn continue_radio_loop(app: AppHandle, expected_seed_id: String) {
         tokio::time::sleep(std::time::Duration::from_millis(THROTTLE_MS)).await;
 
         // Check current state. If we're no longer the active radio, exit.
+        // `cap_hit` flags an exit caused by the size cap so we can mark
+        // pool_exhausted+is_complete and emit a final snapshot before breaking.
+        let mut cap_hit = false;
         let should_continue = {
             let queue_state = app.state::<Arc<tokio::sync::Mutex<PlaybackQueue>>>();
             let q = queue_state.lock().await;
-            match q.radio_state() {
-                Some(rs) if rs.seed.id == expected_seed_id => {
-                    if rs.pool_exhausted {
-                        println!(
-                            "[continue_radio_loop] pool_exhausted — exiting loop for seed={expected_seed_id}"
-                        );
-                        false
-                    } else if rs.continuation.is_none() {
-                        println!(
-                            "[continue_radio_loop] no continuation token — exiting loop for seed={expected_seed_id}"
-                        );
-                        false
-                    } else {
-                        true
+
+            // Hard cap on accumulated radio tracks.
+            if q.snapshot().total_loaded >= MAX_RADIO_QUEUE_SIZE {
+                println!(
+                    "[continue_radio_loop] queue reached cap ({}) — exiting loop for seed={expected_seed_id}",
+                    MAX_RADIO_QUEUE_SIZE
+                );
+                cap_hit = true;
+                false
+            } else {
+                match q.radio_state() {
+                    Some(rs) if rs.seed.id == expected_seed_id => {
+                        if rs.pool_exhausted {
+                            println!(
+                                "[continue_radio_loop] pool_exhausted — exiting loop for seed={expected_seed_id}"
+                            );
+                            false
+                        } else if rs.continuation.is_none() {
+                            println!(
+                                "[continue_radio_loop] no continuation token — exiting loop for seed={expected_seed_id}"
+                            );
+                            false
+                        } else {
+                            true
+                        }
                     }
-                }
-                Some(rs) => {
-                    println!(
-                        "[continue_radio_loop] seed changed ({} → {}) — exiting loop",
-                        expected_seed_id, rs.seed.id
-                    );
-                    false
-                }
-                None => {
-                    println!(
-                        "[continue_radio_loop] no longer in radio mode — exiting loop for seed={expected_seed_id}"
-                    );
-                    false
+                    Some(rs) => {
+                        println!(
+                            "[continue_radio_loop] seed changed ({} → {}) — exiting loop",
+                            expected_seed_id, rs.seed.id
+                        );
+                        false
+                    }
+                    None => {
+                        println!(
+                            "[continue_radio_loop] no longer in radio mode — exiting loop for seed={expected_seed_id}"
+                        );
+                        false
+                    }
                 }
             }
         };
 
         if !should_continue {
+            if cap_hit {
+                // Mark the radio as finished so the frontend stops showing
+                // the loading spinner, then emit a final radio-extended with
+                // the updated snapshot so the UI syncs.
+                let queue_state = app.state::<Arc<tokio::sync::Mutex<PlaybackQueue>>>();
+                let mut q = queue_state.lock().await;
+                if let Some(rs) = q.radio_state_mut() {
+                    rs.pool_exhausted = true;
+                }
+                q.set_is_complete(true);
+                let snapshot_payload = q.snapshot();
+                drop(q);
+                let _ = app.emit("radio-extended", &snapshot_payload);
+            }
             break;
         }
 

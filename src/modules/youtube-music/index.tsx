@@ -257,10 +257,10 @@ export default function YouTubeMusicModule() {
     let cancelled = false;
     let unlisten: UnlistenFn | null = null;
 
-    listen("radio-extended", () => {
+    listen<QueueSnapshot>("radio-extended", (event) => {
       if (cancelled) return;
-      console.log("[YouTubeMusicModule] radio-extended event received");
-      useQueueStore.getState().applyRadioExtended();
+      console.log("[YouTubeMusicModule] radio-extended event received", event.payload);
+      useQueueStore.getState().applyRadioExtended(event.payload);
     }).then((fn) => {
       if (cancelled) {
         fn();
