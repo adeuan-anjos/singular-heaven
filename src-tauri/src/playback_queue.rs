@@ -183,7 +183,11 @@ impl PlaybackQueue {
         self.radio_state = None;
     }
 
-    /// Quantas faixas sobram depois da posição atual. Usado pelo trigger de continuation.
+    /// Quantas faixas sobram depois da posição atual. Kept for future use in
+    /// scroll-based triggers — the radio continuation trigger was replaced by
+    /// a proactive background loop (see `continue_radio_loop`), so there is
+    /// currently no non-test caller.
+    #[allow(dead_code)]
     pub fn remaining_after_current(&self) -> usize {
         match self.current_index {
             Some(idx) if idx < self.playback_items.len() => {

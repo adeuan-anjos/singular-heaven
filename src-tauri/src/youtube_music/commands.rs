@@ -2683,27 +2683,9 @@ pub async fn yt_queue_handle_track_end(
         queue.handle_track_end()
     };
     emit_queue_state_updated(&app, &response.snapshot);
-
-    // Radio mode — trigger continuation in background if queue is running low.
-    {
-        let q = queue.lock().await;
-        if let Some(rs) = q.radio_state() {
-            let remaining = q.remaining_after_current();
-            let should_continue =
-                remaining <= 10 && !rs.pool_exhausted && rs.continuation.is_some();
-            drop(q);
-            if should_continue {
-                println!(
-                    "[yt_queue_handle_track_end] radio low ({remaining} remaining) — spawning continuation"
-                );
-                let app_clone = app.clone();
-                tokio::spawn(async move {
-                    continue_radio_background(app_clone).await;
-                });
-            }
-        }
-    }
-
+    // Radio continuation is handled proactively by the background loop spawned
+    // from `yt_radio_start` / `yt_radio_reroll` (mirrors the yt_load_playlist
+    // pattern), so there's nothing to trigger here on track end.
     Ok(response)
 }
 
@@ -2987,6 +2969,73 @@ pub async fn continue_radio_background(app: AppHandle) {
     println!("[continue_radio] done — added {added} tracks");
 }
 
+/// Background loop that keeps fetching radio continuation pages until the pool
+/// is exhausted, the queue leaves radio mode, or the seed changes. Mirrors the
+/// `yt_load_playlist` background task pattern so the queue is extended
+/// proactively, not only when a track ends.
+///
+/// The loop is self-aborting: every iteration re-checks the current
+/// `radio_state` against the expected seed id. If another radio started (reroll
+/// producing a different seed, or a fresh `yt_radio_start`), this loop exits
+/// and the new radio's loop takes over.
+async fn continue_radio_loop(app: AppHandle, expected_seed_id: String) {
+    println!("[continue_radio_loop] starting for seed={expected_seed_id}");
+    const THROTTLE_MS: u64 = 400;
+
+    loop {
+        // Brief pause between iterations. The first iteration also waits so
+        // that the initial response returned to the frontend is not blocked by
+        // background work kicked off on the same runtime.
+        tokio::time::sleep(std::time::Duration::from_millis(THROTTLE_MS)).await;
+
+        // Check current state. If we're no longer the active radio, exit.
+        let should_continue = {
+            let queue_state = app.state::<Arc<tokio::sync::Mutex<PlaybackQueue>>>();
+            let q = queue_state.lock().await;
+            match q.radio_state() {
+                Some(rs) if rs.seed.id == expected_seed_id => {
+                    if rs.pool_exhausted {
+                        println!(
+                            "[continue_radio_loop] pool_exhausted — exiting loop for seed={expected_seed_id}"
+                        );
+                        false
+                    } else if rs.continuation.is_none() {
+                        println!(
+                            "[continue_radio_loop] no continuation token — exiting loop for seed={expected_seed_id}"
+                        );
+                        false
+                    } else {
+                        true
+                    }
+                }
+                Some(rs) => {
+                    println!(
+                        "[continue_radio_loop] seed changed ({} → {}) — exiting loop",
+                        expected_seed_id, rs.seed.id
+                    );
+                    false
+                }
+                None => {
+                    println!(
+                        "[continue_radio_loop] no longer in radio mode — exiting loop for seed={expected_seed_id}"
+                    );
+                    false
+                }
+            }
+        };
+
+        if !should_continue {
+            break;
+        }
+
+        // Delegate the actual fetch to the existing one-shot helper. On return,
+        // RadioState will have been updated (or marked exhausted).
+        continue_radio_background(app.clone()).await;
+    }
+
+    println!("[continue_radio_loop] exited for seed={expected_seed_id}");
+}
+
 // ---------------------------------------------------------------------------
 // Radio commands (Task 8)
 // ---------------------------------------------------------------------------
@@ -3083,6 +3132,16 @@ pub async fn yt_radio_start(
 
     emit_queue_state_updated(&app, &response.snapshot);
 
+    // Spawn background continuation loop (mirrors yt_load_playlist pattern).
+    // Only spawn if the first page already indicated there's more to fetch.
+    if has_more {
+        let app_clone = app.clone();
+        let expected_id = seed_id.clone();
+        tokio::spawn(async move {
+            continue_radio_loop(app_clone, expected_id).await;
+        });
+    }
+
     println!(
         "[yt_radio_start] loaded {} tracks, is_radio={}",
         loaded_count, response.snapshot.is_radio
@@ -3147,6 +3206,7 @@ pub async fn yt_radio_reroll(
 
     // 4. Truncate queue after current track, then append new tracks
     //    (filter out any that match the current track to avoid duplicating it).
+    let has_more = page.continuation.is_some();
     let response = {
         let mut q = queue.lock().await;
         let current = q.current_track_id();
@@ -3157,7 +3217,6 @@ pub async fn yt_radio_reroll(
             .cloned()
             .collect();
         let added = q.append_radio_batch(&track_ids_to_append);
-        let has_more = page.continuation.is_some();
         if let Some(rs) = q.radio_state_mut() {
             rs.continuation = page.continuation.clone();
             rs.loaded_count = added;
@@ -3182,6 +3241,22 @@ pub async fn yt_radio_reroll(
 
     // 5. Sync frontend.
     emit_queue_state_updated(&app, &response.snapshot);
+
+    // Spawn a fresh background continuation loop. In practice the reroll seed
+    // matches the previous seed, so any still-running loop from the previous
+    // `yt_radio_start` will naturally pick up the new continuation token on
+    // its next iteration. But if that loop had already exited (e.g. previous
+    // `pool_exhausted` was true before the reroll refreshed the token) there
+    // is nobody to resume the work. Always spawning here is the simple, safe
+    // fix — a duplicate loop is benign because both call `continue_radio_background`
+    // under the queue lock and the second one just no-ops and exits.
+    if has_more {
+        let app_clone = app.clone();
+        let expected_id = seed.id.clone();
+        tokio::spawn(async move {
+            continue_radio_loop(app_clone, expected_id).await;
+        });
+    }
 
     serde_json::to_string(&response)
         .map_err(|e| format!("[yt_radio_reroll] serialization: {e}"))
