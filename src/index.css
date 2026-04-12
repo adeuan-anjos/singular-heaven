@@ -205,3 +205,19 @@
 html.document-hidden .equalizer span {
   animation-play-state: paused;
 }
+
+/* Titlebar glow — soft breathing pulse on the text */
+.titlebar-glow {
+  animation: glow-breathe 6s ease-in-out infinite;
+}
+
+@keyframes glow-breathe {
+  0%, 100% {
+    opacity: 0.6;
+    filter: drop-shadow(0 0 2px rgba(168, 140, 255, 0.2));
+  }
+  50% {
+    opacity: 1;
+    filter: drop-shadow(0 0 8px rgba(168, 140, 255, 0.7)) drop-shadow(0 0 20px rgba(168, 140, 255, 0.3));
+  }
+}
