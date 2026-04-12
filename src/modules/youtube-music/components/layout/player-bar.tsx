@@ -88,7 +88,7 @@ export const PlayerBar = React.memo(function PlayerBar({ onOpenQueue }: PlayerBa
   };
 
   return (
-    <div className="grid grid-cols-3 items-center border-t border-border bg-background px-4 py-2">
+    <div className="grid grid-cols-3 items-center border-t border-border/50 backdrop-blur-xl px-4 py-2">
       {/* Left: Track info */}
       <div className="flex items-center gap-3 min-w-0">
         <button

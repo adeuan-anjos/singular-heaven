@@ -21,6 +21,7 @@ import { ArtistSongsPage } from "./components/pages/artist-songs-page";
 import { AlbumPage } from "./components/pages/album-page";
 import { PlaylistPage } from "./components/pages/playlist-page";
 import { QueueSheet } from "./components/queue/queue-sheet";
+import { AmbientBackground } from "./components/layout/ambient-background";
 import { SearchResultsPage } from "./components/search/search-results-page";
 import { AddToPlaylistDialog } from "./components/shared/add-to-playlist-dialog";
 import { EditPlaylistDialog } from "./components/shared/edit-playlist-dialog";
@@ -689,7 +690,8 @@ export default function YouTubeMusicModule() {
     <TooltipProvider delay={0}>
       <Router hook={useMemoryLocation} searchHook={useMemorySearch}>
         <YtActionsProvider value={ytActions}>
-          <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+          <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
+            <AmbientBackground />
             <TopBar onLogout={handleLogout} />
 
             <div className="flex min-h-0 flex-1">
@@ -716,11 +718,15 @@ export default function YouTubeMusicModule() {
                     <Route path="/mood" component={ExploreView} />
                     <Route component={HomeView} />
                   </Switch>
+                  {/* Spacer to prevent content from being hidden behind the glass player bar */}
+                  <div className="h-16 shrink-0" />
                 </PageContainer>
               </ScrollRegion>
             </div>
 
-            <PlayerBar onOpenQueue={handleOpenQueue} />
+            <div className="absolute bottom-0 left-0 right-0 z-20">
+              <PlayerBar onOpenQueue={handleOpenQueue} />
+            </div>
 
             <QueueSheet open={queueOpen} onOpenChange={setQueueOpen} />
 

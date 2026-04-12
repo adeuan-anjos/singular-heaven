@@ -614,7 +614,7 @@ export const QueueSheet = React.memo(function QueueSheet({ open, onOpenChange }:
 
   return (
     <Sheet open={open} onOpenChange={handleOpenChange}>
-      <SheetContent side="right" className="flex w-96 flex-col p-0">
+      <SheetContent side="right" className="flex w-96 flex-col border-border/50 bg-background/40 backdrop-blur-md p-0">
         {open && <QueueSheetContent />}
       </SheetContent>
     </Sheet>
