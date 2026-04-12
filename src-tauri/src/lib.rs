@@ -5,7 +5,7 @@ mod youtube_music;
 
 use std::collections::HashSet;
 use std::sync::Arc;
-use tauri::Manager;
+use tauri::{Emitter, Manager};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tokio::sync::RwLock;
 
@@ -315,6 +315,21 @@ pub fn run() {
             });
         })
         .setup(|app| {
+            // ── Media controls: register event handler BEFORE JS calls initializeSession ──
+            // The plugin's setup_button_handlers() checks event_handler at registration time,
+            // so it MUST be set before initialize_session is invoked from JS.
+            {
+                use tauri_plugin_media::MediaExt;
+                let handle = app.handle().clone();
+                app.media().set_event_handler(move |event| {
+                    println!("[media-controls] OS event: {:?}", event.event_type);
+                    if let Err(e) = handle.emit("media-control-event", &event) {
+                        eprintln!("[media-controls] Failed to emit event: {e}");
+                    }
+                });
+                println!("[setup] Media control event handler registered.");
+            }
+
             #[cfg(target_os = "windows")]
             if let Some(ww) = app.get_webview_window("main") {
                 set_tracking_prevention_basic(&ww);

@@ -1,9 +1,9 @@
 import {
   mediaControls,
-  MediaControlEventType,
   PlaybackStatus,
   type MediaControlEvent,
 } from "tauri-plugin-media-api";
+import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 
 import { usePlayerStore } from "../stores/player-store";
 import { useQueueStore } from "../stores/queue-store";
@@ -15,6 +15,7 @@ const LOG_TAG = "[MediaSessionBridge]";
 
 let initialized = false;
 let unsubscribePlayer: (() => void) | null = null;
+let unlistenMediaEvent: UnlistenFn | null = null;
 let positionInterval: ReturnType<typeof setInterval> | null = null;
 
 // ── Helpers ──
@@ -68,22 +69,25 @@ async function pushNowPlaying(videoId: string): Promise<void> {
 }
 
 // ── Event handler (OS → app) ──
+// Events arrive via Tauri's emit system from Rust (serde camelCase serialization).
+// The eventType field is a camelCase string matching MediaControlEventType variants.
 
 function handleMediaControlEvent(event: MediaControlEvent): void {
-  console.log(LOG_TAG, "OS event received", { type: event.eventType });
+  const eventType = event.eventType;
+  console.log(LOG_TAG, "OS event received", { eventType });
 
   const playerState = usePlayerStore.getState();
   const queueState = useQueueStore.getState();
 
-  switch (event.eventType) {
-    case MediaControlEventType.PlayPause:
-    case MediaControlEventType.Play:
-    case MediaControlEventType.Pause:
+  switch (eventType) {
+    case "playPause":
+    case "play":
+    case "pause":
       console.log(LOG_TAG, "togglePlay");
       playerState.togglePlay();
       break;
 
-    case MediaControlEventType.Next:
+    case "next":
       console.log(LOG_TAG, "next track");
       queueState.next().then((nextId) => {
         if (nextId) {
@@ -97,7 +101,7 @@ function handleMediaControlEvent(event: MediaControlEvent): void {
       });
       break;
 
-    case MediaControlEventType.Previous: {
+    case "previous": {
       const { progress } = usePlayerStore.getState();
       if (progress > 3) {
         console.log(LOG_TAG, "previous: progress > 3s, seeking to start", { progress });
@@ -118,7 +122,7 @@ function handleMediaControlEvent(event: MediaControlEvent): void {
       break;
     }
 
-    case MediaControlEventType.Stop:
+    case "stop":
       console.log(LOG_TAG, "stop");
       playerState.cleanup();
       mediaControls.clearNowPlaying().catch((err) => {
@@ -126,18 +130,8 @@ function handleMediaControlEvent(event: MediaControlEvent): void {
       });
       break;
 
-    case MediaControlEventType.SeekTo:
-    case MediaControlEventType.SetPosition:
-      if (typeof event.data === "number") {
-        console.log(LOG_TAG, "seek to position", { position: event.data });
-        playerState.seek(event.data as number);
-      } else {
-        console.warn(LOG_TAG, "SeekTo/SetPosition received without numeric data", event.data);
-      }
-      break;
-
     default:
-      console.log(LOG_TAG, "unhandled event type", { type: event.eventType });
+      console.log(LOG_TAG, "unhandled event type", { eventType });
   }
 }
 
@@ -210,8 +204,12 @@ export async function initMediaSession(): Promise<void> {
     // Non-fatal on platforms where media session is unavailable
   }
 
-  mediaControls.setEventHandler(handleMediaControlEvent);
-  console.log(LOG_TAG, "event handler registered");
+  // Listen for media control events emitted by the Rust side via app.emit()
+  // (The JS plugin's setEventHandler is a stub — we bypass it entirely)
+  unlistenMediaEvent = await listen<MediaControlEvent>("media-control-event", (e) => {
+    handleMediaControlEvent(e.payload);
+  });
+  console.log(LOG_TAG, "Tauri event listener registered for media-control-event");
 
   unsubscribePlayer = subscribeToPlayerStore();
 
@@ -249,8 +247,11 @@ export function destroyMediaSession(): void {
     console.log(LOG_TAG, "position update interval cleared");
   }
 
-  mediaControls.setEventHandler(null);
-  console.log(LOG_TAG, "event handler removed");
+  if (unlistenMediaEvent) {
+    unlistenMediaEvent();
+    unlistenMediaEvent = null;
+    console.log(LOG_TAG, "Tauri event listener removed");
+  }
 
   mediaControls.clearNowPlaying().catch((err) => {
     console.error(LOG_TAG, "clearNowPlaying on destroy failed", err);
