@@ -21,7 +21,7 @@ export function Titlebar() {
 
   const handleMinimize = useCallback(() => appWindow.minimize(), []);
   const handleToggleMaximize = useCallback(() => appWindow.toggleMaximize(), []);
-  const handleClose = useCallback(() => appWindow.close(), []);
+  const handleClose = useCallback(() => appWindow.hide(), []);
 
   return (
     <div

@@ -6,6 +6,7 @@ mod youtube_music;
 use std::collections::HashSet;
 use std::sync::Arc;
 use tauri::Manager;
+use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tokio::sync::RwLock;
 
 use youtube_music::client::YtMusicState;
@@ -318,6 +319,54 @@ pub fn run() {
                 set_tracking_prevention_basic(&ww);
             }
 
+            // ── System Tray ──────────────────────────────────────────────
+            let show_item = tauri::menu::MenuItem::with_id(app, "show", "Mostrar", true, None::<&str>)?;
+            let quit_item = tauri::menu::MenuItem::with_id(app, "quit", "Sair", true, None::<&str>)?;
+            let tray_menu = tauri::menu::MenuBuilder::new(app)
+                .item(&show_item)
+                .separator()
+                .item(&quit_item)
+                .build()?;
+
+            TrayIconBuilder::new()
+                .icon(app.default_window_icon().cloned().expect("app icon missing"))
+                .menu(&tray_menu)
+                .show_menu_on_left_click(false)
+                .tooltip("Singular Haven")
+                .on_menu_event(|app, event| {
+                    match event.id.as_ref() {
+                        "show" => {
+                            if let Some(w) = app.get_webview_window("main") {
+                                let _ = w.show();
+                                let _ = w.unminimize();
+                                let _ = w.set_focus();
+                            }
+                        }
+                        "quit" => {
+                            println!("[tray] quit requested");
+                            app.exit(0);
+                        }
+                        _ => {}
+                    }
+                })
+                .on_tray_icon_event(|tray, event| {
+                    if let TrayIconEvent::Click {
+                        button: MouseButton::Left,
+                        button_state: MouseButtonState::Up,
+                        ..
+                    } = event
+                    {
+                        let app = tray.app_handle();
+                        if let Some(w) = app.get_webview_window("main") {
+                            let _ = w.show();
+                            let _ = w.unminimize();
+                            let _ = w.set_focus();
+                        }
+                    }
+                })
+                .build(app)?;
+            println!("[setup] System tray initialized.");
+
             println!("[setup] Initializing YtMusicState...");
 
             // Session activity tracker — last successful authenticated call timestamp
@@ -473,6 +522,13 @@ pub fn run() {
             youtube_music::commands::yt_dev_session_stats,
         ])
         .on_window_event(|window, event| {
+            // ── Close → hide to tray (intercept Alt+F4, taskbar close, etc.) ──
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                println!("[window] CloseRequested — hiding to tray");
+                api.prevent_close();
+                let _ = window.hide();
+            }
+
             if let tauri::WindowEvent::Focused(focused) = event {
                 // Memory level (Windows-only — existing behavior)
                 #[cfg(target_os = "windows")]
