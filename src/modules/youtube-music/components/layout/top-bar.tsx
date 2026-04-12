@@ -1,6 +1,7 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
+import havenSoundsLogo from "@/assets/haven-sounds-logo.png";
 import { Input } from "@/components/ui/input";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import {
@@ -193,8 +194,24 @@ export function TopBar({ onLogout }: TopBarProps) {
 
   return (
     <div className="flex shrink-0 border-b border-border">
-      {/* Spacer matching side panel width */}
-      <div className="w-64 shrink-0 border-r border-border" />
+      {/* Branding matching side panel width */}
+      <Tooltip>
+        <TooltipTrigger
+          render={
+            <div className="flex w-64 shrink-0 items-center gap-2.5 border-r border-border px-4">
+              <img
+                src={havenSoundsLogo}
+                alt="Haven Sounds"
+                className="h-8 w-8 rounded-md"
+              />
+              <span className="text-base font-bold tracking-tight text-foreground">
+                Haven Sounds
+              </span>
+            </div>
+          }
+        />
+        <TooltipContent>Cliente desktop leve para YouTube Music</TooltipContent>
+      </Tooltip>
 
       {/* Navigation controls + search */}
       <div className="flex flex-1 items-center gap-2 px-4 py-2">
