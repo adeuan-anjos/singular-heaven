@@ -1,5 +1,6 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useLayoutEffect } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
+import { useScrollViewport } from "../layout/scroll-viewport-context";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -27,8 +28,6 @@ interface TrackTableProps {
   showViews?: boolean;
   enableVirtualization?: boolean;
   getTrackKey?: (track: Track, index: number) => string;
-  /** Content rendered inside the scroll container, above the track list (scrolls with it). */
-  headerContent?: React.ReactNode;
   onEndReached?: () => void;
   onPlay?: (track: Track) => void;
   onAddToQueue?: (track: Track) => void;
@@ -308,7 +307,6 @@ export function TrackTable({
   showViews = false,
   enableVirtualization = false,
   getTrackKey,
-  headerContent,
   onEndReached,
   onPlay,
   onAddToQueue,
@@ -360,7 +358,6 @@ export function TrackTable({
       showViews={showViews}
       getTrackKey={getTrackKey}
       showDuration={showDuration}
-      headerContent={headerContent}
       onEndReached={onEndReached}
       onPlay={onPlay}
       onAddToQueue={onAddToQueue}
@@ -381,7 +378,6 @@ function VirtualizedTrackTable({
   showViews = false,
   getTrackKey,
   showDuration = true,
-  headerContent,
   onEndReached,
   onPlay,
   onAddToQueue,
@@ -397,7 +393,6 @@ function VirtualizedTrackTable({
   showViews?: boolean;
   getTrackKey?: (track: Track, index: number) => string;
   showDuration?: boolean;
-  headerContent?: React.ReactNode;
   onEndReached?: () => void;
   onPlay?: (track: Track) => void;
   onAddToQueue?: (track: Track) => void;
@@ -407,23 +402,49 @@ function VirtualizedTrackTable({
   onGoToAlbum?: (albumId: string) => void;
   onStartRadio?: (track: Track) => void;
 }) {
-  // containerRef wraps the scroll element — ResizeObserver measures its height so
-  // the scroll container always gets an explicit pixel height regardless of the flex chain.
-  const containerRef = useRef<HTMLDivElement>(null);
-  const [containerHeight, setContainerHeight] = useState(0);
+  const viewport = useScrollViewport();
+  const listRef = useRef<HTMLDivElement>(null);
+  const [scrollMargin, setScrollMargin] = useState(0);
 
-  useEffect(() => {
-    const el = containerRef.current;
-    if (!el) return;
-    const observer = new ResizeObserver((entries) => {
-      const height = entries[0].contentRect.height;
-      setContainerHeight(height);
-    });
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, []);
+  // Recompute scrollMargin whenever the list anchor or the viewport resizes.
+  // scrollMargin is the distance from the viewport's scroll origin to the
+  // top of the virtualized spacer element. listRef is attached to the spacer
+  // itself (not the outer wrapper) so this measurement matches the reference
+  // frame TanStack Virtual uses: item.start values are computed relative to
+  // scrollMargin, and rows are placed via translateY(start - scrollMargin)
+  // within the spacer. Any sibling content above the spacer (e.g. the page's
+  // CollectionHeader and the sticky table header) contributes to its DOM
+  // offset automatically.
+  useLayoutEffect(() => {
+    const list = listRef.current;
+    if (!list || !viewport) return;
 
-  const scrollRef = useRef<HTMLDivElement>(null);
+    const recompute = () => {
+      const listRect = list.getBoundingClientRect();
+      const viewportRect = viewport.getBoundingClientRect();
+      const next = Math.max(
+        0,
+        listRect.top - viewportRect.top + viewport.scrollTop
+      );
+      setScrollMargin((prev) => {
+        if (Math.abs(prev - next) < 1) return prev;
+        console.log("[TrackTable:Virtual] scrollMargin update", {
+          previous: prev,
+          current: next,
+        });
+        return next;
+      });
+    };
+
+    recompute();
+
+    const ro = new ResizeObserver(recompute);
+    ro.observe(list);
+    ro.observe(viewport);
+
+    return () => ro.disconnect();
+  }, [viewport]);
+
   const onEndReachedRef = useRef(onEndReached);
   onEndReachedRef.current = onEndReached;
 
@@ -435,9 +456,10 @@ function VirtualizedTrackTable({
 
   const virtualizer = useVirtualizer({
     count: tracks.length,
-    getScrollElement: () => scrollRef.current,
+    getScrollElement: () => viewport,
     estimateSize: () => ROW_HEIGHT_ESTIMATE,
     overscan: 5,
+    scrollMargin,
     useFlushSync: false,
   });
 
@@ -446,7 +468,7 @@ function VirtualizedTrackTable({
 
   // TanStack Virtual infinite scroll — monitor last visible item
   useEffect(() => {
-    if (!lastItem || !onEndReachedRef.current) return;
+    if (!lastItem || !onEndReachedRef.current || !viewport) return;
 
     const isNearEnd = lastItem.index >= tracks.length - 5;
     if (!isNearEnd) return;
@@ -455,78 +477,71 @@ function VirtualizedTrackTable({
     if (lastLoadedAtLengthRef.current >= tracks.length) return;
 
     // Block if user hasn't scrolled past the point where last load was triggered
-    const scrollEl = scrollRef.current;
-    if (scrollEl && lastLoadedAtLengthRef.current > 0) {
-      if (scrollEl.scrollTop <= lastLoadScrollTopRef.current + ROW_HEIGHT_ESTIMATE) {
+    if (lastLoadedAtLengthRef.current > 0) {
+      if (viewport.scrollTop <= lastLoadScrollTopRef.current + ROW_HEIGHT_ESTIMATE) {
         return; // User hasn't scrolled down since last load
       }
     }
 
-    console.log("[TrackTable:Virtual] onEndReached — lastItem.index:", lastItem.index, "tracks.length:", tracks.length);
+    console.log(
+      "[TrackTable:Virtual] onEndReached — lastItem.index:",
+      lastItem.index,
+      "tracks.length:",
+      tracks.length
+    );
     lastLoadedAtLengthRef.current = tracks.length;
-    lastLoadScrollTopRef.current = scrollEl?.scrollTop ?? 0;
+    lastLoadScrollTopRef.current = viewport.scrollTop;
     onEndReachedRef.current();
-  }, [lastItem?.index, tracks.length]);
+  }, [lastItem?.index, tracks.length, viewport]);
 
   return (
-    // containerRef fills the available space given by the flex parent.
-    // ResizeObserver reads its pixel height so we can set it explicitly on scrollRef.
-    <div ref={containerRef} className="flex min-h-0 flex-1 flex-col">
+    <div className="flex min-w-0 flex-col">
+      <TrackTableHeader showViews={showViews} showDuration={showDuration} />
       <div
-        ref={scrollRef}
-        className="styled-scrollbar overflow-y-auto"
-        // Explicit pixel height — guaranteed by ResizeObserver, not by the flex chain.
-        // This is what makes overflow-y-auto actually constrain scroll without relying on CSS.
-        style={{ height: containerHeight || undefined }}
+        ref={listRef}
+        className="mt-1"
+        style={{
+          height: virtualizer.getTotalSize(),
+          position: "relative",
+          width: "100%",
+        }}
       >
-        {headerContent}
-        <div className="sticky top-0 z-10 bg-background">
-          <TrackTableHeader showViews={showViews} showDuration={showDuration} />
-        </div>
-        <div
-          style={{
-            height: virtualizer.getTotalSize(),
-            position: "relative",
-            width: "100%",
-          }}
-        >
-          {virtualItems.map((virtualRow) => {
-            const track = tracks[virtualRow.index];
-            return (
-              <div
-                key={
-                  getTrackKey?.(track, virtualRow.index) ??
-                  `${track.videoId}-${virtualRow.index}`
-                }
-                data-index={virtualRow.index}
-                ref={virtualizer.measureElement}
-                style={{
-                  position: "absolute",
-                  top: 0,
-                  left: 0,
-                  width: "100%",
-                  transform: `translateY(${virtualRow.start}px)`,
-                }}
-              >
-                <TrackTableRow
-                  track={track}
-                  index={virtualRow.index}
-                  isCurrent={currentTrackId === track.videoId}
-                  isPlaying={currentTrackId === track.videoId && isPlaying}
-                  showViews={showViews}
-                  showDuration={showDuration}
-                  onPlay={onPlay}
-                  onAddToQueue={onAddToQueue}
-                  onAddToPlaylist={onAddToPlaylist}
-                  onRemoveFromPlaylist={onRemoveFromPlaylist}
-                  onGoToArtist={onGoToArtist}
-                  onGoToAlbum={onGoToAlbum}
-                  onStartRadio={onStartRadio}
-                />
-              </div>
-            );
-          })}
-        </div>
+        {virtualItems.map((virtualRow) => {
+          const track = tracks[virtualRow.index];
+          return (
+            <div
+              key={
+                getTrackKey?.(track, virtualRow.index) ??
+                `${track.videoId}-${virtualRow.index}`
+              }
+              data-index={virtualRow.index}
+              ref={virtualizer.measureElement}
+              style={{
+                position: "absolute",
+                top: 0,
+                left: 0,
+                width: "100%",
+                transform: `translateY(${virtualRow.start - scrollMargin}px)`,
+              }}
+            >
+              <TrackTableRow
+                track={track}
+                index={virtualRow.index}
+                isCurrent={currentTrackId === track.videoId}
+                isPlaying={currentTrackId === track.videoId && isPlaying}
+                showViews={showViews}
+                showDuration={showDuration}
+                onPlay={onPlay}
+                onAddToQueue={onAddToQueue}
+                onAddToPlaylist={onAddToPlaylist}
+                onRemoveFromPlaylist={onRemoveFromPlaylist}
+                onGoToArtist={onGoToArtist}
+                onGoToAlbum={onGoToAlbum}
+                onStartRadio={onStartRadio}
+              />
+            </div>
+          );
+        })}
       </div>
     </div>
   );

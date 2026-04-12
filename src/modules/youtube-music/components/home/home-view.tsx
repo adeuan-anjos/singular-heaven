@@ -1,7 +1,6 @@
 import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { Loader2 } from "lucide-react";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { CarouselSection } from "../shared/carousel-section";
 import { MediaCard } from "../shared/media-card";
 import { ytGetHome } from "../../services/yt-api";
@@ -177,31 +176,29 @@ export function HomeView() {
   }
 
   return (
-    <ScrollArea className="group/page h-full">
-      <div className="mx-auto max-w-screen-xl space-y-6 p-4">
-        {sections.map((section) => (
-          <CarouselSection key={section.title} title={section.title}>
-            {section.contents.map((item, i) => {
-              const props = getItemProps(item);
-              const actions = getItemActions(item, navigate, onPlayTrack);
-              return (
-                <MediaCard
-                  key={i}
-                  title={props.title}
-                  typeLabel={props.typeLabel}
-                  artistName={props.artistName}
-                  albumName={props.albumName}
-                  thumbnails={props.thumbnails}
-                  onClick={actions.onClick}
-                  onPlay={actions.onPlay}
-                  onGoToArtist={actions.onGoToArtist}
-                  onGoToAlbum={actions.onGoToAlbum}
-                />
-              );
-            })}
-          </CarouselSection>
-        ))}
-      </div>
-    </ScrollArea>
+    <div className="flex flex-col gap-6">
+      {sections.map((section) => (
+        <CarouselSection key={section.title} title={section.title}>
+          {section.contents.map((item, i) => {
+            const props = getItemProps(item);
+            const actions = getItemActions(item, navigate, onPlayTrack);
+            return (
+              <MediaCard
+                key={i}
+                title={props.title}
+                typeLabel={props.typeLabel}
+                artistName={props.artistName}
+                albumName={props.albumName}
+                thumbnails={props.thumbnails}
+                onClick={actions.onClick}
+                onPlay={actions.onPlay}
+                onGoToArtist={actions.onGoToArtist}
+                onGoToAlbum={actions.onGoToAlbum}
+              />
+            );
+          })}
+        </CarouselSection>
+      ))}
+    </div>
   );
 }

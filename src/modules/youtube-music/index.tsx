@@ -10,6 +10,8 @@ import { GoogleAccountPicker } from "./components/auth/google-account-picker";
 import { SidePanel } from "./components/layout/side-panel";
 import { TopBar } from "./components/layout/top-bar";
 import { PlayerBar } from "./components/layout/player-bar";
+import { ScrollRegion } from "./components/layout/scroll-region";
+import { PageContainer } from "./components/layout/page-container";
 import { HomeView } from "./components/home/home-view";
 import { ExploreView } from "./components/explore/explore-view";
 import { LibraryView } from "./components/library/library-view";
@@ -697,20 +699,22 @@ export default function YouTubeMusicModule() {
                 onStartRadio={handleStartRadio}
                 onPlaylistDeleted={handlePlaylistDeleted}
               />
-              <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-                <Switch>
-                  <Route path={paths.home} component={HomeView} />
-                  <Route path={paths.explore} component={ExploreView} />
-                  <Route path={paths.library} component={LibraryView} />
-                  <Route path="/artist/:id/songs" component={ArtistSongsPage} />
-                  <Route path="/artist/:id" component={ArtistPage} />
-                  <Route path="/album/:id" component={AlbumPage} />
-                  <Route path="/playlist/:id" component={PlaylistPage} />
-                  <Route path="/search" component={SearchResultsPage} />
-                  <Route path="/mood" component={ExploreView} />
-                  <Route component={HomeView} />
-                </Switch>
-              </div>
+              <ScrollRegion>
+                <PageContainer>
+                  <Switch>
+                    <Route path={paths.home} component={HomeView} />
+                    <Route path={paths.explore} component={ExploreView} />
+                    <Route path={paths.library} component={LibraryView} />
+                    <Route path="/artist/:id/songs" component={ArtistSongsPage} />
+                    <Route path="/artist/:id" component={ArtistPage} />
+                    <Route path="/album/:id" component={AlbumPage} />
+                    <Route path="/playlist/:id" component={PlaylistPage} />
+                    <Route path="/search" component={SearchResultsPage} />
+                    <Route path="/mood" component={ExploreView} />
+                    <Route component={HomeView} />
+                  </Switch>
+                </PageContainer>
+              </ScrollRegion>
             </div>
 
             <PlayerBar onOpenQueue={handleOpenQueue} />

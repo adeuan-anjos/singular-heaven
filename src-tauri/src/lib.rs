@@ -93,6 +93,13 @@ fn set_tracking_prevention_basic(
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    #[cfg(target_os = "windows")]
+    std::env::set_var(
+        "WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS",
+        "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection \
+         --enable-features=SmoothScrolling,FractionalScrollOffsets",
+    );
+
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .register_asynchronous_uri_scheme_protocol("thumb", |ctx, request, responder| {

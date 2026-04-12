@@ -1,7 +1,6 @@
 import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { Loader2 } from "lucide-react";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { CarouselSection } from "../shared/carousel-section";
 import { MediaCard } from "../shared/media-card";
 import { MoodGrid } from "./mood-grid";
@@ -115,83 +114,81 @@ export function ExploreView() {
   }
 
   return (
-    <ScrollArea className="group/page h-full">
-      <div className="mx-auto max-w-screen-xl space-y-6 p-4">
-        <CarouselSection title="Novos lançamentos">
-          {data.newReleases.map((album) => {
-            const firstArtistId = album.artists[0]?.id;
-            return (
-              <MediaCard
-                key={album.browseId}
-                title={album.title}
-                typeLabel="Álbum"
-                artistName={album.artists.map((a) => a.name).join(", ")}
-                thumbnails={album.thumbnails}
-                onClick={() => navigate(paths.album(album.browseId))}
-                onPlay={() => navigate(paths.album(album.browseId))}
-                onGoToArtist={firstArtistId ? () => navigate(paths.artist(firstArtistId)) : undefined}
-              />
-            );
-          })}
-        </CarouselSection>
+    <div className="flex flex-col gap-6">
+      <CarouselSection title="Novos lançamentos">
+        {data.newReleases.map((album) => {
+          const firstArtistId = album.artists[0]?.id;
+          return (
+            <MediaCard
+              key={album.browseId}
+              title={album.title}
+              typeLabel="Álbum"
+              artistName={album.artists.map((a) => a.name).join(", ")}
+              thumbnails={album.thumbnails}
+              onClick={() => navigate(paths.album(album.browseId))}
+              onPlay={() => navigate(paths.album(album.browseId))}
+              onGoToArtist={firstArtistId ? () => navigate(paths.artist(firstArtistId)) : undefined}
+            />
+          );
+        })}
+      </CarouselSection>
 
-        <div>
-          <ChartList
-            title="Top músicas"
-            tracks={chartTracks}
-            onPlayTrack={onPlayTrack}
-            onGoToArtist={(artistId) => navigate(paths.artist(artistId))}
-            onGoToAlbum={(albumId) => navigate(paths.album(albumId))}
-          />
-        </div>
-
-        <CarouselSection title="Em alta">
-          {data.trending.map((track) => {
-            const firstArtistId = track.artists[0]?.id;
-            const albumId = track.album?.id;
-            return (
-              <MediaCard
-                key={track.videoId}
-                title={track.title}
-                typeLabel="Música"
-                artistName={track.artists.map((a) => a.name).join(", ")}
-                albumName={track.album?.name}
-                thumbnails={track.thumbnails}
-                onClick={() => onPlayTrack(track)}
-                onPlay={() => onPlayTrack(track)}
-                onGoToArtist={firstArtistId ? () => navigate(paths.artist(firstArtistId)) : undefined}
-                onGoToAlbum={albumId ? () => navigate(paths.album(albumId)) : undefined}
-              />
-            );
-          })}
-        </CarouselSection>
-
-        <div className="space-y-3">
-          <SectionHeader title="Momentos e gêneros" />
-          <MoodGrid categories={data.moodsAndGenres} />
-        </div>
-
-        <CarouselSection title="Novos vídeos">
-          {data.newVideos.map((track) => {
-            const firstArtistId = track.artists[0]?.id;
-            const albumId = track.album?.id;
-            return (
-              <MediaCard
-                key={track.videoId}
-                title={track.title}
-                typeLabel="Música"
-                artistName={track.artists.map((a) => a.name).join(", ")}
-                albumName={track.album?.name}
-                thumbnails={track.thumbnails}
-                onClick={() => onPlayTrack(track)}
-                onPlay={() => onPlayTrack(track)}
-                onGoToArtist={firstArtistId ? () => navigate(paths.artist(firstArtistId)) : undefined}
-                onGoToAlbum={albumId ? () => navigate(paths.album(albumId)) : undefined}
-              />
-            );
-          })}
-        </CarouselSection>
+      <div>
+        <ChartList
+          title="Top músicas"
+          tracks={chartTracks}
+          onPlayTrack={onPlayTrack}
+          onGoToArtist={(artistId) => navigate(paths.artist(artistId))}
+          onGoToAlbum={(albumId) => navigate(paths.album(albumId))}
+        />
       </div>
-    </ScrollArea>
+
+      <CarouselSection title="Em alta">
+        {data.trending.map((track) => {
+          const firstArtistId = track.artists[0]?.id;
+          const albumId = track.album?.id;
+          return (
+            <MediaCard
+              key={track.videoId}
+              title={track.title}
+              typeLabel="Música"
+              artistName={track.artists.map((a) => a.name).join(", ")}
+              albumName={track.album?.name}
+              thumbnails={track.thumbnails}
+              onClick={() => onPlayTrack(track)}
+              onPlay={() => onPlayTrack(track)}
+              onGoToArtist={firstArtistId ? () => navigate(paths.artist(firstArtistId)) : undefined}
+              onGoToAlbum={albumId ? () => navigate(paths.album(albumId)) : undefined}
+            />
+          );
+        })}
+      </CarouselSection>
+
+      <div className="space-y-3">
+        <SectionHeader title="Momentos e gêneros" />
+        <MoodGrid categories={data.moodsAndGenres} />
+      </div>
+
+      <CarouselSection title="Novos vídeos">
+        {data.newVideos.map((track) => {
+          const firstArtistId = track.artists[0]?.id;
+          const albumId = track.album?.id;
+          return (
+            <MediaCard
+              key={track.videoId}
+              title={track.title}
+              typeLabel="Música"
+              artistName={track.artists.map((a) => a.name).join(", ")}
+              albumName={track.album?.name}
+              thumbnails={track.thumbnails}
+              onClick={() => onPlayTrack(track)}
+              onPlay={() => onPlayTrack(track)}
+              onGoToArtist={firstArtistId ? () => navigate(paths.artist(firstArtistId)) : undefined}
+              onGoToAlbum={albumId ? () => navigate(paths.album(albumId)) : undefined}
+            />
+          );
+        })}
+      </CarouselSection>
+    </div>
   );
 }

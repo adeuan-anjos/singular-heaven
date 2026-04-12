@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef } from "react";
 import { useLocation, useParams } from "wouter";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
 import { ButtonGroup } from "@/components/ui/button-group";
 import {
@@ -113,115 +112,113 @@ export function AlbumPage() {
     : tracks;
 
   return (
-    <ScrollArea className="group/page h-full">
-      <div className="mx-auto max-w-screen-xl space-y-4 p-4">
-        <CollectionHeader
-          filterValue={filter}
-          onFilterChange={(e) => setFilter(e.target.value)}
-          filterPlaceholder="Filtrar por título ou artista"
-        >
-          <CollectionHeaderInfo>
-            <CollectionHeaderThumbnail
-              src={album.thumbnails[album.thumbnails.length - 1]?.url ?? album.thumbnails[0]?.url}
-              alt={album.title}
-              fallback={album.title.charAt(0)}
-            />
-            <CollectionHeaderContent>
-              <h1 className="text-4xl font-bold text-foreground">{album.title}</h1>
-              <p className="text-sm text-muted-foreground">
-                {album.artists[0]?.id ? (
-                  <button
-                    type="button"
-                    className="hover:underline"
-                    onClick={() => navigate(paths.artist(album.artists[0].id!))}
-                  >
-                    {artistName}
-                  </button>
-                ) : (
-                  <span>{artistName}</span>
-                )}
-              </p>
-              <p className="text-sm text-muted-foreground">
-                {[album.year, `${tracks.length} músicas`].filter(Boolean).join(" • ")}
-              </p>
-            </CollectionHeaderContent>
-          </CollectionHeaderInfo>
-          <CollectionHeaderActions>
-            <ButtonGroup>
-              <Button
-                variant="outline"
-                onClick={() =>
-                  onPlayAll(tracks, 0, undefined, true, {
-                    queueTrackIds: trackIdsRef.current,
-                  })
+    <div className="flex flex-col gap-4">
+      <CollectionHeader
+        filterValue={filter}
+        onFilterChange={(e) => setFilter(e.target.value)}
+        filterPlaceholder="Filtrar por título ou artista"
+      >
+        <CollectionHeaderInfo>
+          <CollectionHeaderThumbnail
+            src={album.thumbnails[album.thumbnails.length - 1]?.url ?? album.thumbnails[0]?.url}
+            alt={album.title}
+            fallback={album.title.charAt(0)}
+          />
+          <CollectionHeaderContent>
+            <h1 className="text-4xl font-bold text-foreground">{album.title}</h1>
+            <p className="text-sm text-muted-foreground">
+              {album.artists[0]?.id ? (
+                <button
+                  type="button"
+                  className="hover:underline"
+                  onClick={() => navigate(paths.artist(album.artists[0].id!))}
+                >
+                  {artistName}
+                </button>
+              ) : (
+                <span>{artistName}</span>
+              )}
+            </p>
+            <p className="text-sm text-muted-foreground">
+              {[album.year, `${tracks.length} músicas`].filter(Boolean).join(" • ")}
+            </p>
+          </CollectionHeaderContent>
+        </CollectionHeaderInfo>
+        <CollectionHeaderActions>
+          <ButtonGroup>
+            <Button
+              variant="outline"
+              onClick={() =>
+                onPlayAll(tracks, 0, undefined, true, {
+                  queueTrackIds: trackIdsRef.current,
+                })
+              }
+            >
+              <Play data-icon="inline-start" />
+              Reproduzir
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() =>
+                onPlayAll(tracks, 0, undefined, true, {
+                  queueTrackIds: trackIdsRef.current,
+                  shuffle: true,
+                })
+              }
+            >
+              <Shuffle data-icon="inline-start" />
+              Aleatório
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => {
+                const firstTrack = tracks[0];
+                if (!firstTrack?.videoId) {
+                  console.warn("[album-page] no tracks loaded, cannot start radio");
+                  return;
                 }
-              >
-                <Play data-icon="inline-start" />
-                Reproduzir
-              </Button>
-              <Button
-                variant="outline"
-                onClick={() =>
-                  onPlayAll(tracks, 0, undefined, true, {
-                    queueTrackIds: trackIdsRef.current,
-                    shuffle: true,
-                  })
-                }
-              >
-                <Shuffle data-icon="inline-start" />
-                Aleatório
-              </Button>
-              <Button
-                variant="outline"
-                onClick={() => {
-                  const firstTrack = tracks[0];
-                  if (!firstTrack?.videoId) {
-                    console.warn("[album-page] no tracks loaded, cannot start radio");
-                    return;
-                  }
-                  void onStartRadio({ kind: "video", id: firstTrack.videoId });
-                }}
-              >
-                <Radio data-icon="inline-start" />
-                Iniciar rádio
-              </Button>
-            </ButtonGroup>
-          </CollectionHeaderActions>
-        </CollectionHeader>
+                void onStartRadio({ kind: "video", id: firstTrack.videoId });
+              }}
+            >
+              <Radio data-icon="inline-start" />
+              Iniciar rádio
+            </Button>
+          </ButtonGroup>
+        </CollectionHeaderActions>
+      </CollectionHeader>
 
-        <TrackTable
-          tracks={filteredTracks}
-          currentTrackId={currentTrackId ?? undefined}
-          isPlaying={isPlaying}
-          getTrackKey={(track) =>
-            (track as TrackCollectionEntry).collectionRowKey ?? track.videoId
+      <TrackTable
+        tracks={filteredTracks}
+        currentTrackId={currentTrackId ?? undefined}
+        isPlaying={isPlaying}
+        getTrackKey={(track) =>
+          (track as TrackCollectionEntry).collectionRowKey ?? track.videoId
+        }
+        onPlay={(track) => {
+          const allTracks = collectionTracks;
+          const index =
+            (track as TrackCollectionEntry).collectionPosition ??
+            allTracks.findIndex((t) => t.videoId === track.videoId);
+          if (index >= 0) {
+            onPlayAll(allTracks, index, undefined, true, {
+              queueTrackIds: trackIdsRef.current,
+            });
+          } else {
+            onPlayTrack(track);
           }
-          onPlay={(track) => {
-            const allTracks = collectionTracks;
-            const index =
-              (track as TrackCollectionEntry).collectionPosition ??
-              allTracks.findIndex((t) => t.videoId === track.videoId);
-            if (index >= 0) {
-              onPlayAll(allTracks, index, undefined, true, {
-                queueTrackIds: trackIdsRef.current,
-              });
-            } else {
-              onPlayTrack(track);
-            }
-          }}
-          onAddToQueue={onAddToQueue}
-          onAddToPlaylist={onAddToPlaylist}
-          onGoToArtist={(id) => navigate(paths.artist(id))}
-          onGoToAlbum={(id) => navigate(paths.album(id))}
-          onStartRadio={(track) => onStartRadio({ kind: "video", id: track.videoId })}
-        />
+        }}
+        onAddToQueue={onAddToQueue}
+        onAddToPlaylist={onAddToPlaylist}
+        onGoToArtist={(id) => navigate(paths.artist(id))}
+        onGoToAlbum={(id) => navigate(paths.album(id))}
+        onStartRadio={(track) => onStartRadio({ kind: "video", id: track.videoId })}
+      />
 
-        {filter && filteredTracks.length === 0 && (
-          <p className="py-8 text-center text-sm text-muted-foreground">
-            Nenhuma música encontrada para "{filter}"
-          </p>
-        )}
-      </div>
-    </ScrollArea>
+      {filter && filteredTracks.length === 0 && (
+        <p className="py-8 text-center text-sm text-muted-foreground">
+          Nenhuma música encontrada para "{filter}"
+        </p>
+      )}
+    </div>
   );
 }

@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useLocation } from "wouter";
 import { Loader2 } from "lucide-react";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { MediaGrid } from "../shared/media-grid";
 import { MediaCard } from "../shared/media-card";
 import { ytGetLibrarySongs } from "../../services/yt-api";
@@ -99,31 +98,29 @@ export const LibraryView = React.memo(function LibraryView() {
   }
 
   return (
-    <ScrollArea className="group/page h-full">
-      <div className="mx-auto max-w-screen-xl space-y-6 p-4">
-        <MediaGrid title="Biblioteca">
-          <MediaCard
-            title="Curtidas"
-            typeLabel="Playlist"
-            artistName={`${likedEntryCount} músicas`}
-            thumbnails={likedSongs[0]?.thumbnails ?? []}
-            onClick={() => navigate(paths.playlist("liked"))}
-            onPlay={() => navigate(paths.playlist("liked"))}
-          />
+    <div className="flex flex-col gap-6">
+      <MediaGrid title="Biblioteca">
+        <MediaCard
+          title="Curtidas"
+          typeLabel="Playlist"
+          artistName={`${likedEntryCount} músicas`}
+          thumbnails={likedSongs[0]?.thumbnails ?? []}
+          onClick={() => navigate(paths.playlist("liked"))}
+          onPlay={() => navigate(paths.playlist("liked"))}
+        />
 
-          {visiblePlaylists.map((playlist: Playlist) => (
-            <MediaCard
-              key={playlist.playlistId}
-              title={playlist.title}
-              typeLabel="Playlist"
-              artistName={`${playlist.author.name} • ${playlist.trackCount ?? 0} músicas`}
-              thumbnails={playlist.thumbnails ?? []}
-              onClick={() => navigate(paths.playlist(playlist.playlistId))}
-              onPlay={() => navigate(paths.playlist(playlist.playlistId))}
-            />
-          ))}
-        </MediaGrid>
-      </div>
-    </ScrollArea>
+        {visiblePlaylists.map((playlist: Playlist) => (
+          <MediaCard
+            key={playlist.playlistId}
+            title={playlist.title}
+            typeLabel="Playlist"
+            artistName={`${playlist.author.name} • ${playlist.trackCount ?? 0} músicas`}
+            thumbnails={playlist.thumbnails ?? []}
+            onClick={() => navigate(paths.playlist(playlist.playlistId))}
+            onPlay={() => navigate(paths.playlist(playlist.playlistId))}
+          />
+        ))}
+      </MediaGrid>
+    </div>
   );
 });

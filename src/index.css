@@ -126,17 +126,10 @@
     }
   html {
     @apply font-sans h-full;
-    scroll-behavior: smooth;
     }
   #root {
     @apply h-full;
     }
-
-  /* GPU-accelerated smooth scrolling for all scrollable containers */
-  [data-slot="scroll-area-viewport"] {
-    scroll-behavior: smooth;
-    -webkit-overflow-scrolling: touch;
-  }
 }
 
 /* Auto-hide vertical page scrollbars — appear on mouse move, fade on inactivity */

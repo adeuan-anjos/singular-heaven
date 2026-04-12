@@ -1,7 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 import { useLocation, useSearch } from "wouter";
 import { Loader2 } from "lucide-react";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { TrackRow } from "../shared/track-row";
 import { MediaCard } from "../shared/media-card";
@@ -288,50 +287,48 @@ export function SearchResultsPage() {
   );
 
   return (
-    <ScrollArea className="group/page h-full">
-      <div className="mx-auto max-w-screen-xl space-y-6 p-4">
-        <h1 className="text-2xl font-bold text-foreground">
-          Resultados para &apos;{query}&apos;
-        </h1>
+    <div className="flex flex-col gap-6">
+      <h1 className="text-2xl font-bold text-foreground">
+        Resultados para &apos;{query}&apos;
+      </h1>
 
-        <Tabs defaultValue="all" className="space-y-6">
-          <TabsList variant="line">
-            {FILTER_TABS.map((tab) => (
-              <TabsTrigger key={tab.value} value={tab.value}>
-                {tab.label}
-              </TabsTrigger>
-            ))}
-          </TabsList>
+      <Tabs defaultValue="all" className="space-y-6">
+        <TabsList variant="line">
+          {FILTER_TABS.map((tab) => (
+            <TabsTrigger key={tab.value} value={tab.value}>
+              {tab.label}
+            </TabsTrigger>
+          ))}
+        </TabsList>
 
-          <TabsContent value="all">
-            {renderAllTab()}
-          </TabsContent>
+        <TabsContent value="all">
+          {renderAllTab()}
+        </TabsContent>
 
-          <TabsContent value="songs">
-            {renderSongsSection()}
-          </TabsContent>
+        <TabsContent value="songs">
+          {renderSongsSection()}
+        </TabsContent>
 
-          <TabsContent value="videos">
-            {renderSongsSection()}
-          </TabsContent>
+        <TabsContent value="videos">
+          {renderSongsSection()}
+        </TabsContent>
 
-          <TabsContent value="albums">
-            {renderAlbumsSection()}
-          </TabsContent>
+        <TabsContent value="albums">
+          {renderAlbumsSection()}
+        </TabsContent>
 
-          <TabsContent value="artists">
-            {renderArtistsSection()}
-          </TabsContent>
+        <TabsContent value="artists">
+          {renderArtistsSection()}
+        </TabsContent>
 
-          <TabsContent value="community_playlists">
-            {renderPlaylistsSection()}
-          </TabsContent>
+        <TabsContent value="community_playlists">
+          {renderPlaylistsSection()}
+        </TabsContent>
 
-          <TabsContent value="featured_playlists">
-            {renderPlaylistsSection()}
-          </TabsContent>
-        </Tabs>
-      </div>
-    </ScrollArea>
+        <TabsContent value="featured_playlists">
+          {renderPlaylistsSection()}
+        </TabsContent>
+      </Tabs>
+    </div>
   );
 }

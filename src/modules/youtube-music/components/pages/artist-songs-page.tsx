@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef } from "react";
 import { useLocation, useParams } from "wouter";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
 import { ButtonGroup } from "@/components/ui/button-group";
 import {
@@ -138,88 +137,86 @@ export function ArtistSongsPage() {
   };
 
   return (
-    <ScrollArea className="group/page h-full">
-      <div className="mx-auto max-w-screen-xl space-y-4 p-4">
-        <CollectionHeader
-          filterValue={filter}
-          onFilterChange={(e) => setFilter(e.target.value)}
-          filterPlaceholder="Filtrar por título, artista ou álbum"
-        >
-          <CollectionHeaderInfo>
-            <CollectionHeaderThumbnail
-              src={imgUrl || undefined}
-              alt={artist.name}
-              fallback={artist.name.charAt(0)}
-            />
-            <CollectionHeaderContent>
-              <h1 className="text-4xl font-bold text-foreground">{artist.name}</h1>
-              {artist.monthlyListeners && (
-                <p className="text-sm text-muted-foreground">{artist.monthlyListeners}</p>
-              )}
-              {artist.subscribers && (
-                <p className="text-sm text-muted-foreground">{artist.subscribers} inscritos</p>
-              )}
-            </CollectionHeaderContent>
-          </CollectionHeaderInfo>
-          <CollectionHeaderActions>
-            <ButtonGroup>
-              <Button variant="outline" onClick={handleShuffle}>
-                <Shuffle data-icon="inline-start" />
-                Aleatório
-              </Button>
-              <Button variant="outline" onClick={handlePlayAll}>
-                <Radio data-icon="inline-start" />
-                Rádio
-              </Button>
-            </ButtonGroup>
-            <ButtonGroup>
-              <Button
-                variant={subscribed ? "default" : "outline"}
-                onClick={() => setSubscribed(!subscribed)}
-              >
-                {subscribed ? "Inscrito" : "Inscrever-se"}
-              </Button>
-            </ButtonGroup>
-          </CollectionHeaderActions>
-        </CollectionHeader>
+    <div className="flex flex-col gap-4">
+      <CollectionHeader
+        filterValue={filter}
+        onFilterChange={(e) => setFilter(e.target.value)}
+        filterPlaceholder="Filtrar por título, artista ou álbum"
+      >
+        <CollectionHeaderInfo>
+          <CollectionHeaderThumbnail
+            src={imgUrl || undefined}
+            alt={artist.name}
+            fallback={artist.name.charAt(0)}
+          />
+          <CollectionHeaderContent>
+            <h1 className="text-4xl font-bold text-foreground">{artist.name}</h1>
+            {artist.monthlyListeners && (
+              <p className="text-sm text-muted-foreground">{artist.monthlyListeners}</p>
+            )}
+            {artist.subscribers && (
+              <p className="text-sm text-muted-foreground">{artist.subscribers} inscritos</p>
+            )}
+          </CollectionHeaderContent>
+        </CollectionHeaderInfo>
+        <CollectionHeaderActions>
+          <ButtonGroup>
+            <Button variant="outline" onClick={handleShuffle}>
+              <Shuffle data-icon="inline-start" />
+              Aleatório
+            </Button>
+            <Button variant="outline" onClick={handlePlayAll}>
+              <Radio data-icon="inline-start" />
+              Rádio
+            </Button>
+          </ButtonGroup>
+          <ButtonGroup>
+            <Button
+              variant={subscribed ? "default" : "outline"}
+              onClick={() => setSubscribed(!subscribed)}
+            >
+              {subscribed ? "Inscrito" : "Inscrever-se"}
+            </Button>
+          </ButtonGroup>
+        </CollectionHeaderActions>
+      </CollectionHeader>
 
-        {/* Músicas heading */}
-        <h2 className="text-lg font-semibold text-foreground">Músicas</h2>
+      {/* Músicas heading */}
+      <h2 className="text-lg font-semibold text-foreground">Músicas</h2>
 
-        {/* Full track list */}
-        <TrackTable
-          tracks={filteredSongs}
-          showViews
-          currentTrackId={currentTrackId ?? undefined}
-          isPlaying={isPlaying}
-          getTrackKey={(track) =>
-            (track as TrackCollectionEntry).collectionRowKey ?? track.videoId
+      {/* Full track list */}
+      <TrackTable
+        tracks={filteredSongs}
+        showViews
+        currentTrackId={currentTrackId ?? undefined}
+        isPlaying={isPlaying}
+        getTrackKey={(track) =>
+          (track as TrackCollectionEntry).collectionRowKey ?? track.videoId
+        }
+        onPlay={(track) => {
+          const index =
+            (track as TrackCollectionEntry).collectionPosition ??
+            allSongs.findIndex((t) => t.videoId === track.videoId);
+          if (index >= 0) {
+            onPlayAll(allSongs, index, undefined, true, {
+              queueTrackIds: trackIdsRef.current,
+            });
+          } else {
+            onPlayTrack(track);
           }
-          onPlay={(track) => {
-            const index =
-              (track as TrackCollectionEntry).collectionPosition ??
-              allSongs.findIndex((t) => t.videoId === track.videoId);
-            if (index >= 0) {
-              onPlayAll(allSongs, index, undefined, true, {
-                queueTrackIds: trackIdsRef.current,
-              });
-            } else {
-              onPlayTrack(track);
-            }
-          }}
-          onAddToQueue={onAddToQueue}
-          onAddToPlaylist={onAddToPlaylist}
-          onGoToArtist={(id) => navigate(paths.artist(id))}
-          onGoToAlbum={(id) => navigate(paths.album(id))}
-          onStartRadio={(track) => onStartRadio({ kind: "video", id: track.videoId })}
-        />
+        }}
+        onAddToQueue={onAddToQueue}
+        onAddToPlaylist={onAddToPlaylist}
+        onGoToArtist={(id) => navigate(paths.artist(id))}
+        onGoToAlbum={(id) => navigate(paths.album(id))}
+        onStartRadio={(track) => onStartRadio({ kind: "video", id: track.videoId })}
+      />
 
-        {filter && filteredSongs.length === 0 && (
-          <p className="py-8 text-center text-sm text-muted-foreground">
-            Nenhuma música encontrada para "{filter}"
-          </p>
-        )}
-      </div>
-    </ScrollArea>
+      {filter && filteredSongs.length === 0 && (
+        <p className="py-8 text-center text-sm text-muted-foreground">
+          Nenhuma música encontrada para "{filter}"
+        </p>
+      )}
+    </div>
   );
 }

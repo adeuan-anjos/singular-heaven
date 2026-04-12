@@ -436,8 +436,18 @@ export function PlaylistPage() {
     />
   );
 
-  const headerContent = (
-    <div className="space-y-4 p-4">
+  const destructiveTitle =
+    destructiveAction === "delete" ? "Excluir playlist" : "Remover playlist";
+  const destructiveDescription =
+    destructiveAction === "delete"
+      ? "Quer mesmo excluir esta playlist? Essa ação remove a playlist da sua conta."
+      : "Quer mesmo remover esta playlist da biblioteca?";
+  const emptyMessage = filter
+    ? `Nenhuma música encontrada para "${filter}".`
+    : "Esta playlist ainda não tem músicas.";
+
+  return (
+    <div className="flex flex-col gap-4">
       <CollectionHeader
         filterValue={filter}
         onFilterChange={(e) => setFilter(e.target.value)}
@@ -542,21 +552,7 @@ export function PlaylistPage() {
           </ButtonGroup>
         </CollectionHeaderActions>
       </CollectionHeader>
-    </div>
-  );
 
-  const destructiveTitle =
-    destructiveAction === "delete" ? "Excluir playlist" : "Remover playlist";
-  const destructiveDescription =
-    destructiveAction === "delete"
-      ? "Quer mesmo excluir esta playlist? Essa ação remove a playlist da sua conta."
-      : "Quer mesmo remover esta playlist da biblioteca?";
-  const emptyMessage = filter
-    ? `Nenhuma música encontrada para "${filter}".`
-    : "Esta playlist ainda não tem músicas.";
-
-  return (
-    <div className="flex min-h-0 flex-1 flex-col">
       {filteredTracks.length > 0 ? (
         <TrackTable
           tracks={filteredTracks}
@@ -566,7 +562,6 @@ export function PlaylistPage() {
           getTrackKey={(track) =>
             (track as PlaylistTrackEntry).playlistRowKey ?? track.videoId
           }
-          headerContent={headerContent}
           onEndReached={loadMore}
           onPlay={(track) => {
             const currentTracks = ((playlist.tracks as PlaylistTrackEntry[] | undefined) ?? []);
@@ -646,11 +641,8 @@ export function PlaylistPage() {
           onStartRadio={(track) => onStartRadio({ kind: "video", id: track.videoId })}
         />
       ) : (
-        <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
-          {headerContent}
-          <div className="flex flex-1 items-center justify-center px-4 py-12">
-            <p className="text-sm text-muted-foreground">{emptyMessage}</p>
-          </div>
+        <div className="flex items-center justify-center px-4 py-12">
+          <p className="text-sm text-muted-foreground">{emptyMessage}</p>
         </div>
       )}
 
