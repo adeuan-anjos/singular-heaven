@@ -15,6 +15,54 @@ function isMediaSessionAvailable(): boolean {
   return "mediaSession" in navigator;
 }
 
+// ── Shared dispatch logic ──
+// Used by both MediaSession action handlers (minimized/background)
+// and keydown listener (foreground/focused).
+
+function dispatchTogglePlay(): void {
+  console.log(LOG_TAG, "dispatch: togglePlay");
+  usePlayerStore.getState().togglePlay();
+}
+
+function dispatchNext(): void {
+  console.log(LOG_TAG, "dispatch: next");
+  useQueueStore.getState().next().then((nextId) => {
+    if (nextId) {
+      console.log(LOG_TAG, "advancing to next track", { nextId });
+      usePlayerStore.getState().play(nextId);
+    } else {
+      console.log(LOG_TAG, "next: queue exhausted");
+    }
+  }).catch((err) => {
+    console.error(LOG_TAG, "next() failed", err);
+  });
+}
+
+function dispatchPrevious(): void {
+  console.log(LOG_TAG, "dispatch: previous");
+  const playerState = usePlayerStore.getState();
+  if (playerState.progress > 3) {
+    console.log(LOG_TAG, "previous: progress > 3s, seeking to start");
+    playerState.seek(0);
+  } else {
+    useQueueStore.getState().previous().then((prevId) => {
+      if (prevId) {
+        console.log(LOG_TAG, "advancing to previous track", { prevId });
+        usePlayerStore.getState().play(prevId);
+      } else {
+        console.log(LOG_TAG, "previous: no previous track");
+      }
+    }).catch((err) => {
+      console.error(LOG_TAG, "previous() failed", err);
+    });
+  }
+}
+
+function dispatchStop(): void {
+  console.log(LOG_TAG, "dispatch: stop");
+  usePlayerStore.getState().cleanup();
+}
+
 // ── Metadata sync (app → OS) ──
 
 function syncMetadata(videoId: string): void {
@@ -26,7 +74,6 @@ function syncMetadata(videoId: string): void {
 
   const artistName = track.artists.map((a) => a.name).join(", ");
 
-  // Build artwork array from thumbnails (all resolutions for OS to pick best)
   const artwork = track.thumbnails.map((t) => ({
     src: t.url,
     sizes: `${t.width}x${t.height}`,
@@ -43,66 +90,20 @@ function syncMetadata(videoId: string): void {
   });
 }
 
-// ── Action handlers (OS → app) ──
+// ── MediaSession action handlers (works when app is minimized/background) ──
 
 function registerActionHandlers(): void {
-  console.log(LOG_TAG, "registering media session action handlers");
+  console.log(LOG_TAG, "registering MediaSession action handlers");
 
   try {
-    navigator.mediaSession.setActionHandler("play", () => {
-      console.log(LOG_TAG, "action: play");
-      usePlayerStore.getState().togglePlay();
-    });
-
-    navigator.mediaSession.setActionHandler("pause", () => {
-      console.log(LOG_TAG, "action: pause");
-      usePlayerStore.getState().togglePlay();
-    });
-
-    navigator.mediaSession.setActionHandler("nexttrack", () => {
-      console.log(LOG_TAG, "action: nexttrack");
-      const queueState = useQueueStore.getState();
-      queueState.next().then((nextId) => {
-        if (nextId) {
-          console.log(LOG_TAG, "advancing to next track", { nextId });
-          usePlayerStore.getState().play(nextId);
-        } else {
-          console.log(LOG_TAG, "next: queue exhausted");
-        }
-      }).catch((err) => {
-        console.error(LOG_TAG, "next() failed", err);
-      });
-    });
-
-    navigator.mediaSession.setActionHandler("previoustrack", () => {
-      console.log(LOG_TAG, "action: previoustrack");
-      const playerState = usePlayerStore.getState();
-      if (playerState.progress > 3) {
-        console.log(LOG_TAG, "previous: progress > 3s, seeking to start");
-        playerState.seek(0);
-      } else {
-        const queueState = useQueueStore.getState();
-        queueState.previous().then((prevId) => {
-          if (prevId) {
-            console.log(LOG_TAG, "advancing to previous track", { prevId });
-            usePlayerStore.getState().play(prevId);
-          } else {
-            console.log(LOG_TAG, "previous: no previous track");
-          }
-        }).catch((err) => {
-          console.error(LOG_TAG, "previous() failed", err);
-        });
-      }
-    });
-
-    navigator.mediaSession.setActionHandler("stop", () => {
-      console.log(LOG_TAG, "action: stop");
-      usePlayerStore.getState().cleanup();
-    });
-
+    navigator.mediaSession.setActionHandler("play", dispatchTogglePlay);
+    navigator.mediaSession.setActionHandler("pause", dispatchTogglePlay);
+    navigator.mediaSession.setActionHandler("nexttrack", dispatchNext);
+    navigator.mediaSession.setActionHandler("previoustrack", dispatchPrevious);
+    navigator.mediaSession.setActionHandler("stop", dispatchStop);
     navigator.mediaSession.setActionHandler("seekto", (details) => {
       if (details.seekTime != null) {
-        console.log(LOG_TAG, "action: seekto", { seekTime: details.seekTime });
+        console.log(LOG_TAG, "dispatch: seekto", { seekTime: details.seekTime });
         usePlayerStore.getState().seek(details.seekTime);
       }
     });
@@ -110,7 +111,7 @@ function registerActionHandlers(): void {
     console.error(LOG_TAG, "failed to register some action handlers", err);
   }
 
-  console.log(LOG_TAG, "action handlers registered");
+  console.log(LOG_TAG, "MediaSession action handlers registered");
 }
 
 function unregisterActionHandlers(): void {
@@ -121,10 +122,36 @@ function unregisterActionHandlers(): void {
     try {
       navigator.mediaSession.setActionHandler(action, null);
     } catch {
-      // Some actions may not be supported
+      // Some actions may not be supported on all platforms
     }
   }
-  console.log(LOG_TAG, "action handlers unregistered");
+}
+
+// ── Keyboard media key handler (works when app is in foreground/focused) ──
+// When the WebView has focus, media keys arrive as keydown events
+// instead of being routed through the OS MediaSession layer.
+
+function handleMediaKeyDown(e: KeyboardEvent): void {
+  // Only handle media keys — don't interfere with other keyboard events
+  switch (e.key) {
+    case "MediaPlayPause":
+      e.preventDefault();
+      dispatchTogglePlay();
+      break;
+    case "MediaTrackNext":
+      e.preventDefault();
+      dispatchNext();
+      break;
+    case "MediaTrackPrevious":
+      e.preventDefault();
+      dispatchPrevious();
+      break;
+    case "MediaStop":
+      e.preventDefault();
+      dispatchStop();
+      break;
+    // No default — let all other keys pass through
+  }
 }
 
 // ── Store subscription ──
@@ -184,9 +211,16 @@ export function initMediaSession(): void {
     return;
   }
 
-  console.log(LOG_TAG, "initializing (Web MediaSession API)");
+  console.log(LOG_TAG, "initializing");
 
+  // MediaSession handlers — OS overlay buttons + media keys when app is background
   registerActionHandlers();
+
+  // Keyboard listener — media keys when app is in foreground
+  document.addEventListener("keydown", handleMediaKeyDown);
+  console.log(LOG_TAG, "keydown listener registered for foreground media keys");
+
+  // Store subscription — sync metadata + playback state to OS
   unsubscribePlayer = subscribeToPlayerStore();
 
   initialized = true;
@@ -202,6 +236,8 @@ export function destroyMediaSession(): void {
     unsubscribePlayer();
     unsubscribePlayer = null;
   }
+
+  document.removeEventListener("keydown", handleMediaKeyDown);
 
   if (isMediaSessionAvailable()) {
     unregisterActionHandlers();
