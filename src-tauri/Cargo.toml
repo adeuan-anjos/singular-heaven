@@ -1,6 +1,6 @@
 [package]
 name = "singular-haven"
-version = "0.1.0"
+version = "1.0.0"
 description = "Singular Haven — unified personal utilities desktop app"
 edition = "2021"
 
