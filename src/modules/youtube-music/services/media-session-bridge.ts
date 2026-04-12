@@ -1,8 +1,4 @@
-import {
-  mediaControls,
-  PlaybackStatus,
-  type MediaControlEvent,
-} from "tauri-plugin-media-api";
+import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 
 import { usePlayerStore } from "../stores/player-store";
@@ -14,14 +10,75 @@ const LOG_TAG = "[MediaSessionBridge]";
 // ── Module-level state (service, not a React component) ──
 
 let initialized = false;
+let initPromise: Promise<void> | null = null; // Guards against concurrent/double init (React StrictMode)
 let unsubscribePlayer: (() => void) | null = null;
 let unlistenMediaEvent: UnlistenFn | null = null;
 let positionInterval: ReturnType<typeof setInterval> | null = null;
 
+// ── Event deduplication ──
+// The plugin's setup_button_handlers() may register multiple SMTC handlers
+// (once from set_event_handler, once from initialize_session), causing
+// duplicate Rust emits per single OS media key press. We deduplicate by
+// eventType + timestamp — the same physical keypress produces identical timestamps.
+let lastEventKey = "";
+
 // ── Helpers ──
 
-function toPlaybackStatus(isPlaying: boolean): PlaybackStatus {
-  return isPlaying ? PlaybackStatus.Playing : PlaybackStatus.Paused;
+/** Wrapper around plugin invoke for set_metadata that includes artworkData field */
+async function setMetadataWithDefaults(metadata: {
+  title: string;
+  artist?: string;
+  album?: string;
+  duration?: number;
+  artworkUrl?: string;
+}): Promise<void> {
+  await invoke("plugin:media|set_metadata", {
+    metadata: {
+      title: metadata.title,
+      artist: metadata.artist ?? null,
+      album: metadata.album ?? null,
+      albumArtist: null,
+      duration: metadata.duration ?? null,
+      artworkUrl: metadata.artworkUrl ?? null,
+      artworkData: null, // Required by Rust struct deserialization
+    },
+  });
+}
+
+/** Wrapper for set_playback_info */
+async function setPlaybackInfoDirect(info: {
+  status: string;
+  position: number;
+  playbackRate: number;
+}): Promise<void> {
+  await invoke("plugin:media|set_playback_info", {
+    info: {
+      status: info.status,
+      position: info.position,
+      shuffle: false,
+      repeatMode: "none",
+      playbackRate: info.playbackRate,
+    },
+  });
+}
+
+/** Wrapper for set_playback_status */
+async function setPlaybackStatusDirect(status: string): Promise<void> {
+  await invoke("plugin:media|set_playback_status", { status });
+}
+
+/** Wrapper for clear_metadata */
+async function clearNowPlayingDirect(): Promise<void> {
+  await invoke("plugin:media|clear_metadata");
+}
+
+/** Wrapper for set_position */
+async function updatePositionDirect(position: number): Promise<void> {
+  await invoke("plugin:media|set_position", { position });
+}
+
+function toPlaybackStatus(isPlaying: boolean): string {
+  return isPlaying ? "playing" : "paused";
 }
 
 async function pushNowPlaying(videoId: string): Promise<void> {
@@ -52,29 +109,40 @@ async function pushNowPlaying(videoId: string): Promise<void> {
     isPlaying,
   });
 
-  await mediaControls.updateNowPlaying(
-    {
-      title: track.title,
-      artist: artistName || undefined,
-      album: albumName,
-      duration: track.durationSeconds > 0 ? track.durationSeconds : undefined,
-      artworkUrl: thumbnail?.url,
-    },
-    {
-      status: toPlaybackStatus(isPlaying),
-      position: progress,
-      playbackRate: 1,
-    }
-  );
+  await setMetadataWithDefaults({
+    title: track.title,
+    artist: artistName || undefined,
+    album: albumName,
+    duration: track.durationSeconds > 0 ? track.durationSeconds : undefined,
+    artworkUrl: thumbnail?.url,
+  });
+
+  await setPlaybackInfoDirect({
+    status: toPlaybackStatus(isPlaying),
+    position: progress,
+    playbackRate: 1,
+  });
 }
 
 // ── Event handler (OS → app) ──
 // Events arrive via Tauri's emit system from Rust (serde camelCase serialization).
-// The eventType field is a camelCase string matching MediaControlEventType variants.
 
-function handleMediaControlEvent(event: MediaControlEvent): void {
+interface MediaControlEventPayload {
+  eventType: string;
+  timestamp: number;
+}
+
+function handleMediaControlEvent(event: MediaControlEventPayload): void {
+  // ── Deduplicate: same eventType+timestamp = same physical keypress ──
+  const key = `${event.eventType}-${event.timestamp}`;
+  if (key === lastEventKey) {
+    console.log(LOG_TAG, "dedup: skipping duplicate event", { key });
+    return;
+  }
+  lastEventKey = key;
+
   const eventType = event.eventType;
-  console.log(LOG_TAG, "OS event received", { eventType });
+  console.log(LOG_TAG, "handling OS event", { eventType });
 
   const playerState = usePlayerStore.getState();
   const queueState = useQueueStore.getState();
@@ -125,7 +193,7 @@ function handleMediaControlEvent(event: MediaControlEvent): void {
     case "stop":
       console.log(LOG_TAG, "stop");
       playerState.cleanup();
-      mediaControls.clearNowPlaying().catch((err) => {
+      clearNowPlayingDirect().catch((err) => {
         console.error(LOG_TAG, "clearNowPlaying after stop failed", err);
       });
       break;
@@ -151,22 +219,13 @@ function subscribeToPlayerStore(): () => void {
 
     if (!trackChanged && !playStateChanged) return;
 
-    console.log(LOG_TAG, "player store changed", {
-      prevTrackId,
-      currentTrackId,
-      prevIsPlaying,
-      isPlaying,
-      trackChanged,
-      playStateChanged,
-    });
-
     prevTrackId = currentTrackId;
     prevIsPlaying = isPlaying;
 
     if (trackChanged) {
       if (currentTrackId === null) {
         console.log(LOG_TAG, "track cleared, calling clearNowPlaying");
-        mediaControls.clearNowPlaying().catch((err) => {
+        clearNowPlayingDirect().catch((err) => {
           console.error(LOG_TAG, "clearNowPlaying failed", err);
         });
       } else {
@@ -175,13 +234,10 @@ function subscribeToPlayerStore(): () => void {
         });
       }
     } else if (playStateChanged && currentTrackId !== null) {
-      // Same track, only play/pause state changed
       console.log(LOG_TAG, "updatePlaybackStatus", { isPlaying });
-      mediaControls
-        .updatePlaybackStatus(toPlaybackStatus(isPlaying))
-        .catch((err) => {
-          console.error(LOG_TAG, "updatePlaybackStatus failed", err);
-        });
+      setPlaybackStatusDirect(toPlaybackStatus(isPlaying)).catch((err) => {
+        console.error(LOG_TAG, "updatePlaybackStatus failed", err);
+      });
     }
   });
 }
@@ -189,34 +245,55 @@ function subscribeToPlayerStore(): () => void {
 // ── Public API ──
 
 export async function initMediaSession(): Promise<void> {
+  // Guard against concurrent init (React StrictMode double-mount)
   if (initialized) {
-    console.warn(LOG_TAG, "initMediaSession called while already initialized — skipping");
+    console.warn(LOG_TAG, "already initialized — skipping");
     return;
   }
+  if (initPromise) {
+    console.warn(LOG_TAG, "init already in progress — waiting");
+    return void (await initPromise);
+  }
 
+  initPromise = doInit();
+  try {
+    await initPromise;
+  } finally {
+    initPromise = null;
+  }
+}
+
+async function doInit(): Promise<void> {
   console.log(LOG_TAG, "initializing media session");
 
   try {
-    await mediaControls.initialize("com.singular.haven", "Haven Sounds");
-    console.log(LOG_TAG, "mediaControls.initialize OK");
+    // Step 1: Initialize the plugin media session (creates SMTC controls on Windows)
+    // At this point, event_handler is None so setup_button_handlers registers nothing.
+    await invoke("plugin:media|initialize_session", {
+      request: { appId: "com.singular.haven", appName: "Haven Sounds" },
+    });
+    console.log(LOG_TAG, "initialize_session OK");
+
+    // Step 2: Register our event handler — this calls set_event_handler which internally
+    // calls setup_button_handlers ONCE, registering exactly 1 SMTC handler.
+    await invoke("register_media_event_handler");
+    console.log(LOG_TAG, "register_media_event_handler OK");
   } catch (err) {
-    console.error(LOG_TAG, "mediaControls.initialize failed", err);
-    // Non-fatal on platforms where media session is unavailable
+    console.error(LOG_TAG, "media session init failed", err);
   }
 
   // Listen for media control events emitted by the Rust side via app.emit()
-  // (The JS plugin's setEventHandler is a stub — we bypass it entirely)
-  unlistenMediaEvent = await listen<MediaControlEvent>("media-control-event", (e) => {
+  unlistenMediaEvent = await listen<MediaControlEventPayload>("media-control-event", (e) => {
     handleMediaControlEvent(e.payload);
   });
-  console.log(LOG_TAG, "Tauri event listener registered for media-control-event");
+  console.log(LOG_TAG, "Tauri event listener registered for 'media-control-event'");
 
   unsubscribePlayer = subscribeToPlayerStore();
 
   positionInterval = setInterval(() => {
     const { progress, currentTrackId, isPlaying } = usePlayerStore.getState();
     if (currentTrackId === null || !isPlaying) return;
-    mediaControls.updatePosition(progress).catch((err) => {
+    updatePositionDirect(progress).catch((err) => {
       console.error(LOG_TAG, "updatePosition (interval) failed", err);
     });
   }, 5000);
@@ -228,8 +305,8 @@ export async function initMediaSession(): Promise<void> {
 }
 
 export function destroyMediaSession(): void {
-  if (!initialized) {
-    console.warn(LOG_TAG, "destroyMediaSession called while not initialized — no-op");
+  if (!initialized && !initPromise) {
+    console.warn(LOG_TAG, "destroyMediaSession: not initialized — no-op");
     return;
   }
 
@@ -238,22 +315,19 @@ export function destroyMediaSession(): void {
   if (unsubscribePlayer) {
     unsubscribePlayer();
     unsubscribePlayer = null;
-    console.log(LOG_TAG, "player store unsubscribed");
   }
 
   if (positionInterval !== null) {
     clearInterval(positionInterval);
     positionInterval = null;
-    console.log(LOG_TAG, "position update interval cleared");
   }
 
   if (unlistenMediaEvent) {
     unlistenMediaEvent();
     unlistenMediaEvent = null;
-    console.log(LOG_TAG, "Tauri event listener removed");
   }
 
-  mediaControls.clearNowPlaying().catch((err) => {
+  clearNowPlayingDirect().catch((err) => {
     console.error(LOG_TAG, "clearNowPlaying on destroy failed", err);
   });
 

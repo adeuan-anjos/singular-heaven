@@ -12,6 +12,25 @@ use tokio::sync::RwLock;
 use youtube_music::client::YtMusicState;
 use youtube_music::session::SessionActivity;
 
+/// Register a media control event handler that emits OS media events (play, pause,
+/// next, previous) to the frontend via Tauri's event system.
+/// MUST be called AFTER plugin:media|initialize_session and exactly ONCE.
+/// The plugin's set_event_handler() internally calls setup_button_handlers() which
+/// registers SMTC handlers — calling this multiple times would duplicate them.
+#[tauri::command]
+fn register_media_event_handler(app: tauri::AppHandle) {
+    use tauri_plugin_media::MediaExt;
+    let handle = app.clone();
+    println!("[media-controls] Registering OS media event handler");
+    app.media().set_event_handler(move |event| {
+        println!("[media-controls] OS event: {:?}", event.event_type);
+        if let Err(e) = handle.emit("media-control-event", &event) {
+            eprintln!("[media-controls] Failed to emit event: {e}");
+        }
+    });
+    println!("[media-controls] OS media event handler registered");
+}
+
 #[tauri::command]
 fn yt_set_memory_level(window: tauri::WebviewWindow, low: bool) {
     println!("[yt_set_memory_level] low={low}");
@@ -102,6 +121,15 @@ pub fn run() {
     );
 
     tauri::Builder::default()
+        .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
+            // A second instance was launched — focus the existing window
+            println!("[single-instance] Second instance detected, focusing existing window");
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.show();
+                let _ = window.unminimize();
+                let _ = window.set_focus();
+            }
+        }))
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_media::init())
         .register_asynchronous_uri_scheme_protocol("thumb", |ctx, request, responder| {
@@ -315,24 +343,17 @@ pub fn run() {
             });
         })
         .setup(|app| {
-            // ── Media controls: register event handler BEFORE JS calls initializeSession ──
-            // The plugin's setup_button_handlers() checks event_handler at registration time,
-            // so it MUST be set before initialize_session is invoked from JS.
-            {
-                use tauri_plugin_media::MediaExt;
-                let handle = app.handle().clone();
-                app.media().set_event_handler(move |event| {
-                    println!("[media-controls] OS event: {:?}", event.event_type);
-                    if let Err(e) = handle.emit("media-control-event", &event) {
-                        eprintln!("[media-controls] Failed to emit event: {e}");
-                    }
-                });
-                println!("[setup] Media control event handler registered.");
-            }
-
             #[cfg(target_os = "windows")]
             if let Some(ww) = app.get_webview_window("main") {
                 set_tracking_prevention_basic(&ww);
+            }
+
+            // ── Window Icon (taskbar / Alt+Tab) ─────────────────────────
+            if let Some(window) = app.get_webview_window("main") {
+                if let Some(icon) = app.default_window_icon() {
+                    let _ = window.set_icon(icon.clone());
+                    println!("[setup] Window icon set for taskbar/Alt+Tab.");
+                }
             }
 
             // ── System Tray ──────────────────────────────────────────────
@@ -469,6 +490,7 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            register_media_event_handler,
             yt_set_memory_level,
             youtube_music::commands::yt_search,
             youtube_music::commands::yt_search_suggestions,
