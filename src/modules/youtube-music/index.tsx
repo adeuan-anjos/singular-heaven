@@ -694,6 +694,7 @@ export default function YouTubeMusicModule() {
                 onSavePlaylist={handleSavePlaylist}
                 onAddPlaylistNext={handleAddPlaylistNext}
                 onAppendPlaylistToQueue={handleAppendPlaylistToQueue}
+                onStartRadio={handleStartRadio}
                 onPlaylistDeleted={handlePlaylistDeleted}
               />
               <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">

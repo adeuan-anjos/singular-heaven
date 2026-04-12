@@ -41,7 +41,7 @@ import { thumbUrl } from "../../utils/thumb-url";
 import { CreatePlaylistDialog } from "../shared/create-playlist-dialog";
 import { PlaylistActionsMenu } from "../shared/playlist-actions-menu";
 import { PlaylistDestructiveDialog } from "../shared/playlist-destructive-dialog";
-import { ytGetPlaylistTrackIds, ytLoadPlaylist } from "../../services/yt-api";
+import { ytGetPlaylistTrackIds, ytLoadPlaylist, type RadioSeedKind } from "../../services/yt-api";
 import { paths } from "../../router/paths";
 import type { PlayAllOptions, Playlist, Track } from "../../types/music";
 
@@ -57,6 +57,7 @@ interface SidePanelProps {
   onSavePlaylist: (playlistId: string, title: string) => void;
   onAddPlaylistNext: (tracks: Track[], queueTrackIds: string[]) => Promise<void>;
   onAppendPlaylistToQueue: (tracks: Track[], queueTrackIds: string[]) => Promise<void>;
+  onStartRadio: (seed: { kind: RadioSeedKind; id: string }) => Promise<void>;
   onPlaylistDeleted?: (playlistId: string) => void;
 }
 
@@ -175,6 +176,7 @@ function PlaylistActionMenuContent({
   onShufflePlay,
   onPlayNext,
   onAppendQueue,
+  onStartRadio,
   onSavePlaylist,
   onShare,
   onDestructive,
@@ -186,6 +188,7 @@ function PlaylistActionMenuContent({
   onShufflePlay: () => void;
   onPlayNext: () => void;
   onAppendQueue: () => void;
+  onStartRadio?: () => void;
   onSavePlaylist: () => void;
   onShare: () => void;
   onDestructive: () => void;
@@ -195,6 +198,7 @@ function PlaylistActionMenuContent({
       kind={kind}
       showEdit={Boolean(onEdit && playlist.isOwnedByUser && playlist.isEditable)}
       showShuffle
+      showStartRadio={Boolean(onStartRadio)}
       showPlayNext
       showAppendQueue
       showSavePlaylist
@@ -204,8 +208,10 @@ function PlaylistActionMenuContent({
       }
       disableEdit={isPending}
       disableDestructive={isPending}
+      disableStartRadio={isPending}
       onEdit={onEdit}
       onShufflePlay={onShufflePlay}
+      onStartRadio={onStartRadio}
       onPlayNext={onPlayNext}
       onAppendQueue={onAppendQueue}
       onSavePlaylist={onSavePlaylist}
@@ -282,6 +288,7 @@ function SidebarPlaylistMenuAnchor({
   onShufflePlay,
   onPlayNext,
   onAppendQueue,
+  onStartRadio,
   onSavePlaylist,
   onShare,
   onDestructive,
@@ -297,6 +304,7 @@ function SidebarPlaylistMenuAnchor({
   onShufflePlay: () => void;
   onPlayNext: () => void;
   onAppendQueue: () => void;
+  onStartRadio?: () => void;
   onSavePlaylist: () => void;
   onShare: () => void;
   onDestructive: () => void;
@@ -357,6 +365,7 @@ function SidebarPlaylistMenuAnchor({
       isPending={isPending}
       onEdit={onEdit}
       onShufflePlay={onShufflePlay}
+      onStartRadio={onStartRadio}
       onPlayNext={onPlayNext}
       onAppendQueue={onAppendQueue}
       onSavePlaylist={onSavePlaylist}
@@ -396,6 +405,7 @@ function SidebarPlaylistMenuAnchor({
             isPending={isPending}
             onEdit={onEdit}
             onShufflePlay={onShufflePlay}
+            onStartRadio={onStartRadio}
             onPlayNext={onPlayNext}
             onAppendQueue={onAppendQueue}
             onSavePlaylist={onSavePlaylist}
@@ -414,6 +424,7 @@ export function SidePanel({
   onSavePlaylist,
   onAddPlaylistNext,
   onAppendPlaylistToQueue,
+  onStartRadio,
   onPlaylistDeleted,
 }: SidePanelProps) {
   const [, navigate] = useLocation();
@@ -632,6 +643,32 @@ export function SidePanel({
     [onSavePlaylist]
   );
 
+  const handlePlaylistStartRadio = useCallback(
+    (playlist: Playlist) => {
+      console.log(
+        `[SidePanel] playlist action ${JSON.stringify({
+          playlistId: playlist.playlistId,
+          title: playlist.title,
+          action: "start-radio",
+        })}`
+      );
+      void resolvePlaylistPlayback(playlist)
+        .then((playback) => {
+          const firstTrack = playback.tracks[0];
+          if (!firstTrack) {
+            toast.error("A playlist está vazia.");
+            return;
+          }
+          onStartRadio({ kind: "video", id: firstTrack.videoId });
+        })
+        .catch((error) => {
+          console.error("[SidePanel] start radio failed", error);
+          toast.error("Não foi possível iniciar o rádio.");
+        });
+    },
+    [onStartRadio, resolvePlaylistPlayback]
+  );
+
   const handlePlaylistShare = useCallback((playlist: Playlist) => {
     const url = buildPlaylistShareUrl(playlist.playlistId);
     console.log(
@@ -787,6 +824,7 @@ export function SidePanel({
                           onAppendQueue={() =>
                             handlePlaylistAppendQueue(playlist)
                           }
+                          onStartRadio={() => handlePlaylistStartRadio(playlist)}
                           onSavePlaylist={() => handlePlaylistSave(playlist)}
                           onShare={() => handlePlaylistShare(playlist)}
                           onDestructive={() =>
