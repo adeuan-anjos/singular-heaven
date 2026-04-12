@@ -17,6 +17,7 @@ import {
   ytQueueRemove,
   ytQueueSet,
   ytQueueToggleShuffle,
+  ytRadioLoadMore,
   ytRadioReroll,
 } from "../services/yt-api";
 
@@ -24,6 +25,7 @@ const PAGE_SIZE = 50;
 const INITIAL_REVEAL = 50;
 const CURRENT_TRACK_BUFFER = 10;
 const inflightWindows = new Set<number>();
+let loadMoreInflight = false;
 
 interface QueueState {
   pages: Record<number, QueueWindowItem[]>;
@@ -67,6 +69,7 @@ interface QueueActions {
   removeFromQueue: (index: number) => Promise<void>;
   toggleShuffle: () => Promise<void>;
   cycleRepeat: () => Promise<void>;
+  loadMoreRadio: () => Promise<void>;
   applyRadioExtended: (snapshot: QueueSnapshot) => void;
   cleanup: () => Promise<void>;
 }
@@ -484,6 +487,25 @@ export const useQueueStore = create<QueueStore>()((set, get) => ({
       ...applySnapshot(response.snapshot),
       revealedCount: deriveRevealedCount(state.revealedCount, response.snapshot, false),
     }));
+  },
+
+  loadMoreRadio: async () => {
+    const { isRadio, isComplete } = get();
+    if (!isRadio || isComplete) return;
+
+    // Local in-flight guard (matches backend's rs.fetching)
+    if (loadMoreInflight) return;
+    loadMoreInflight = true;
+
+    try {
+      console.log("[queue-store] loadMoreRadio → ytRadioLoadMore()");
+      const r = await ytRadioLoadMore();
+      set(applySnapshot(r.snapshot));
+    } catch (err) {
+      console.error("[queue-store] loadMoreRadio failed", err);
+    } finally {
+      loadMoreInflight = false;
+    }
   },
 
   applyRadioExtended: (snapshot: QueueSnapshot) => {

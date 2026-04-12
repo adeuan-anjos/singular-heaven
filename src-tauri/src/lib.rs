@@ -457,6 +457,7 @@ pub fn run() {
             youtube_music::commands::yt_queue_clear,
             youtube_music::commands::yt_radio_start,
             youtube_music::commands::yt_radio_reroll,
+            youtube_music::commands::yt_radio_load_more,
             #[cfg(debug_assertions)]
             youtube_music::commands::yt_dev_corrupt_cookies,
             #[cfg(debug_assertions)]

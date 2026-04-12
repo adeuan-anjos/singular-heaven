@@ -110,6 +110,10 @@ pub struct RadioState {
     pub continuation: Option<String>,
     pub pool_exhausted: bool,
     pub loaded_count: usize,
+    /// In-flight guard — true while a continuation request is being fetched.
+    /// Prevents the track-end trigger and the scroll-trigger from racing each
+    /// other when the user happens to scroll while a track ends.
+    pub fetching: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -183,11 +187,9 @@ impl PlaybackQueue {
         self.radio_state = None;
     }
 
-    /// Quantas faixas sobram depois da posição atual. Kept for future use in
-    /// scroll-based triggers — the radio continuation trigger was replaced by
-    /// a proactive background loop (see `continue_radio_loop`), so there is
-    /// currently no non-test caller.
-    #[allow(dead_code)]
+    /// Quantas faixas sobram depois da posição atual. Used by
+    /// `yt_queue_handle_track_end` to decide whether to trigger a lazy radio
+    /// continuation fetch as natural playback approaches the end of the queue.
     pub fn remaining_after_current(&self) -> usize {
         match self.current_index {
             Some(idx) if idx < self.playback_items.len() => {
@@ -1311,6 +1313,7 @@ mod tests {
             continuation: Some("tok".into()),
             pool_exhausted: false,
             loaded_count: 10,
+            fetching: false,
         });
         assert!(queue.radio_state().is_some());
         queue.set_queue(vec!["a".into()], 0, None, true, false);

@@ -845,3 +845,8 @@ export async function ytRadioReroll(): Promise<QueueCommandResponse> {
   const json = await invoke<string>("yt_radio_reroll");
   return parseJson<QueueCommandResponse>(json);
 }
+
+export async function ytRadioLoadMore(): Promise<QueueCommandResponse> {
+  const json = await invoke<string>("yt_radio_load_more");
+  return parseJson<QueueCommandResponse>(json);
+}

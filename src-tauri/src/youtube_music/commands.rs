@@ -2683,9 +2683,33 @@ pub async fn yt_queue_handle_track_end(
         queue.handle_track_end()
     };
     emit_queue_state_updated(&app, &response.snapshot);
-    // Radio continuation is handled proactively by the background loop spawned
-    // from `yt_radio_start` / `yt_radio_reroll` (mirrors the yt_load_playlist
-    // pattern), so there's nothing to trigger here on track end.
+
+    // Radio mode — lazy continuation trigger. When the user is playing the
+    // final couple of tracks in the current radio pool, fetch one more page
+    // so playback continues smoothly. This is the "natural end of playback"
+    // path; the other path is the scroll-triggered `yt_radio_load_more`.
+    // Kept deliberately lazy (<= 2) so idle radios don't burn API calls.
+    {
+        let q = queue.lock().await;
+        if let Some(rs) = q.radio_state() {
+            let remaining = q.remaining_after_current();
+            let should_continue = remaining <= 2
+                && !rs.pool_exhausted
+                && rs.continuation.is_some()
+                && !rs.fetching;
+            drop(q);
+            if should_continue {
+                println!(
+                    "[yt_queue_handle_track_end] radio low ({remaining} remaining) — spawning continuation"
+                );
+                let app_clone = app.clone();
+                tokio::spawn(async move {
+                    continue_radio_background(app_clone).await;
+                });
+            }
+        }
+    }
+
     Ok(response)
 }
 
@@ -2877,9 +2901,11 @@ pub async fn continue_radio_background(app: AppHandle) {
     let queue = app.state::<Arc<tokio::sync::Mutex<PlaybackQueue>>>();
 
     // 1. Snapshot radio_state without holding the queue lock across I/O.
+    //    Also claim the `fetching` in-flight guard so the scroll-triggered
+    //    `yt_radio_load_more` can't race against us.
     let (token, is_playlist_seed, collection_id) = {
-        let q = queue.lock().await;
-        let Some(rs) = q.radio_state() else {
+        let mut q = queue.lock().await;
+        let Some(rs) = q.radio_state_mut() else {
             println!("[continue_radio] queue no longer in radio mode — aborting");
             return;
         };
@@ -2887,10 +2913,15 @@ pub async fn continue_radio_background(app: AppHandle) {
             println!("[continue_radio] pool already exhausted — aborting");
             return;
         }
+        if rs.fetching {
+            println!("[continue_radio] another fetch in flight — aborting");
+            return;
+        }
         let Some(tok) = rs.continuation.clone() else {
             println!("[continue_radio] no continuation token — aborting");
             return;
         };
+        rs.fetching = true;
         let is_playlist =
             matches!(rs.seed.kind, RadioSeedKind::Playlist | RadioSeedKind::Album);
         let coll_id = format!("{}:{}", rs.seed.kind.as_str(), rs.seed.id);
@@ -2918,6 +2949,11 @@ pub async fn continue_radio_background(app: AppHandle) {
         Ok(p) => p,
         Err(e) => {
             println!("[continue_radio] error: {e} — aborting");
+            // Release the in-flight guard so future triggers can retry.
+            let mut q = queue.lock().await;
+            if let Some(rs) = q.radio_state_mut() {
+                rs.fetching = false;
+            }
             return;
         }
     };
@@ -2953,6 +2989,7 @@ pub async fn continue_radio_background(app: AppHandle) {
         if let Some(rs) = q.radio_state_mut() {
             rs.continuation = page.continuation.clone();
             rs.loaded_count += added;
+            rs.fetching = false;
             if exhausted {
                 rs.pool_exhausted = true;
                 println!("[continue_radio] pool_exhausted=true");
@@ -2972,106 +3009,6 @@ pub async fn continue_radio_background(app: AppHandle) {
     };
     let _ = app.emit("radio-extended", &snapshot_payload);
     println!("[continue_radio] done — added {added} tracks");
-}
-
-/// Maximum tracks the background radio loop will accumulate before stopping.
-/// Prevents runaway memory and network usage when the YT API keeps returning
-/// continuation tokens indefinitely.
-const MAX_RADIO_QUEUE_SIZE: usize = 2000;
-
-/// Background loop that keeps fetching radio continuation pages until the pool
-/// is exhausted, the queue leaves radio mode, or the seed changes. Mirrors the
-/// `yt_load_playlist` background task pattern so the queue is extended
-/// proactively, not only when a track ends.
-///
-/// The loop is self-aborting: every iteration re-checks the current
-/// `radio_state` against the expected seed id. If another radio started (reroll
-/// producing a different seed, or a fresh `yt_radio_start`), this loop exits
-/// and the new radio's loop takes over.
-async fn continue_radio_loop(app: AppHandle, expected_seed_id: String) {
-    println!("[continue_radio_loop] starting for seed={expected_seed_id}");
-    const THROTTLE_MS: u64 = 800;
-
-    loop {
-        // Brief pause between iterations. The first iteration also waits so
-        // that the initial response returned to the frontend is not blocked by
-        // background work kicked off on the same runtime.
-        tokio::time::sleep(std::time::Duration::from_millis(THROTTLE_MS)).await;
-
-        // Check current state. If we're no longer the active radio, exit.
-        // `cap_hit` flags an exit caused by the size cap so we can mark
-        // pool_exhausted+is_complete and emit a final snapshot before breaking.
-        let mut cap_hit = false;
-        let should_continue = {
-            let queue_state = app.state::<Arc<tokio::sync::Mutex<PlaybackQueue>>>();
-            let q = queue_state.lock().await;
-
-            // Hard cap on accumulated radio tracks.
-            if q.snapshot().total_loaded >= MAX_RADIO_QUEUE_SIZE {
-                println!(
-                    "[continue_radio_loop] queue reached cap ({}) — exiting loop for seed={expected_seed_id}",
-                    MAX_RADIO_QUEUE_SIZE
-                );
-                cap_hit = true;
-                false
-            } else {
-                match q.radio_state() {
-                    Some(rs) if rs.seed.id == expected_seed_id => {
-                        if rs.pool_exhausted {
-                            println!(
-                                "[continue_radio_loop] pool_exhausted — exiting loop for seed={expected_seed_id}"
-                            );
-                            false
-                        } else if rs.continuation.is_none() {
-                            println!(
-                                "[continue_radio_loop] no continuation token — exiting loop for seed={expected_seed_id}"
-                            );
-                            false
-                        } else {
-                            true
-                        }
-                    }
-                    Some(rs) => {
-                        println!(
-                            "[continue_radio_loop] seed changed ({} → {}) — exiting loop",
-                            expected_seed_id, rs.seed.id
-                        );
-                        false
-                    }
-                    None => {
-                        println!(
-                            "[continue_radio_loop] no longer in radio mode — exiting loop for seed={expected_seed_id}"
-                        );
-                        false
-                    }
-                }
-            }
-        };
-
-        if !should_continue {
-            if cap_hit {
-                // Mark the radio as finished so the frontend stops showing
-                // the loading spinner, then emit a final radio-extended with
-                // the updated snapshot so the UI syncs.
-                let queue_state = app.state::<Arc<tokio::sync::Mutex<PlaybackQueue>>>();
-                let mut q = queue_state.lock().await;
-                if let Some(rs) = q.radio_state_mut() {
-                    rs.pool_exhausted = true;
-                }
-                q.set_is_complete(true);
-                let snapshot_payload = q.snapshot();
-                drop(q);
-                let _ = app.emit("radio-extended", &snapshot_payload);
-            }
-            break;
-        }
-
-        // Delegate the actual fetch to the existing one-shot helper. On return,
-        // RadioState will have been updated (or marked exhausted).
-        continue_radio_background(app.clone()).await;
-    }
-
-    println!("[continue_radio_loop] exited for seed={expected_seed_id}");
 }
 
 // ---------------------------------------------------------------------------
@@ -3159,6 +3096,7 @@ pub async fn yt_radio_start(
             continuation,
             pool_exhausted: !has_more,
             loaded_count,
+            fetching: false,
         });
         // Rebuild the response so `snapshot.is_radio` reflects the installed
         // RadioState.
@@ -3170,15 +3108,10 @@ pub async fn yt_radio_start(
 
     emit_queue_state_updated(&app, &response.snapshot);
 
-    // Spawn background continuation loop (mirrors yt_load_playlist pattern).
-    // Only spawn if the first page already indicated there's more to fetch.
-    if has_more {
-        let app_clone = app.clone();
-        let expected_id = seed_id.clone();
-        tokio::spawn(async move {
-            continue_radio_loop(app_clone, expected_id).await;
-        });
-    }
+    // Demand-driven model: NO background loop. The queue sheet triggers
+    // `yt_radio_load_more` on scroll, and `yt_queue_handle_track_end` spawns
+    // a single `continue_radio_background` when the queue runs low.
+    let _ = has_more;
 
     println!(
         "[yt_radio_start] loaded {} tracks, is_radio={}",
@@ -3259,6 +3192,7 @@ pub async fn yt_radio_reroll(
             rs.continuation = page.continuation.clone();
             rs.loaded_count = added;
             rs.pool_exhausted = !has_more;
+            rs.fetching = false;
         }
         // Sync is_complete: if reroll fetched a page with continuation,
         // recover a previously stale is_complete=true.
@@ -3280,22 +3214,132 @@ pub async fn yt_radio_reroll(
     // 5. Sync frontend.
     emit_queue_state_updated(&app, &response.snapshot);
 
-    // Spawn a fresh background continuation loop. In practice the reroll seed
-    // matches the previous seed, so any still-running loop from the previous
-    // `yt_radio_start` will naturally pick up the new continuation token on
-    // its next iteration. But if that loop had already exited (e.g. previous
-    // `pool_exhausted` was true before the reroll refreshed the token) there
-    // is nobody to resume the work. Always spawning here is the simple, safe
-    // fix — a duplicate loop is benign because both call `continue_radio_background`
-    // under the queue lock and the second one just no-ops and exits.
-    if has_more {
-        let app_clone = app.clone();
-        let expected_id = seed.id.clone();
-        tokio::spawn(async move {
-            continue_radio_loop(app_clone, expected_id).await;
-        });
-    }
+    // Demand-driven: no background loop. Continuation is fetched lazily by
+    // `yt_radio_load_more` (scroll) or `continue_radio_background` (track end).
 
     serde_json::to_string(&response)
         .map_err(|e| format!("[yt_radio_reroll] serialization: {e}"))
+}
+
+/// Fetches ONE continuation page of radio tracks on demand (scroll-triggered).
+/// Returns the updated `QueueCommandResponse` inline so the frontend can apply
+/// the snapshot immediately. Does NOT emit `radio-extended` — the caller already
+/// has the snapshot.
+#[tauri::command]
+pub async fn yt_radio_load_more(
+    app: AppHandle,
+    state: State<'_, Arc<RwLock<YtMusicState>>>,
+    activity: State<'_, Arc<SessionActivity>>,
+    queue: State<'_, Arc<tokio::sync::Mutex<PlaybackQueue>>>,
+) -> Result<String, String> {
+    println!("[yt_radio_load_more] entering");
+
+    // In-flight guard: check if another load is running.
+    let (token, is_playlist_seed, collection_id) = {
+        let mut q = queue.lock().await;
+        let Some(rs) = q.radio_state_mut() else {
+            return Err("[yt_radio_load_more] not in radio mode".into());
+        };
+        if rs.pool_exhausted {
+            // Nothing more to load — return current snapshot.
+            let snapshot = q.snapshot();
+            let track_id = q.current_track_id();
+            let response = QueueCommandResponse { track_id, snapshot };
+            return serde_json::to_string(&response)
+                .map_err(|e| format!("[yt_radio_load_more] serialization: {e}"));
+        }
+        if rs.fetching {
+            println!("[yt_radio_load_more] another fetch in flight — returning current snapshot");
+            let snapshot = q.snapshot();
+            let track_id = q.current_track_id();
+            let response = QueueCommandResponse { track_id, snapshot };
+            return serde_json::to_string(&response)
+                .map_err(|e| format!("[yt_radio_load_more] serialization: {e}"));
+        }
+        let Some(tok) = rs.continuation.clone() else {
+            return Err("[yt_radio_load_more] no continuation token".into());
+        };
+        rs.fetching = true;
+
+        let is_playlist = matches!(rs.seed.kind, RadioSeedKind::Playlist | RadioSeedKind::Album);
+        let coll_id = format!("{}:{}", rs.seed.kind.as_str(), rs.seed.id);
+        (tok, is_playlist, coll_id)
+    };
+
+    // Fetch one continuation page.
+    let result = session::with_session_refresh(
+        &state,
+        &app,
+        &activity,
+        "yt_radio_load_more",
+        |client| {
+            let tok = token.clone();
+            async move { client.get_watch_playlist_continuation(&tok, is_playlist_seed).await }
+        },
+    )
+    .await;
+
+    // Release the fetching flag regardless of outcome.
+    let page = match result {
+        Ok(p) => p,
+        Err(e) => {
+            let mut q = queue.lock().await;
+            if let Some(rs) = q.radio_state_mut() {
+                rs.fetching = false;
+            }
+            return Err(format!("[yt_radio_load_more] {e}"));
+        }
+    };
+
+    let track_ids: Vec<String> = page.tracks.iter().map(|t| t.video_id.clone()).collect();
+    let cached: Vec<CachedTrack> = page.tracks.iter().map(cached_from_watch).collect();
+
+    // Best-effort cache write.
+    if !cached.is_empty() {
+        let cache_state = app.state::<Arc<tokio::sync::Mutex<PlaylistCache>>>();
+        let cache_guard = cache_state.lock().await;
+        match cache_guard.collection_track_count("radio", &collection_id) {
+            Ok(start_pos) => {
+                let rows = playlist_cache::cached_tracks_to_rows(&cached);
+                if let Err(e) =
+                    cache_guard.save_collection_tracks("radio", &collection_id, start_pos, &rows)
+                {
+                    println!("[yt_radio_load_more] save_collection_tracks error: {e}");
+                }
+            }
+            Err(e) => {
+                println!(
+                    "[yt_radio_load_more] collection_track_count error: {e} — skipping cache write"
+                );
+            }
+        }
+    }
+
+    // Append to queue and update radio state.
+    let response = {
+        let mut q = queue.lock().await;
+        let added = q.append_radio_batch(&track_ids);
+        if let Some(rs) = q.radio_state_mut() {
+            rs.continuation = page.continuation.clone();
+            rs.loaded_count += added;
+            rs.fetching = false;
+            if track_ids.is_empty() || page.continuation.is_none() {
+                rs.pool_exhausted = true;
+                println!("[yt_radio_load_more] pool_exhausted=true");
+            }
+        }
+        q.set_is_complete(page.continuation.is_none());
+        println!(
+            "[yt_radio_load_more] added {} tracks, total={}",
+            added,
+            q.snapshot().total_loaded
+        );
+        QueueCommandResponse {
+            track_id: q.current_track_id(),
+            snapshot: q.snapshot(),
+        }
+    };
+
+    serde_json::to_string(&response)
+        .map_err(|e| format!("[yt_radio_load_more] serialization: {e}"))
 }

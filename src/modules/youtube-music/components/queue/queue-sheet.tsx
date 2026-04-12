@@ -134,6 +134,7 @@ function QueueSheetContent() {
     pagesVersion,
     currentIndex,
     isComplete,
+    isRadio,
     pageSize,
     getItemAt,
     initializeReveal,
@@ -142,6 +143,7 @@ function QueueSheetContent() {
     ensureRange,
     removeFromQueue,
     queuePlayIndex,
+    loadMoreRadio,
   } = useQueueStore(
     useShallow((s) => ({
       totalLoaded: s.totalLoaded,
@@ -149,6 +151,7 @@ function QueueSheetContent() {
       pagesVersion: s.pagesVersion,
       currentIndex: s.currentIndex,
       isComplete: s.isComplete,
+      isRadio: s.isRadio,
       pageSize: s.pageSize,
       getItemAt: s.getItemAt,
       initializeReveal: s.initializeReveal,
@@ -157,6 +160,7 @@ function QueueSheetContent() {
       ensureRange: s.ensureRange,
       removeFromQueue: s.removeFromQueue,
       queuePlayIndex: s.playIndex,
+      loadMoreRadio: s.loadMoreRadio,
     }))
   );
   const playerPlay = usePlayerStore((s) => s.play);
@@ -270,6 +274,15 @@ function QueueSheetContent() {
       reachedTerminalRowRef.current = null;
     }
   }, [revealedCount, terminalRowType, totalLoaded]);
+
+  // Radio demand-driven loading: when the loading row becomes visible and
+  // we're in radio mode, fetch ONE continuation page. The in-flight guard
+  // inside loadMoreRadio prevents duplicate requests.
+  useEffect(() => {
+    if (terminalRowType === "loading" && isRadio) {
+      void loadMoreRadio();
+    }
+  }, [terminalRowType, isRadio, loadMoreRadio]);
 
   const virtualItems = virtualizer.getVirtualItems();
   const visibleContentRows = virtualItems.filter(
