@@ -7,7 +7,6 @@ const LOG_TAG = "[MediaSessionBridge]";
 // ── Module-level state ──
 
 let initialized = false;
-let initPromise: Promise<void> | null = null;
 let unsubscribePlayer: (() => void) | null = null;
 
 // ── Feature detection ──
@@ -177,19 +176,9 @@ function subscribeToPlayerStore(): () => void {
 
 // ── Public API ──
 
-export async function initMediaSession(): Promise<void> {
+export function initMediaSession(): void {
   if (initialized) return;
-  if (initPromise) return void (await initPromise);
 
-  initPromise = doInit();
-  try {
-    await initPromise;
-  } finally {
-    initPromise = null;
-  }
-}
-
-async function doInit(): Promise<void> {
   if (!isMediaSessionAvailable()) {
     console.warn(LOG_TAG, "MediaSession API not available on this platform");
     return;
@@ -205,7 +194,7 @@ async function doInit(): Promise<void> {
 }
 
 export function destroyMediaSession(): void {
-  if (!initialized && !initPromise) return;
+  if (!initialized) return;
 
   console.log(LOG_TAG, "destroying");
 

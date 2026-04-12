@@ -131,7 +131,7 @@ export default function YouTubeMusicModule() {
 
     checkAuth();
     void queueHydrate();
-    void initMediaSession();
+    initMediaSession();
 
     return () => {
       cancelled = true;
