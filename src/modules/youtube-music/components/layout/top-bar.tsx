@@ -75,8 +75,8 @@ export function TopBar({ onLogout }: TopBarProps) {
         if (cancelled) return;
         const active = accounts.find((a) => a.isActive) ?? accounts[0] ?? null;
         console.log("[TopBar] active account loaded", {
-          name: active?.name ?? null,
-          channelHandle: active?.channelHandle ?? null,
+          hasAccount: Boolean(active),
+          hasHandle: Boolean(active?.channelHandle),
           hasPhoto: Boolean(active?.photoUrl),
           isActive: active?.isActive ?? null,
         });

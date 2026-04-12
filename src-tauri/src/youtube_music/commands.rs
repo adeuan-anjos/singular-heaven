@@ -983,7 +983,10 @@ pub async fn yt_switch_account(
     state: State<'_, Arc<RwLock<YtMusicState>>>,
     activity: State<'_, Arc<SessionActivity>>,
 ) -> Result<String, String> {
-    println!("[yt_switch_account] page_id={page_id:?}");
+    println!(
+        "[yt_switch_account] has_page_id={}",
+        page_id.as_ref().is_some()
+    );
 
     // Write lock: mutation + persist to disk
     {
@@ -1420,11 +1423,17 @@ pub async fn yt_detect_google_accounts(
 
         let key = (identity.name.clone(), identity.channel_handle.clone());
         if seen_keys.contains(&key) {
-            println!("[yt_detect_google_accounts] Duplicate identity '{}' at auth_user={auth_user}. Skipping.", identity.name);
+            println!(
+                "[yt_detect_google_accounts] Duplicate identity at auth_user={auth_user}. Skipping."
+            );
             continue;
         }
 
-        println!("[yt_detect_google_accounts] Found account: auth_user={auth_user}, name='{}', email={:?}, handle={:?}", identity.name, identity.email, identity.channel_handle);
+        println!(
+            "[yt_detect_google_accounts] Found account: auth_user={auth_user}, has_email={}, has_handle={}",
+            identity.email.is_some(),
+            identity.channel_handle.is_some()
+        );
         seen_keys.insert(key);
         accounts.push(GoogleAccountInfo {
             auth_user,

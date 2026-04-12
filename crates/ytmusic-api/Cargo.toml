@@ -3,7 +3,6 @@ name = "ytmusic-api"
 version = "0.1.0"
 edition = "2021"
 description = "YouTube Music InnerTube API client — converted from Python ytmusicapi"
-authors = ["Open Source Maintainer"]
 
 [dependencies]
 reqwest = { version = "0.12", features = ["json", "cookies"] }

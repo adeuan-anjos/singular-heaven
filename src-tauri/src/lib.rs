@@ -500,15 +500,12 @@ pub fn run() {
                         let mut restored_page_id: Option<String> = None;
                         if let Some(ref dir) = app_data_dir {
                             if let Some(page_id) = YtMusicState::load_page_id(dir) {
-                                println!("[setup] restoring saved page_id={page_id}");
+                                println!("[setup] restoring saved page_id");
                                 state.client.set_on_behalf_of_user(Some(page_id.clone()));
                                 restored_page_id = Some(page_id);
                             }
                         }
                         println!("[setup] FINAL STATE SUMMARY: authenticated=true, auth_user={auth_user}, has_page_id={}", restored_page_id.is_some());
-                        if let Some(ref pid) = restored_page_id {
-                            println!("[setup] FINAL STATE SUMMARY: page_id={pid}");
-                        }
                         app.manage(Arc::new(RwLock::new(state)));
                         println!("[setup] YtMusicState added to managed state.");
                         return Ok(());

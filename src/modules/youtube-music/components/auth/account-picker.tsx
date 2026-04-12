@@ -62,8 +62,8 @@ export function AccountPicker({ onAccountSelected }: AccountPickerProps) {
 
   const handleSelect = async (account: ApiAccountInfo) => {
     console.log("[AccountPicker] channel clicked", {
-      name: account.name,
-      pageId: account.pageId ?? null,
+      hasPageId: Boolean(account.pageId),
+      hasChannelHandle: Boolean(account.channelHandle),
     });
     setSwitching(account.pageId ?? "main");
     try {

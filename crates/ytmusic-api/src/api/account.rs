@@ -32,7 +32,10 @@ impl YtMusicClient {
                 .filter(|s| s.contains('@'))
                 .map(|s| s.to_string());
 
-            println!("[ytmusic-api] get_accounts header_email={:?}", header_email);
+            println!(
+                "[ytmusic-api] get_accounts header_email_present={}",
+                header_email.is_some()
+            );
 
             let menu_sections = nav_array(&menu_val, &["sections"]);
             for section in &menu_sections {

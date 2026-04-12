@@ -42,8 +42,8 @@ export function GoogleAccountPicker({
         const result = await ytDetectGoogleAccounts();
         console.log("[GoogleAccountPicker] detected accounts", {
           count: result.length,
-          names: result.map((a) => a.name),
           authUsers: result.map((a) => a.authUser),
+          withEmail: result.filter((a) => Boolean(a.email)).length,
         });
 
         if (cancelled) return;
@@ -52,7 +52,6 @@ export function GoogleAccountPicker({
           const selectedAuthUser = result[0]?.authUser ?? 0;
           console.log("[GoogleAccountPicker] single account — auto-skipping picker", {
             authUser: selectedAuthUser,
-            name: result[0]?.name ?? "(none)",
           });
           onAccountSelected(selectedAuthUser);
           return;
@@ -82,7 +81,6 @@ export function GoogleAccountPicker({
 
   const handleSelect = async (account: ApiGoogleAccountInfo) => {
     console.log("[GoogleAccountPicker] account clicked", {
-      name: account.name,
       authUser: account.authUser,
     });
     setSelecting(account.authUser);

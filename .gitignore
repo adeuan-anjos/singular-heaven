@@ -26,6 +26,10 @@ dist-ssr
 # Environment / secrets
 .env
 .env.*
+oauth_token.json
+yt_cookies.txt
+yt_page_id.txt
+yt_auth_user.txt
 
 # Security audit reports (contain sensitive findings)
 SECURITY-AUDIT-*.md
