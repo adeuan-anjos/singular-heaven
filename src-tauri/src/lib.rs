@@ -63,6 +63,68 @@ fn set_webview_memory_level(
     });
 }
 
+/// Set the window icon for taskbar and Alt+Tab using Win32 API directly.
+/// Loads the icon from the exe's embedded resource (ID 32512), which tauri-build
+/// writes to resource.rc during compilation. This bypasses Tauri's buggy
+/// default_window_icon / set_icon path (tauri-codegen bug #14596).
+#[cfg(target_os = "windows")]
+fn set_window_icon_from_resource(window: &tauri::WebviewWindow<impl tauri::Runtime>) {
+    use std::ffi::c_void;
+
+    type HANDLE = *mut c_void;
+
+    const IMAGE_ICON: u32 = 1;
+    const LR_SHARED: u32 = 0x0000_8000;
+    const WM_SETICON: u32 = 0x0080;
+    const ICON_SMALL: usize = 0;
+    const ICON_BIG: usize = 1;
+
+    extern "system" {
+        fn GetModuleHandleW(lpModuleName: *const u16) -> *mut c_void;
+        fn LoadImageW(
+            hInst: *mut c_void,
+            name: *const u16,
+            r#type: u32,
+            cx: i32,
+            cy: i32,
+            fuLoad: u32,
+        ) -> HANDLE;
+        fn SendMessageW(
+            hWnd: *mut c_void,
+            msg: u32,
+            wParam: usize,
+            lParam: isize,
+        ) -> isize;
+    }
+
+    match window.hwnd() {
+        Ok(hwnd) => unsafe {
+            let hinstance = GetModuleHandleW(std::ptr::null());
+            // Resource ID 32512: standard icon ID that tauri-build embeds in resource.rc
+            let resource_id = 32512u16 as *const u16;
+
+            let icon_big = LoadImageW(hinstance, resource_id, IMAGE_ICON, 48, 48, LR_SHARED);
+            let icon_small = LoadImageW(hinstance, resource_id, IMAGE_ICON, 16, 16, LR_SHARED);
+
+            let hwnd_ptr = hwnd.0 as *mut c_void;
+
+            if !icon_big.is_null() {
+                SendMessageW(hwnd_ptr, WM_SETICON, ICON_BIG, icon_big as isize);
+                println!("[setup] ICON_BIG set via Win32 API.");
+            } else {
+                eprintln!("[setup] LoadImageW failed for ICON_BIG.");
+            }
+            if !icon_small.is_null() {
+                SendMessageW(hwnd_ptr, WM_SETICON, ICON_SMALL, icon_small as isize);
+                println!("[setup] ICON_SMALL set via Win32 API.");
+            } else {
+                eprintln!("[setup] LoadImageW failed for ICON_SMALL.");
+            }
+        },
+        Err(e) => eprintln!("[setup] Failed to get HWND for icon: {e}"),
+    }
+}
+
 /// Set WebView2 Tracking Prevention to Basic level.
 /// Default (Balanced) blocks storage for CDN domains like yt3.ggpht.com, which
 /// pollutes the console with warnings. Basic still protects against malicious
@@ -335,11 +397,11 @@ pub fn run() {
             }
 
             // ── Window Icon (taskbar / Alt+Tab) ─────────────────────────
+            // Uses Win32 API directly to load icon from exe resource, bypassing
+            // Tauri's buggy codegen path (bug #14596).
+            #[cfg(target_os = "windows")]
             if let Some(window) = app.get_webview_window("main") {
-                if let Some(icon) = app.default_window_icon() {
-                    let _ = window.set_icon(icon.clone());
-                    println!("[setup] Window icon set for taskbar/Alt+Tab.");
-                }
+                set_window_icon_from_resource(&window);
             }
 
             // ── System Tray ──────────────────────────────────────────────
@@ -352,7 +414,7 @@ pub fn run() {
                 .build()?;
 
             TrayIconBuilder::new()
-                .icon(app.default_window_icon().cloned().expect("app icon missing"))
+                .icon(Image::from_bytes(ICON_BYTES).expect("failed to load tray icon"))
                 .menu(&tray_menu)
                 .show_menu_on_left_click(false)
                 .tooltip("Singular Haven")
