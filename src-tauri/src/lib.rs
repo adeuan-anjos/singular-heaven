@@ -5,31 +5,18 @@ mod youtube_music;
 
 use std::collections::HashSet;
 use std::sync::Arc;
-use tauri::{Emitter, Manager};
+use tauri::image::Image;
+use tauri::Manager;
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tokio::sync::RwLock;
 
+/// App icon embedded at compile time (128x128@2x = 256x256 PNG).
+/// Workaround for tauri-codegen bug #14596 which only reads the first ICO entry,
+/// producing a tiny/wrong icon for taskbar and Alt+Tab in production builds.
+const ICON_BYTES: &[u8] = include_bytes!("../icons/128x128@2x.png");
+
 use youtube_music::client::YtMusicState;
 use youtube_music::session::SessionActivity;
-
-/// Register a media control event handler that emits OS media events (play, pause,
-/// next, previous) to the frontend via Tauri's event system.
-/// MUST be called AFTER plugin:media|initialize_session and exactly ONCE.
-/// The plugin's set_event_handler() internally calls setup_button_handlers() which
-/// registers SMTC handlers — calling this multiple times would duplicate them.
-#[tauri::command]
-fn register_media_event_handler(app: tauri::AppHandle) {
-    use tauri_plugin_media::MediaExt;
-    let handle = app.clone();
-    println!("[media-controls] Registering OS media event handler");
-    app.media().set_event_handler(move |event| {
-        println!("[media-controls] OS event: {:?}", event.event_type);
-        if let Err(e) = handle.emit("media-control-event", &event) {
-            eprintln!("[media-controls] Failed to emit event: {e}");
-        }
-    });
-    println!("[media-controls] OS media event handler registered");
-}
 
 #[tauri::command]
 fn yt_set_memory_level(window: tauri::WebviewWindow, low: bool) {
@@ -131,7 +118,6 @@ pub fn run() {
             }
         }))
         .plugin(tauri_plugin_opener::init())
-        .plugin(tauri_plugin_media::init())
         .register_asynchronous_uri_scheme_protocol("thumb", |ctx, request, responder| {
             let app = ctx.app_handle().clone();
             tauri::async_runtime::spawn(async move {
@@ -490,7 +476,6 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
-            register_media_event_handler,
             yt_set_memory_level,
             youtube_music::commands::yt_search,
             youtube_music::commands::yt_search_suggestions,

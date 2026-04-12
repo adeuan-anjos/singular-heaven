@@ -1,162 +1,68 @@
-import { invoke } from "@tauri-apps/api/core";
-import { listen, type UnlistenFn } from "@tauri-apps/api/event";
-
 import { usePlayerStore } from "../stores/player-store";
 import { useQueueStore } from "../stores/queue-store";
 import { useTrackCacheStore } from "../stores/track-cache-store";
 
 const LOG_TAG = "[MediaSessionBridge]";
 
-// ── Module-level state (service, not a React component) ──
+// ── Module-level state ──
 
 let initialized = false;
-let initPromise: Promise<void> | null = null; // Guards against concurrent/double init (React StrictMode)
+let initPromise: Promise<void> | null = null;
 let unsubscribePlayer: (() => void) | null = null;
-let unlistenMediaEvent: UnlistenFn | null = null;
-let positionInterval: ReturnType<typeof setInterval> | null = null;
 
-// ── Event deduplication ──
-// The plugin's setup_button_handlers() may register multiple SMTC handlers
-// (once from set_event_handler, once from initialize_session), causing
-// duplicate Rust emits per single OS media key press. We deduplicate by
-// eventType + timestamp — the same physical keypress produces identical timestamps.
-let lastEventKey = "";
+// ── Feature detection ──
 
-// ── Helpers ──
-
-/** Wrapper around plugin invoke for set_metadata that includes artworkData field */
-async function setMetadataWithDefaults(metadata: {
-  title: string;
-  artist?: string;
-  album?: string;
-  duration?: number;
-  artworkUrl?: string;
-}): Promise<void> {
-  await invoke("plugin:media|set_metadata", {
-    metadata: {
-      title: metadata.title,
-      artist: metadata.artist ?? null,
-      album: metadata.album ?? null,
-      albumArtist: null,
-      duration: metadata.duration ?? null,
-      artworkUrl: metadata.artworkUrl ?? null,
-      artworkData: null, // Required by Rust struct deserialization
-    },
-  });
+function isMediaSessionAvailable(): boolean {
+  return "mediaSession" in navigator;
 }
 
-/** Wrapper for set_playback_info */
-async function setPlaybackInfoDirect(info: {
-  status: string;
-  position: number;
-  playbackRate: number;
-}): Promise<void> {
-  await invoke("plugin:media|set_playback_info", {
-    info: {
-      status: info.status,
-      position: info.position,
-      shuffle: false,
-      repeatMode: "none",
-      playbackRate: info.playbackRate,
-    },
-  });
-}
+// ── Metadata sync (app → OS) ──
 
-/** Wrapper for set_playback_status */
-async function setPlaybackStatusDirect(status: string): Promise<void> {
-  await invoke("plugin:media|set_playback_status", { status });
-}
-
-/** Wrapper for clear_metadata */
-async function clearNowPlayingDirect(): Promise<void> {
-  await invoke("plugin:media|clear_metadata");
-}
-
-/** Wrapper for set_position */
-async function updatePositionDirect(position: number): Promise<void> {
-  await invoke("plugin:media|set_position", { position });
-}
-
-function toPlaybackStatus(isPlaying: boolean): string {
-  return isPlaying ? "playing" : "paused";
-}
-
-async function pushNowPlaying(videoId: string): Promise<void> {
+function syncMetadata(videoId: string): void {
   const track = useTrackCacheStore.getState().getTrack(videoId);
-
   if (!track) {
-    console.warn(LOG_TAG, "pushNowPlaying: track not in cache yet", { videoId });
+    console.warn(LOG_TAG, "syncMetadata: track not in cache", { videoId });
     return;
   }
 
   const artistName = track.artists.map((a) => a.name).join(", ");
-  const albumName = track.album?.name ?? undefined;
 
-  // Pick the highest-resolution thumbnail available
-  const thumbnail =
-    track.thumbnails.length > 0
-      ? track.thumbnails.reduce((best, t) =>
-          t.width * t.height > best.width * best.height ? t : best
-        )
-      : undefined;
+  // Build artwork array from thumbnails (all resolutions for OS to pick best)
+  const artwork = track.thumbnails.map((t) => ({
+    src: t.url,
+    sizes: `${t.width}x${t.height}`,
+    type: "image/jpeg" as const,
+  }));
 
-  const { isPlaying, progress } = usePlayerStore.getState();
+  console.log(LOG_TAG, "syncMetadata", { title: track.title, artist: artistName });
 
-  console.log(LOG_TAG, "pushNowPlaying", {
-    videoId,
+  navigator.mediaSession.metadata = new MediaMetadata({
     title: track.title,
     artist: artistName,
-    isPlaying,
-  });
-
-  await setMetadataWithDefaults({
-    title: track.title,
-    artist: artistName || undefined,
-    album: albumName,
-    duration: track.durationSeconds > 0 ? track.durationSeconds : undefined,
-    artworkUrl: thumbnail?.url,
-  });
-
-  await setPlaybackInfoDirect({
-    status: toPlaybackStatus(isPlaying),
-    position: progress,
-    playbackRate: 1,
+    album: track.album?.name ?? "",
+    artwork,
   });
 }
 
-// ── Event handler (OS → app) ──
-// Events arrive via Tauri's emit system from Rust (serde camelCase serialization).
+// ── Action handlers (OS → app) ──
 
-interface MediaControlEventPayload {
-  eventType: string;
-  timestamp: number;
-}
+function registerActionHandlers(): void {
+  console.log(LOG_TAG, "registering media session action handlers");
 
-function handleMediaControlEvent(event: MediaControlEventPayload): void {
-  // ── Deduplicate: same eventType+timestamp = same physical keypress ──
-  const key = `${event.eventType}-${event.timestamp}`;
-  if (key === lastEventKey) {
-    console.log(LOG_TAG, "dedup: skipping duplicate event", { key });
-    return;
-  }
-  lastEventKey = key;
+  try {
+    navigator.mediaSession.setActionHandler("play", () => {
+      console.log(LOG_TAG, "action: play");
+      usePlayerStore.getState().togglePlay();
+    });
 
-  const eventType = event.eventType;
-  console.log(LOG_TAG, "handling OS event", { eventType });
+    navigator.mediaSession.setActionHandler("pause", () => {
+      console.log(LOG_TAG, "action: pause");
+      usePlayerStore.getState().togglePlay();
+    });
 
-  const playerState = usePlayerStore.getState();
-  const queueState = useQueueStore.getState();
-
-  switch (eventType) {
-    case "playPause":
-    case "play":
-    case "pause":
-      console.log(LOG_TAG, "togglePlay");
-      playerState.togglePlay();
-      break;
-
-    case "next":
-      console.log(LOG_TAG, "next track");
+    navigator.mediaSession.setActionHandler("nexttrack", () => {
+      console.log(LOG_TAG, "action: nexttrack");
+      const queueState = useQueueStore.getState();
       queueState.next().then((nextId) => {
         if (nextId) {
           console.log(LOG_TAG, "advancing to next track", { nextId });
@@ -167,15 +73,16 @@ function handleMediaControlEvent(event: MediaControlEventPayload): void {
       }).catch((err) => {
         console.error(LOG_TAG, "next() failed", err);
       });
-      break;
+    });
 
-    case "previous": {
-      const { progress } = usePlayerStore.getState();
-      if (progress > 3) {
-        console.log(LOG_TAG, "previous: progress > 3s, seeking to start", { progress });
+    navigator.mediaSession.setActionHandler("previoustrack", () => {
+      console.log(LOG_TAG, "action: previoustrack");
+      const playerState = usePlayerStore.getState();
+      if (playerState.progress > 3) {
+        console.log(LOG_TAG, "previous: progress > 3s, seeking to start");
         playerState.seek(0);
       } else {
-        console.log(LOG_TAG, "previous: going to previous track");
+        const queueState = useQueueStore.getState();
         queueState.previous().then((prevId) => {
           if (prevId) {
             console.log(LOG_TAG, "advancing to previous track", { prevId });
@@ -187,23 +94,41 @@ function handleMediaControlEvent(event: MediaControlEventPayload): void {
           console.error(LOG_TAG, "previous() failed", err);
         });
       }
-      break;
-    }
+    });
 
-    case "stop":
-      console.log(LOG_TAG, "stop");
-      playerState.cleanup();
-      clearNowPlayingDirect().catch((err) => {
-        console.error(LOG_TAG, "clearNowPlaying after stop failed", err);
-      });
-      break;
+    navigator.mediaSession.setActionHandler("stop", () => {
+      console.log(LOG_TAG, "action: stop");
+      usePlayerStore.getState().cleanup();
+    });
 
-    default:
-      console.log(LOG_TAG, "unhandled event type", { eventType });
+    navigator.mediaSession.setActionHandler("seekto", (details) => {
+      if (details.seekTime != null) {
+        console.log(LOG_TAG, "action: seekto", { seekTime: details.seekTime });
+        usePlayerStore.getState().seek(details.seekTime);
+      }
+    });
+  } catch (err) {
+    console.error(LOG_TAG, "failed to register some action handlers", err);
   }
+
+  console.log(LOG_TAG, "action handlers registered");
 }
 
-// ── Store subscription (app → OS) ──
+function unregisterActionHandlers(): void {
+  const actions: MediaSessionAction[] = [
+    "play", "pause", "nexttrack", "previoustrack", "stop", "seekto",
+  ];
+  for (const action of actions) {
+    try {
+      navigator.mediaSession.setActionHandler(action, null);
+    } catch {
+      // Some actions may not be supported
+    }
+  }
+  console.log(LOG_TAG, "action handlers unregistered");
+}
+
+// ── Store subscription ──
 
 function subscribeToPlayerStore(): () => void {
   let prevTrackId: string | null = null;
@@ -212,7 +137,7 @@ function subscribeToPlayerStore(): () => void {
   console.log(LOG_TAG, "subscribing to player store");
 
   return usePlayerStore.subscribe((state) => {
-    const { currentTrackId, isPlaying } = state;
+    const { currentTrackId, isPlaying, progress, duration } = state;
 
     const trackChanged = currentTrackId !== prevTrackId;
     const playStateChanged = isPlaying !== prevIsPlaying;
@@ -222,22 +147,30 @@ function subscribeToPlayerStore(): () => void {
     prevTrackId = currentTrackId;
     prevIsPlaying = isPlaying;
 
-    if (trackChanged) {
-      if (currentTrackId === null) {
-        console.log(LOG_TAG, "track cleared, calling clearNowPlaying");
-        clearNowPlayingDirect().catch((err) => {
-          console.error(LOG_TAG, "clearNowPlaying failed", err);
+    // Update playback state
+    navigator.mediaSession.playbackState = currentTrackId
+      ? (isPlaying ? "playing" : "paused")
+      : "none";
+
+    if (trackChanged && currentTrackId) {
+      syncMetadata(currentTrackId);
+    }
+
+    if (trackChanged && !currentTrackId) {
+      navigator.mediaSession.metadata = null;
+    }
+
+    // Update position state for the OS progress bar
+    if (currentTrackId && duration > 0) {
+      try {
+        navigator.mediaSession.setPositionState({
+          duration,
+          playbackRate: 1,
+          position: Math.min(progress, duration),
         });
-      } else {
-        pushNowPlaying(currentTrackId).catch((err) => {
-          console.error(LOG_TAG, "pushNowPlaying failed", err);
-        });
+      } catch {
+        // Can fail if duration/position are invalid
       }
-    } else if (playStateChanged && currentTrackId !== null) {
-      console.log(LOG_TAG, "updatePlaybackStatus", { isPlaying });
-      setPlaybackStatusDirect(toPlaybackStatus(isPlaying)).catch((err) => {
-        console.error(LOG_TAG, "updatePlaybackStatus failed", err);
-      });
     }
   });
 }
@@ -245,15 +178,8 @@ function subscribeToPlayerStore(): () => void {
 // ── Public API ──
 
 export async function initMediaSession(): Promise<void> {
-  // Guard against concurrent init (React StrictMode double-mount)
-  if (initialized) {
-    console.warn(LOG_TAG, "already initialized — skipping");
-    return;
-  }
-  if (initPromise) {
-    console.warn(LOG_TAG, "init already in progress — waiting");
-    return void (await initPromise);
-  }
+  if (initialized) return;
+  if (initPromise) return void (await initPromise);
 
   initPromise = doInit();
   try {
@@ -264,73 +190,36 @@ export async function initMediaSession(): Promise<void> {
 }
 
 async function doInit(): Promise<void> {
-  console.log(LOG_TAG, "initializing media session");
-
-  try {
-    // Step 1: Initialize the plugin media session (creates SMTC controls on Windows)
-    // At this point, event_handler is None so setup_button_handlers registers nothing.
-    await invoke("plugin:media|initialize_session", {
-      request: { appId: "com.singular.haven", appName: "Haven Sounds" },
-    });
-    console.log(LOG_TAG, "initialize_session OK");
-
-    // Step 2: Register our event handler — this calls set_event_handler which internally
-    // calls setup_button_handlers ONCE, registering exactly 1 SMTC handler.
-    await invoke("register_media_event_handler");
-    console.log(LOG_TAG, "register_media_event_handler OK");
-  } catch (err) {
-    console.error(LOG_TAG, "media session init failed", err);
-  }
-
-  // Listen for media control events emitted by the Rust side via app.emit()
-  unlistenMediaEvent = await listen<MediaControlEventPayload>("media-control-event", (e) => {
-    handleMediaControlEvent(e.payload);
-  });
-  console.log(LOG_TAG, "Tauri event listener registered for 'media-control-event'");
-
-  unsubscribePlayer = subscribeToPlayerStore();
-
-  positionInterval = setInterval(() => {
-    const { progress, currentTrackId, isPlaying } = usePlayerStore.getState();
-    if (currentTrackId === null || !isPlaying) return;
-    updatePositionDirect(progress).catch((err) => {
-      console.error(LOG_TAG, "updatePosition (interval) failed", err);
-    });
-  }, 5000);
-
-  console.log(LOG_TAG, "position update interval started (5s)");
-
-  initialized = true;
-  console.log(LOG_TAG, "media session initialized");
-}
-
-export function destroyMediaSession(): void {
-  if (!initialized && !initPromise) {
-    console.warn(LOG_TAG, "destroyMediaSession: not initialized — no-op");
+  if (!isMediaSessionAvailable()) {
+    console.warn(LOG_TAG, "MediaSession API not available on this platform");
     return;
   }
 
-  console.log(LOG_TAG, "destroying media session");
+  console.log(LOG_TAG, "initializing (Web MediaSession API)");
+
+  registerActionHandlers();
+  unsubscribePlayer = subscribeToPlayerStore();
+
+  initialized = true;
+  console.log(LOG_TAG, "initialized");
+}
+
+export function destroyMediaSession(): void {
+  if (!initialized && !initPromise) return;
+
+  console.log(LOG_TAG, "destroying");
 
   if (unsubscribePlayer) {
     unsubscribePlayer();
     unsubscribePlayer = null;
   }
 
-  if (positionInterval !== null) {
-    clearInterval(positionInterval);
-    positionInterval = null;
+  if (isMediaSessionAvailable()) {
+    unregisterActionHandlers();
+    navigator.mediaSession.metadata = null;
+    navigator.mediaSession.playbackState = "none";
   }
-
-  if (unlistenMediaEvent) {
-    unlistenMediaEvent();
-    unlistenMediaEvent = null;
-  }
-
-  clearNowPlayingDirect().catch((err) => {
-    console.error(LOG_TAG, "clearNowPlaying on destroy failed", err);
-  });
 
   initialized = false;
-  console.log(LOG_TAG, "media session destroyed");
+  console.log(LOG_TAG, "destroyed");
 }
