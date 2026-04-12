@@ -4,6 +4,7 @@ import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { Router, Route, Switch } from "wouter";
 import { toast } from "sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { initMediaSession, destroyMediaSession } from "./services/media-session-bridge";
 import { LoginScreen } from "./components/auth/login-screen";
 import { AccountPicker } from "./components/auth/account-picker";
 import { GoogleAccountPicker } from "./components/auth/google-account-picker";
@@ -130,10 +131,12 @@ export default function YouTubeMusicModule() {
 
     checkAuth();
     void queueHydrate();
+    void initMediaSession();
 
     return () => {
       cancelled = true;
       console.log("[YouTubeMusicModule] unmounting — cleaning up stores");
+      destroyMediaSession();
       playerCleanup();
       void queueCleanup();
       playlistLibraryClear();
