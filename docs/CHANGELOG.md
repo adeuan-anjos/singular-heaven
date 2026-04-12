@@ -40,6 +40,9 @@ O formato segue o espírito de [Keep a Changelog](https://keepachangelog.com/), 
 
 ### Fixed
 
+- **Home page: álbuns, playlists e artistas abriam com ID `"undefined"`** — `#[serde(rename_all = "camelCase")]` no `enum HomeItem` só renomeava variantes (`Song` → `"song"`), não campos dentro delas. Campos multi-palavra como `browse_id`, `video_id`, `playlist_id` serializavam em snake_case, mas o frontend esperava camelCase → `undefined` em JavaScript → HTTP 400 `INVALID_ARGUMENT` ao enviar `"undefined"` como `browseId` para o YouTube. Fix: `rename_all = "camelCase"` movido para cada variante do enum.
+- **`CLIENT_VERSION` hardcoded de nov/2024 (`1.20241118.01.00`)** — YouTube Music rejeita requests com versões muito antigas em certos endpoints `/browse`. Fix: versão agora é gerada dinamicamente com a data UTC atual (`1.YYYYMMDD.01.00`), idêntico ao comportamento do ytmusicapi Python. `USER_AGENT` atualizado de Chrome 131 para 141 por consistência.
+
 - Sessao `HTTP 401` apos uptime prolongado (8-10h+): o app mantinha cookies extraidos uma unica vez no startup/login e nunca refrescava durante uptime. Quando o Google rotacionava SIDCC/sessao em background, a proxima chamada autenticada (ex: abrir playlist) retornava `401 Unauthorized` enquanto a musica que ja estava tocando continuava normal (porque `fetch_audio_bytes` usa stream URL pre-assinada sem cookies). Fix: `with_session_refresh` wrapper detecta 401, dispara refresh via `rookie` e retenta — transparente para o usuario. Focus-triggered refresh antecipa o mesmo fluxo quando a janela volta ao foco apos idle > 30 min. Detalhes em [youtube-music-auth.md](explanation/youtube-music-auth.md#refresh-de-sessao).
 - CSP corrigido para incluir `http://thumb.localhost` e `http://stream.localhost` (imagens e áudio quebrados em build de produção).
 - Dead code `is_cached` removido de `thumb_cache.rs`.

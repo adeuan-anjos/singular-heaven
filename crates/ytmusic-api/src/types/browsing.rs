@@ -95,16 +95,16 @@ pub struct HomeSection {
 }
 
 #[derive(Debug, Clone, Serialize)]
-#[serde(tag = "type", rename_all = "camelCase")]
+#[serde(tag = "type")]
 pub enum HomeItem {
-    #[serde(rename = "song")]
+    #[serde(rename = "song", rename_all = "camelCase")]
     Song {
         title: String,
         video_id: String,
         artists: Vec<ArtistRef>,
         thumbnails: Vec<Thumbnail>,
     },
-    #[serde(rename = "album")]
+    #[serde(rename = "album", rename_all = "camelCase")]
     Album {
         title: String,
         browse_id: String,
@@ -112,21 +112,21 @@ pub enum HomeItem {
         year: Option<String>,
         thumbnails: Vec<Thumbnail>,
     },
-    #[serde(rename = "artist")]
+    #[serde(rename = "artist", rename_all = "camelCase")]
     Artist {
         name: String,
         browse_id: String,
         subscribers: Option<String>,
         thumbnails: Vec<Thumbnail>,
     },
-    #[serde(rename = "playlist")]
+    #[serde(rename = "playlist", rename_all = "camelCase")]
     Playlist {
         title: String,
         playlist_id: String,
         author: Option<String>,
         thumbnails: Vec<Thumbnail>,
     },
-    #[serde(rename = "video")]
+    #[serde(rename = "video", rename_all = "camelCase")]
     Video {
         title: String,
         video_id: String,

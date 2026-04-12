@@ -8,13 +8,19 @@ pub const API_KEY: &str = "AIzaSyC9XL3ZjWddXya6X74dJoCTL-WEYFDNX30";
 pub const ORIGIN: &str = "https://music.youtube.com";
 
 /// User agent matching a modern browser
-pub const USER_AGENT: &str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
+pub const USER_AGENT: &str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36";
 
 /// InnerTube client name for WEB_REMIX (YouTube Music web)
 pub const CLIENT_NAME: &str = "WEB_REMIX";
 
-/// InnerTube client version — update periodically
-pub const CLIENT_VERSION: &str = "1.20241118.01.00";
+/// Build a client version string using today's UTC date: `1.YYYYMMDD.01.00`.
+/// YouTube Music rejects requests with very old client versions for certain
+/// browse endpoints (albums, playlists), so this must stay fresh.
+/// Matches the ytmusicapi Python library behavior.
+pub fn current_client_version() -> String {
+    let now = chrono::Utc::now();
+    format!("1.{}.01.00", now.format("%Y%m%d"))
+}
 
 // ---------------------------------------------------------------------------
 // Endpoint paths (appended to BASE_URL)

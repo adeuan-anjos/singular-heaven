@@ -112,7 +112,7 @@ impl YtMusicClient {
         serde_json::json!({
             "client": {
                 "clientName": CLIENT_NAME,
-                "clientVersion": CLIENT_VERSION,
+                "clientVersion": current_client_version(),
                 "hl": self.language,
                 "gl": self.country,
             },
