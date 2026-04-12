@@ -312,17 +312,11 @@ Estratégia:
 
 ### Dependem de spike de endpoint / pesquisa dedicada
 
-#### Iniciar rádio
+#### Iniciar rádio — ✅ implementado
 
-Semântica:
+Implementado em abril 2026. O rádio é acionável a partir de música, playlist, álbum ou artista. Ao iniciar rádio de playlist/álbum, o app pega a primeira faixa e abre um rádio de vídeo (seed por `videoId`), que gera recomendações infinitas via continuations. Para artista, usa o `artist.radioId`.
 
-- iniciar uma fila de rádio derivada da playlist atual
-
-Situação:
-
-- o projeto hoje só implementa rádio baseado em `videoId` individual
-- o `ytmusicapi` documenta `get_watch_playlist(..., playlistId=..., radio=True)`
-- isso merece um spike próprio porque a semântica e o payload são diferentes do fluxo atual de playlist management
+Documentação completa: [youtube-music-radio-architecture.md](youtube-music-radio-architecture.md)
 
 #### Fixar em "Ouvir de novo"
 
@@ -389,7 +383,8 @@ Por isso a playlist editável precisa carregar esse dado no parser e mantê-lo n
 - `Remover da playlist` só aparece em playlist editável
 - `Aleatório` em playlist usa a queue global com `shuffle=true`
 - `Tocar a seguir` e `Adicionar à fila` pertencem à queue global, não à API de playlist do YouTube Music
-- `Iniciar rádio` e `Fixar em "Ouvir de novo"` não devem ser improvisados na UI sem spike de endpoint
+- `Iniciar rádio` está implementado — ver [youtube-music-radio-architecture.md](youtube-music-radio-architecture.md) para semântica e contratos
+- `Fixar em "Ouvir de novo"` não deve ser improvisado na UI sem spike de endpoint
 
 ## Doc relacionada
 

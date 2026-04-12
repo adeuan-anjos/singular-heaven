@@ -143,7 +143,6 @@ Lista de bugs e dívidas técnicas já observados no projeto e deixados para cor
   - [playback_queue.rs](/./src-tauri/src/playback_queue.rs)
   - [watch.rs](/./crates/ytmusic-api/src/api/watch.rs)
 - Pendências conhecidas:
-  - `Iniciar rádio` a partir de playlist
   - `Fixar em "Ouvir de novo"`
   - `Baixar` como feature dedicada
   - colaboração/votação na edição de playlist
