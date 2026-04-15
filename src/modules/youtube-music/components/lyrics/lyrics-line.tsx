@@ -87,7 +87,7 @@ export const LyricsLine = React.memo(
           originY: 0.5,
           // Fluid font-size: max(5vh, 2.5vw) with a hard floor/ceiling via
           // clamp so lines stay readable from 1280×800 up to 4K. Spec §5.1–5.2.
-          fontSize: "clamp(20px, max(2.5vh, 2vw), 48px)",
+          fontSize: "clamp(18px, max(1.8vh, 1.2vw), 30px)",
           lineHeight: "1.2em",
         }}
         className="block w-full cursor-pointer text-left font-semibold will-change-transform"
