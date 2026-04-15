@@ -40,6 +40,7 @@ import { useQueueStore } from "./stores/queue-store";
 import { usePlaylistLibraryStore } from "./stores/playlist-library-store";
 import { useTrackCacheStore } from "./stores/track-cache-store";
 import { useTrackLikeStore } from "./stores/track-like-store";
+import { useLyricsFetchStore } from "./stores/lyrics-fetch-store";
 import { ytGetCachedTracks, ytAuthLogout, ytRadioStart, type QueueSnapshot, type RadioSeedKind } from "./services/yt-api";
 import { mapLibraryPlaylists } from "./services/mappers";
 import type { PlayAllOptions, Playlist, Track } from "./types/music";
@@ -49,6 +50,13 @@ type AuthState = "loading" | "unauthenticated" | "google-account-select" | "acco
 
 export default function YouTubeMusicModule() {
   useDocumentHiddenClass();
+
+  useEffect(() => {
+    const store = useLyricsFetchStore.getState();
+    store.bootstrap();
+    return () => store.cleanup();
+  }, []);
+
   const [authState, setAuthState] = useState<AuthState>("loading");
   const [queueOpen, setQueueOpen] = useState(false);
   const [playlistDialogTrack, setPlaylistDialogTrack] = useState<Track | null>(null);
