@@ -1,4 +1,5 @@
 // src/modules/youtube-music/components/lyrics/lyrics-empty.tsx
+import React from "react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { thumbUrl } from "../../utils/thumb-url";
 import type { Track } from "../../types/music";
@@ -11,7 +12,7 @@ interface LyricsEmptyProps {
  * Rendered when LRCLIB returns no lyrics for the current track.
  * Mirrors a minimal "Now Playing" card centered in the right column.
  */
-export function LyricsEmpty({ track }: LyricsEmptyProps) {
+export const LyricsEmpty = React.memo(function LyricsEmpty({ track }: LyricsEmptyProps) {
   const imgUrl = track.thumbnails[0]?.url ?? "";
   const artistName = track.artists.map((a) => a.name).join(", ");
 
@@ -36,4 +37,4 @@ export function LyricsEmpty({ track }: LyricsEmptyProps) {
       </p>
     </div>
   );
-}
+});

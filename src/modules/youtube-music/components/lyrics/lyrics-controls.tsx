@@ -1,4 +1,5 @@
 // src/modules/youtube-music/components/lyrics/lyrics-controls.tsx
+import React from "react";
 import { Button } from "@/components/ui/button";
 import { Toggle } from "@/components/ui/toggle";
 import {
@@ -13,7 +14,7 @@ import {
 import { usePlayerStore } from "../../stores/player-store";
 import { useQueueStore } from "../../stores/queue-store";
 
-export function LyricsControls() {
+export const LyricsControls = React.memo(function LyricsControls() {
   const isPlaying = usePlayerStore((s) => s.isPlaying);
   const togglePlay = usePlayerStore((s) => s.togglePlay);
   const seek = usePlayerStore((s) => s.seek);
@@ -81,4 +82,4 @@ export function LyricsControls() {
       </Toggle>
     </div>
   );
-}
+});

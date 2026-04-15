@@ -1,5 +1,5 @@
 // src/modules/youtube-music/components/lyrics/lyrics-line.tsx
-import React, { forwardRef } from "react";
+import React, { forwardRef, useCallback } from "react";
 import { cn } from "@/lib/utils";
 
 export type LyricsLineState = "active" | "near" | "far";
@@ -7,7 +7,10 @@ export type LyricsLineState = "active" | "near" | "far";
 interface LyricsLineProps {
   text: string;
   state: LyricsLineState;
-  onClick: () => void;
+  /** Seconds; passed to onSeek when the line is clicked. */
+  time: number;
+  /** Stable seek callback (e.g., the Zustand action). */
+  onSeek: (time: number) => void;
 }
 
 const stateClasses: Record<LyricsLineState, string> = {
@@ -18,14 +21,15 @@ const stateClasses: Record<LyricsLineState, string> = {
 
 export const LyricsLine = React.memo(
   forwardRef<HTMLButtonElement, LyricsLineProps>(function LyricsLine(
-    { text, state, onClick },
+    { text, state, time, onSeek },
     ref,
   ) {
+    const handleClick = useCallback(() => onSeek(time), [onSeek, time]);
     return (
       <button
         ref={ref}
         type="button"
-        onClick={onClick}
+        onClick={handleClick}
         className={cn(
           "block w-full text-left text-3xl font-semibold leading-snug origin-left transition-all duration-500 ease-out cursor-pointer",
           stateClasses[state],

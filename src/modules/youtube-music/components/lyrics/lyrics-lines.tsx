@@ -41,7 +41,8 @@ export function LyricsLines({ data, activeLineIndex }: LyricsLinesProps) {
             }}
             text={line.text}
             state={classify(i, activeLineIndex)}
-            onClick={() => seek(line.time)}
+            time={line.time}
+            onSeek={seek}
           />
         ))}
       </div>
