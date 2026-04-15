@@ -1,4 +1,5 @@
 // src/modules/youtube-music/components/lyrics/lyrics-sheet.tsx
+import { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import {
   Sheet,
@@ -10,6 +11,7 @@ import { usePlayerStore } from "../../stores/player-store";
 import { useTrack } from "../../stores/track-cache-store";
 import { useLyricsStore } from "../../stores/lyrics-store";
 import { useLyrics } from "../../hooks/use-lyrics";
+import { useMouseIdle } from "../../hooks/use-mouse-idle";
 import { LyricsBackground } from "./lyrics-background";
 import { LyricsHeader } from "./lyrics-header";
 import { LyricsArtworkPanel } from "./lyrics-artwork-panel";
@@ -17,6 +19,7 @@ import { LyricsLines } from "./lyrics-lines";
 import { FALLBACK_COLORS } from "../../constants/lyrics";
 
 const SLIDE_SPRING = { type: "spring" as const, stiffness: 200, damping: 30 };
+const IDLE_HIDE_MS = 350;
 
 export function LyricsSheet() {
   const open = useLyricsStore((s) => s.open);
@@ -24,9 +27,19 @@ export function LyricsSheet() {
   const currentTrackId = usePlayerStore((s) => s.currentTrackId);
   const track = useTrack(currentTrackId ?? undefined);
   const { data, activeLineIndex } = useLyrics(currentTrackId);
+  const idle = useMouseIdle(IDLE_HIDE_MS);
 
   const colors = data?.colors ?? FALLBACK_COLORS;
   const hasLyrics = data !== null && data.type !== "missing";
+
+  // `artworkCentered` decouples the `mx-auto` toggle from `hasLyrics` so the
+  // artwork only slides back to center AFTER the lyrics pane has finished its
+  // exit animation (AnimatePresence onExitComplete). When lyrics come in we
+  // flip it immediately so both panels animate in parallel.
+  const [artworkCentered, setArtworkCentered] = useState(!hasLyrics);
+  useEffect(() => {
+    if (hasLyrics) setArtworkCentered(false);
+  }, [hasLyrics]);
 
   return (
     <Sheet open={open} onOpenChange={setOpen}>
@@ -34,7 +47,7 @@ export function LyricsSheet() {
         side="bottom"
         showCloseButton={false}
         className="w-screen max-w-none gap-0 border-0 bg-transparent p-0"
-        style={{ height: "100svh" }}
+        style={{ height: "100svh", cursor: idle ? "none" : "auto" }}
       >
         <SheetTitle className="sr-only">Letra</SheetTitle>
         <SheetDescription className="sr-only">
@@ -48,7 +61,7 @@ export function LyricsSheet() {
           </div>
         ) : (
           <>
-            <LyricsHeader />
+            <LyricsHeader visible={!idle} />
 
             {/*
              * Responsive grid layout:
@@ -78,7 +91,7 @@ export function LyricsSheet() {
             <div className="relative z-10 mx-auto flex w-full min-h-0 max-w-screen-2xl flex-1 items-stretch gap-12 overflow-hidden px-8">
               <motion.div
                 className={`flex shrink-0 items-center py-8 ${
-                  hasLyrics ? "" : "mx-auto"
+                  artworkCentered ? "mx-auto" : ""
                 }`}
                 layout="position"
                 transition={SLIDE_SPRING}
@@ -86,7 +99,7 @@ export function LyricsSheet() {
                 <LyricsArtworkPanel track={track} />
               </motion.div>
 
-              <AnimatePresence>
+              <AnimatePresence onExitComplete={() => setArtworkCentered(true)}>
                 {data && data.type !== "missing" && (
                   <motion.div
                     key="lyrics-pane"

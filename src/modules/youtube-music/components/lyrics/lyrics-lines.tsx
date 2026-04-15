@@ -46,7 +46,10 @@ export function LyricsLines({ data, activeLineIndex }: LyricsLinesProps) {
      * variants — spec §2 requires this to prevent lines from touching the
      * right edge. max-w is removed so lines use the full 80% spec §5.5.
      */
-    <ScrollArea className="h-full" style={EDGE_FADE_STYLE}>
+    <ScrollArea
+      className="h-full [&_[data-slot=scroll-area-scrollbar]]:hidden"
+      style={EDGE_FADE_STYLE}
+    >
       <div className="flex w-full flex-col gap-4 px-4 py-[40vh]">
         {data.lines.map((line, i) => (
           <LyricsLine

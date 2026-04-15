@@ -17,7 +17,6 @@ const TIMEOUT: Duration = Duration::from_secs(8);
 #[serde(rename_all = "camelCase")]
 struct LrclibResponse {
     instrumental: Option<bool>,
-    plain_lyrics: Option<String>,
     synced_lyrics: Option<String>,
 }
 
