@@ -202,7 +202,6 @@ const MOCK_ENHANCED: LyricsData = {
 const MOCK_MISSING: LyricsData = {
   type: "missing",
   colors: FALLBACK_COLORS,
-  lines: [],
 };
 
 export const LYRICS_MOCKS: Record<string, LyricsData> = {
@@ -318,7 +317,7 @@ export function useLyrics(videoId: string | null | undefined): UseLyricsResult {
   }, [videoId]);
 
   const activeLineIndex = useMemo(() => {
-    if (!data || data.lines.length === 0) return -1;
+    if (!data || data.type === "missing") return -1;
     let active = -1;
     for (let i = 0; i < data.lines.length; i++) {
       if (data.lines[i].time <= progress) active = i;
@@ -993,7 +992,6 @@ export function LyricsSheet() {
   const { data, activeLineIndex } = useLyrics(currentTrackId);
 
   const colors = data?.colors ?? FALLBACK_COLORS;
-  const hasLyrics = data !== null && data.type !== "missing";
 
   return (
     <Sheet open={open} onOpenChange={setOpen}>
@@ -1017,7 +1015,7 @@ export function LyricsSheet() {
             <LyricsHeader />
             <div className="grid min-h-0 flex-1 grid-cols-2 gap-12 overflow-hidden px-12 pb-8">
               <LyricsArtworkPanel track={track} />
-              {hasLyrics && data ? (
+              {data && data.type !== "missing" ? (
                 <LyricsLines data={data} activeLineIndex={activeLineIndex} />
               ) : (
                 <LyricsEmpty track={track} />

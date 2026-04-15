@@ -10,15 +10,23 @@ export interface LyricsLine {
   /** Seconds from the start of the track */
   time: number;
   text: string;
-  /** Present only when type === "enhanced" */
+  /** Present only when the parent LyricsData has type === "enhanced" */
   words?: LyricsWord[];
 }
 
 export type LyricsType = "synced" | "enhanced" | "missing";
 
-export interface LyricsData {
-  type: LyricsType;
-  lines: LyricsLine[];
-  /** 3 hex colors used by the animated background */
-  colors: [string, string, string];
-}
+/**
+ * Discriminated union: when `type === "missing"`, there are no `lines`.
+ * Background colors are always present so the gradient can render in any state.
+ */
+export type LyricsData =
+  | {
+      type: "synced" | "enhanced";
+      lines: LyricsLine[];
+      colors: [string, string, string];
+    }
+  | {
+      type: "missing";
+      colors: [string, string, string];
+    };
