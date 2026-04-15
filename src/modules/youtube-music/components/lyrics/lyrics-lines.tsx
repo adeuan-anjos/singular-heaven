@@ -47,10 +47,7 @@ export function LyricsLines({ data, activeLineIndex }: LyricsLinesProps) {
      * right edge. max-w is removed so lines use the full 80% spec §5.5.
      */
     <ScrollArea className="h-full" style={EDGE_FADE_STYLE}>
-      <div
-        className="flex flex-col gap-4 py-[40vh] pl-4 max-[1600px]:pr-[8%] min-[1600px]:pr-[15%]"
-        style={{ width: "80%" }}
-      >
+      <div className="flex w-full flex-col gap-4 px-4 py-[40vh]">
         {data.lines.map((line, i) => (
           <LyricsLine
             key={`${line.time}-${i}`}
