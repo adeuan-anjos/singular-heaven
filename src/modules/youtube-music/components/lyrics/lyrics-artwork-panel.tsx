@@ -67,7 +67,7 @@ export function LyricsArtworkPanel({ track }: LyricsArtworkPanelProps) {
   const artistName = track.artists.map((a) => a.name).join(", ");
 
   return (
-    <div className="flex flex-col items-start gap-6">
+    <div className="flex w-80 flex-col items-start gap-6">
       <Avatar className="size-80 rounded-2xl shadow-2xl">
         <AvatarImage
           src={thumbUrl(imgUrl, 400)}
@@ -79,14 +79,14 @@ export function LyricsArtworkPanel({ track }: LyricsArtworkPanelProps) {
         </AvatarFallback>
       </Avatar>
 
-      <div className="font-heading">
-        <h2 className="text-3xl font-semibold text-foreground">
+      <div className="w-full font-heading">
+        <h2 className="text-2xl font-semibold leading-tight text-foreground">
           {track.title}
         </h2>
-        <p className="text-lg text-muted-foreground">{artistName}</p>
+        <p className="text-base text-muted-foreground">{artistName}</p>
       </div>
 
-      <div className="flex w-full max-w-md flex-col gap-1">
+      <div className="flex w-full flex-col gap-1">
         <div ref={sliderRef}>
           <Slider
             defaultValue={[0]}
