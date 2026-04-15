@@ -43,6 +43,8 @@ impl YtMusicClient {
     pub fn new() -> Result<Self> {
         let http = reqwest::Client::builder()
             .user_agent(USER_AGENT)
+            .pool_max_idle_per_host(0)
+            .tcp_keepalive(None)
             .build()?;
 
         Ok(Self {
@@ -60,6 +62,8 @@ impl YtMusicClient {
         let cookies = cookies.into();
         let http = reqwest::Client::builder()
             .user_agent(USER_AGENT)
+            .pool_max_idle_per_host(0)
+            .tcp_keepalive(None)
             .build()?;
 
         Ok(Self {
@@ -74,7 +78,7 @@ impl YtMusicClient {
 
     /// Set the brand account / channel ID for multi-account support.
     pub fn set_on_behalf_of_user(&mut self, user_id: Option<String>) {
-        println!("[YtMusicClient] set_on_behalf_of_user: {:?}", user_id);
+
         self.on_behalf_of_user = user_id;
     }
 
@@ -85,7 +89,7 @@ impl YtMusicClient {
 
     /// Set the Google account index (X-Goog-AuthUser header).
     pub fn set_auth_user(&mut self, auth_user: u32) {
-        println!("[YtMusicClient] set_auth_user: {auth_user}");
+
         self.auth_user = auth_user;
     }
 
@@ -187,7 +191,7 @@ impl YtMusicClient {
     /// Fetch visitor_data from YouTube webpage.
     /// This token is required for android_vr API calls.
     async fn fetch_visitor_data(&self, video_id: &str) -> Result<String> {
-        println!("[YtMusicClient] fetch_visitor_data: downloading webpage for {video_id}");
+
 
         let url = format!("{YOUTUBE_WATCH_URL}?v={video_id}&bpctr=9999999999&has_verified=1");
 
@@ -200,10 +204,7 @@ impl YtMusicClient {
             .await?;
 
         let html = response.text().await?;
-        println!(
-            "[YtMusicClient] fetch_visitor_data: webpage size={} chars",
-            html.len()
-        );
+
 
         // Extract VISITOR_DATA from ytcfg
         let visitor_data = regex::Regex::new(r#""VISITOR_DATA"\s*:\s*"([^"]+)""#)
@@ -215,16 +216,12 @@ impl YtMusicClient {
                 message: "VISITOR_DATA not found in webpage".to_string(),
             })?;
 
-        println!(
-            "[YtMusicClient] fetch_visitor_data: found visitor_data ({}...)",
-            &visitor_data[..20.min(visitor_data.len())]
-        );
         Ok(visitor_data)
     }
 
     /// Get the best audio stream URL for a video using android_vr client.
     pub async fn get_stream_url(&self, video_id: &str) -> Result<StreamingData> {
-        println!("[YtMusicClient] get_stream_url: starting for videoId={video_id}");
+
 
         // Step 1: Get visitor_data from webpage
         let visitor_data = self.fetch_visitor_data(video_id).await?;
@@ -256,7 +253,7 @@ impl YtMusicClient {
         });
 
         let url = format!("{YOUTUBE_BASE_URL}{ENDPOINT_PLAYER}?prettyPrint=false");
-        println!("[YtMusicClient] get_stream_url: POST {url}");
+
 
         let response = self
             .http
@@ -272,7 +269,7 @@ impl YtMusicClient {
             .await?;
 
         let status = response.status();
-        println!("[YtMusicClient] get_stream_url: response status={status}");
+
 
         if !status.is_success() {
             let body_text = response.text().await.unwrap_or_default();
@@ -293,7 +290,6 @@ impl YtMusicClient {
             .and_then(|s| s.as_str())
             .unwrap_or("UNKNOWN");
 
-        println!("[YtMusicClient] get_stream_url: playabilityStatus={playability_status}");
 
         if playability_status != "OK" {
             let reason = json
@@ -315,10 +311,6 @@ impl YtMusicClient {
                 message: "No streamingData.adaptiveFormats in response".to_string(),
             })?;
 
-        println!(
-            "[YtMusicClient] get_stream_url: {} adaptiveFormats",
-            adaptive_formats.len()
-        );
 
         // Filter audio formats and pick best
         let mut audio_formats: Vec<StreamingFormat> = adaptive_formats
@@ -327,10 +319,6 @@ impl YtMusicClient {
             .filter(|fmt| fmt.mime_type.starts_with("audio/"))
             .collect();
 
-        println!(
-            "[YtMusicClient] get_stream_url: {} audio formats",
-            audio_formats.len()
-        );
 
         if audio_formats.is_empty() {
             return Err(Error::Parse {
@@ -341,10 +329,6 @@ impl YtMusicClient {
         audio_formats.sort_by(|a, b| b.bitrate.cmp(&a.bitrate));
         let best = &audio_formats[0];
 
-        println!(
-            "[YtMusicClient] get_stream_url: best — bitrate={}, mime={}, quality={:?}",
-            best.bitrate, best.mime_type, best.audio_quality
-        );
 
         let stream_url = best.url.as_ref().ok_or_else(|| Error::Api {
             message: "Best audio format has no direct URL".to_string(),
@@ -365,7 +349,7 @@ impl YtMusicClient {
     /// Download complete audio bytes for a video.
     /// Uses android_vr to get the stream URL, then downloads with Chrome UA.
     pub async fn fetch_audio_bytes(&self, video_id: &str) -> Result<(Vec<u8>, String)> {
-        println!("[YtMusicClient] fetch_audio_bytes: starting for videoId={video_id}");
+
 
         let stream_data = self.get_stream_url(video_id).await?;
         let mime_type = stream_data.mime_type.clone();
@@ -376,15 +360,13 @@ impl YtMusicClient {
             .and_then(|s| s.parse().ok())
             .unwrap_or(0);
 
-        println!(
-            "[YtMusicClient] fetch_audio_bytes: downloading {} bytes, mime={}",
-            content_length, mime_type
-        );
 
         // Use a fresh client for the download — the crate's self.http has WEB_REMIX
         // defaults that may interfere. yt-dlp also uses generic Chrome headers for downloads.
         let dl_client = reqwest::Client::builder()
             .user_agent(CHROME_USER_AGENT)
+            .pool_max_idle_per_host(0)
+            .tcp_keepalive(None)
             .build()
             .map_err(|e| Error::Http(e))?;
 
@@ -396,7 +378,6 @@ impl YtMusicClient {
             "bytes=0-".to_string()
         };
 
-        println!("[YtMusicClient] fetch_audio_bytes: downloading with Range: {range_header}");
 
         let response = dl_client
             .get(&stream_data.url)
@@ -406,8 +387,6 @@ impl YtMusicClient {
             .await?;
 
         let status = response.status();
-        let resp_content_length = response.content_length();
-        println!("[YtMusicClient] fetch_audio_bytes: download status={status}, content-length={:?}", resp_content_length);
 
         if !status.is_success() {
             return Err(Error::Api {
@@ -416,10 +395,7 @@ impl YtMusicClient {
         }
 
         let bytes = response.bytes().await?;
-        println!(
-            "[YtMusicClient] fetch_audio_bytes: downloaded {} bytes",
-            bytes.len()
-        );
+
 
         Ok((bytes.to_vec(), mime_type))
     }

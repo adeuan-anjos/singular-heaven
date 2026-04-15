@@ -91,8 +91,6 @@ export function TopResultSection({
   const cardProps = getCardProps(topResult);
   const songs = topSongs.slice(0, 4);
 
-  console.log("[TopResultSection] render", { kind: topResult.kind, songCount: songs.length });
-
   return (
     <div className="grid grid-cols-5 gap-6">
       {/* Left column — Top Result */}

@@ -165,17 +165,6 @@ Lista de bugs e dívidas técnicas já observados no projeto e deixados para cor
   - A shape exata de remoção no `browse/edit_playlist` ainda não foi confirmada.
   - Tentativas óbvias de `ACTION_REMOVE_*` retornaram `INVALID_ARGUMENT`, então a ação ficou fora da UI por decisão explícita de segurança.
 
-### Logs de debug ainda misturam payload útil com `Object`
-
-- Sintoma:
-  - Parte do log ainda aparece como `Object`.
-- Impacto:
-  - Diagnóstico fica pior em `debug.txt`.
-- Área afetada:
-  - Vários componentes com `console.log("...", obj)` ainda não convertidos para `JSON.stringify(...)`
-- Observação:
-  - O fluxo de likes já foi melhorado; o restante pode ser limpo de forma incremental.
-
 ### StrictMode continua duplicando fetches em dev
 
 - Sintoma:
@@ -226,6 +215,9 @@ Lista de bugs e dívidas técnicas já observados no projeto e deixados para cor
 
 ## Encerrados recentemente
 
+- Tráfego de rede idle no processo Rust (~0.1 Mbps em bursts, sem ação do usuário) era causado por connection pool do `reqwest` mantendo conexões TCP/TLS persistentes vivas para a Google. Diagnóstico via `resmon.exe` mostrou 2 conexões idle no Task Manager mesmo com DevTools Network vazio. Fix: todos os builders de `reqwest::Client` agora usam `pool_max_idle_per_host(0)` + `tcp_keepalive(None)`. Ver [network-connection-pool.md](explanation/network-connection-pool.md).
+- Logs de debug artificiais (~590 ocorrências entre `console.log` no frontend e `println!` no backend + crate `ytmusic-api`) removidos. Toda infra de debug-only (`src/lib/debug/`, `services/perf.ts`, IPC wrapper de timing) deletada. `console.error` e `eprintln!` em error paths preservados. `startMemoryMonitor(5000)` que rodava `setInterval` em produção sem cleanup também eliminado.
+- Animações CSS infinitas no shell (`titlebar-glow` com `filter: drop-shadow` 6s e `animated-gradient-text` com `background-position` 4s) consumiam ~7% de CPU em idle por forçar repaint no main thread. Removidas; `text-shadow` estático preservou o visual.
 - Sessão `HTTP 401` após uptime prolongado (8-10h+) agora se recupera transparente via `with_session_refresh` wrapper em todos os comandos autenticados, mais focus-triggered refresh proativo após 30 min idle. O bug se manifestava como "música toca a noite toda, mas abrir playlist de manhã retorna 401"; o fix mantém o usuário sem ver erro algum. Ver [youtube-music-auth.md](explanation/youtube-music-auth.md#refresh-de-sessao).
 - Likes de track agora são backend-first e usam a conta real via cookies.
 - Alias `liked -> LM` corrigido no backend.

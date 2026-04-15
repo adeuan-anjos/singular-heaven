@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useSmoothWheel } from "@/hooks/use-smooth-wheel";
 import {
@@ -24,14 +24,6 @@ export function ScrollRegion({ children }: ScrollRegionProps) {
   const [viewport, setViewport] = useState<ScrollViewportElement>(null);
 
   useSmoothWheel(viewport);
-
-  useEffect(() => {
-    if (!import.meta.env.DEV || !viewport) return;
-    console.log("[ScrollRegion] viewport mounted", {
-      tag: viewport.tagName,
-      clientHeight: viewport.clientHeight,
-    });
-  }, [viewport]);
 
   return (
     <ScrollArea

@@ -20,7 +20,7 @@ use youtube_music::session::SessionActivity;
 
 #[tauri::command]
 fn yt_set_memory_level(window: tauri::WebviewWindow, low: bool) {
-    println!("[yt_set_memory_level] low={low}");
+
     #[cfg(target_os = "windows")]
     set_webview_memory_level(&window, low);
 }
@@ -39,7 +39,7 @@ fn set_webview_memory_level(
         COREWEBVIEW2_MEMORY_USAGE_TARGET_LEVEL_NORMAL,
     };
 
-    let level_name = if low { "Low" } else { "Normal" };
+    let _level_name = if low { "Low" } else { "Normal" };
     let target_level: COREWEBVIEW2_MEMORY_USAGE_TARGET_LEVEL = if low {
         COREWEBVIEW2_MEMORY_USAGE_TARGET_LEVEL_LOW
     } else {
@@ -59,7 +59,6 @@ fn set_webview_memory_level(
             .SetMemoryUsageTargetLevel(target_level)
             .expect("Failed to set WebView2 memory usage target level");
 
-        println!("[Rust] WebView2 memory usage set to {level_name}");
     });
 }
 
@@ -110,13 +109,13 @@ fn set_window_icon_from_resource(window: &tauri::WebviewWindow<impl tauri::Runti
 
             if !icon_big.is_null() {
                 SendMessageW(hwnd_ptr, WM_SETICON, ICON_BIG, icon_big as isize);
-                println!("[setup] ICON_BIG set via Win32 API.");
+
             } else {
                 eprintln!("[setup] LoadImageW failed for ICON_BIG.");
             }
             if !icon_small.is_null() {
                 SendMessageW(hwnd_ptr, WM_SETICON, ICON_SMALL, icon_small as isize);
-                println!("[setup] ICON_SMALL set via Win32 API.");
+
             } else {
                 eprintln!("[setup] LoadImageW failed for ICON_SMALL.");
             }
@@ -156,7 +155,6 @@ fn set_tracking_prevention_basic(
             .SetPreferredTrackingPreventionLevel(COREWEBVIEW2_TRACKING_PREVENTION_LEVEL_BASIC)
             .expect("Failed to set tracking prevention level");
 
-        println!("[Rust] WebView2 tracking prevention set to Basic");
     });
 }
 
@@ -172,7 +170,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
             // A second instance was launched — focus the existing window
-            println!("[single-instance] Second instance detected, focusing existing window");
+
             if let Some(window) = app.get_webview_window("main") {
                 let _ = window.show();
                 let _ = window.unminimize();
@@ -223,7 +221,7 @@ pub fn run() {
                 };
 
                 if !original_url.is_empty() && !is_allowed {
-                    println!("[thumb://] BLOCKED: URL domain not in allowlist: {original_url}");
+
                     let resp = tauri::http::Response::builder()
                         .status(403)
                         .body("Forbidden: URL domain not allowed".as_bytes().to_vec())
@@ -270,7 +268,7 @@ pub fn run() {
 
                 // Try disk cache first
                 if let Ok(bytes) = thumb_cache::read(&app_data_dir, &sized_url, size) {
-                    println!("[thumb://] CACHE HIT: {} bytes", bytes.len());
+
                     let content_type = guess_content_type(&sized_url);
                     let resp = tauri::http::Response::builder()
                         .status(200)
@@ -283,8 +281,12 @@ pub fn run() {
                 }
 
                 // Cache miss — download from CDN
-                println!("[thumb://] CACHE MISS: downloading from CDN...");
-                let client = reqwest::Client::new();
+
+                let client = reqwest::Client::builder()
+                    .pool_max_idle_per_host(0)
+                    .tcp_keepalive(None)
+                    .build()
+                    .unwrap_or_else(|_| reqwest::Client::new());
                 match client.get(&sized_url)
                     .header("Referer", "")
                     .send()
@@ -300,7 +302,7 @@ pub fn run() {
                         match resp.bytes().await {
                             Ok(bytes) => {
                                 // Save to disk cache
-                                println!("[thumb://] Downloaded {} bytes, saving to disk", bytes.len());
+
                                 let _ = thumb_cache::save(&app_data_dir, &sized_url, size, &bytes);
 
                                 let resp = tauri::http::Response::builder()
@@ -343,7 +345,7 @@ pub fn run() {
             tauri::async_runtime::spawn(async move {
                 let path = request.uri().path().trim_start_matches('/').to_string();
                 let video_id = path.as_str();
-                println!("[stream://] Request for videoId={video_id}");
+
 
                 // SECURITY: Validate videoId format (exactly 11 chars, base64url alphabet)
                 let is_valid_video_id = video_id.len() == 11
@@ -367,7 +369,7 @@ pub fn run() {
 
                 match result {
                     Ok((bytes, mime_type)) => {
-                        println!("[stream://] Serving {} bytes, mime={}", bytes.len(), mime_type);
+
                         let len = bytes.len();
                         let resp = tauri::http::Response::builder()
                             .status(200)
@@ -428,7 +430,7 @@ pub fn run() {
                             }
                         }
                         "quit" => {
-                            println!("[tray] quit requested");
+
                             app.exit(0);
                         }
                         _ => {}
@@ -450,35 +452,34 @@ pub fn run() {
                     }
                 })
                 .build(app)?;
-            println!("[setup] System tray initialized.");
 
-            println!("[setup] Initializing YtMusicState...");
+
 
             // Session activity tracker — last successful authenticated call timestamp
             // and refresh serialization mutex. Independent of auth state.
             app.manage(Arc::new(SessionActivity::new()));
-            println!("[setup] SessionActivity added to managed state.");
+
 
             let app_data_dir = app.handle().path().app_data_dir().ok();
 
             // Initialize playlist cache (SQLite)
             if let Some(ref dir) = app_data_dir {
-                println!("[setup] Initializing PlaylistCache...");
+
                 let cache = playlist_cache::PlaylistCache::open(dir)
                     .map_err(|e| format!("Failed to open playlist cache: {e}"))?;
                 app.manage(Arc::new(tokio::sync::Mutex::new(cache)));
-                println!("[setup] PlaylistCache added to managed state.");
+
                 app.manage(Arc::new(tokio::sync::Mutex::new(HashSet::<String>::new())));
-                println!("[setup] Playlist load registry added to managed state.");
+
                 app.manage(Arc::new(tokio::sync::Mutex::new(
                     playback_queue::PlaybackQueue::default(),
                 )));
-                println!("[setup] PlaybackQueue added to managed state.");
+
             }
 
             // Priority 1: Try loading saved cookies from disk
             let saved_cookies = app_data_dir.as_ref().and_then(|dir| {
-                println!("[setup] Checking for saved cookies...");
+
                 match YtMusicState::load_cookies(dir) {
                     Ok(cookies) => cookies,
                     Err(e) => {
@@ -493,35 +494,30 @@ pub fn run() {
                     .and_then(|dir| YtMusicState::load_auth_user(dir))
                     .unwrap_or(0);
 
-                println!("[setup] found saved cookies — creating cookie-auth client (auth_user={auth_user})...");
                 match YtMusicState::new_from_cookies(cookie_string, auth_user) {
                     Ok(mut state) => {
                         // Restore saved brand account (pageId) if available
-                        let mut restored_page_id: Option<String> = None;
                         if let Some(ref dir) = app_data_dir {
                             if let Some(page_id) = YtMusicState::load_page_id(dir) {
-                                println!("[setup] restoring saved page_id");
-                                state.client.set_on_behalf_of_user(Some(page_id.clone()));
-                                restored_page_id = Some(page_id);
+                                state.client.set_on_behalf_of_user(Some(page_id));
                             }
                         }
-                        println!("[setup] FINAL STATE SUMMARY: authenticated=true, auth_user={auth_user}, has_page_id={}", restored_page_id.is_some());
                         app.manage(Arc::new(RwLock::new(state)));
-                        println!("[setup] YtMusicState added to managed state.");
+
                         return Ok(());
                     }
                     Err(e) => {
                         eprintln!("[setup] failed to create cookie-auth client: {e}");
-                        println!("[setup] falling back to unauthenticated...");
+
                     }
                 }
             } else {
-                println!("[setup] no saved cookies found");
+
             }
 
             // Priority 2: Unauthenticated
-            println!("[setup] no saved credentials — creating unauthenticated client...");
-            println!("[setup] FINAL STATE SUMMARY: authenticated=false, auth_user=0, has_page_id=false");
+
+
             let state = match YtMusicState::new_unauthenticated() {
                 Ok(s) => s,
                 Err(e) => {
@@ -531,7 +527,7 @@ pub fn run() {
             };
 
             app.manage(Arc::new(RwLock::new(state)));
-            println!("[setup] YtMusicState added to managed state.");
+
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -606,7 +602,7 @@ pub fn run() {
         .on_window_event(|window, event| {
             // ── Close → hide to tray (intercept Alt+F4, taskbar close, etc.) ──
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
-                println!("[window] CloseRequested — hiding to tray");
+
                 api.prevent_close();
                 let _ = window.hide();
             }
@@ -633,29 +629,25 @@ pub fn run() {
                             .seconds_since()
                             .map(|s| s > youtube_music::session::STALE_THRESHOLD_SECS)
                             .unwrap_or(false);
-                        println!(
-                            "[focus] proactive check: seconds_since={:?} stale={stale}",
-                            activity.seconds_since()
-                        );
+
                         if !stale {
                             return;
                         }
                         if !state.read().await.is_authenticated() {
-                            println!("[focus] not authenticated — skipping proactive refresh");
+
                             return;
                         }
 
-                        println!("[focus] stale session — proactive refresh");
-                        if let Err(e) = youtube_music::session::refresh_cookies_and_rebuild_state(
+                        if let Err(_e) = youtube_music::session::refresh_cookies_and_rebuild_state(
                             &app,
                             state.inner(),
                             activity.inner(),
                         )
                         .await
                         {
-                            println!("[focus] proactive refresh failed: {e}");
+
                         } else {
-                            println!("[focus] proactive refresh complete");
+
                         }
                     });
                 }

@@ -80,7 +80,6 @@ impl Default for SessionActivity {
 /// Extract YouTube cookies from a specific browser using the `rookie` crate.
 /// Returns the cookie string in "key1=val1; key2=val2" format, or None if no cookies found.
 pub(super) fn extract_cookies_from_browser(browser: &str) -> Result<Option<String>, String> {
-    println!("[extract_cookies] Trying browser: {browser}");
 
     let domains = Some(vec![".youtube.com".to_string()]);
 
@@ -97,10 +96,6 @@ pub(super) fn extract_cookies_from_browser(browser: &str) -> Result<Option<Strin
 
     match cookies {
         Ok(cookie_list) => {
-            println!(
-                "[extract_cookies] {browser}: found {} cookies",
-                cookie_list.len()
-            );
             if cookie_list.is_empty() {
                 return Ok(None);
             }
@@ -109,14 +104,9 @@ pub(super) fn extract_cookies_from_browser(browser: &str) -> Result<Option<Strin
                 .map(|c| format!("{}={}", c.name, c.value))
                 .collect::<Vec<_>>()
                 .join("; ");
-            println!(
-                "[extract_cookies] {browser}: cookie string length = {} chars",
-                cookie_string.len()
-            );
             Ok(Some(cookie_string))
         }
         Err(e) => {
-            println!("[extract_cookies] {browser}: error reading cookies: {e}");
             Err(format!(
                 "[extract_cookies] Failed to read {browser} cookies: {e}"
             ))
@@ -128,19 +118,14 @@ pub(super) fn extract_cookies_from_browser(browser: &str) -> Result<Option<Strin
 pub(super) fn extract_cookies_auto() -> Result<(String, String), String> {
     let browsers = ["edge", "chrome", "firefox", "brave", "chromium", "opera", "vivaldi"];
 
-    println!("[extract_cookies_auto] Trying browsers in order: {browsers:?}");
-
     for browser in browsers {
         match extract_cookies_from_browser(browser) {
             Ok(Some(cookies)) => {
-                println!("[extract_cookies_auto] Success with {browser}");
                 return Ok((browser.to_string(), cookies));
             }
             Ok(None) => {
-                println!("[extract_cookies_auto] {browser}: no YouTube cookies");
             }
-            Err(e) => {
-                println!("[extract_cookies_auto] {browser}: skipped ({e})");
+            Err(_e) => {
             }
         }
     }
@@ -181,18 +166,14 @@ pub async fn refresh_cookies_and_rebuild_state(
     state: &Arc<RwLock<YtMusicState>>,
     activity: &SessionActivity,
 ) -> Result<(), String> {
-    println!("[refresh_cookies_and_rebuild_state] acquiring refresh lock");
     let _guard = activity.refresh_lock.lock().await;
-    println!("[refresh_cookies_and_rebuild_state] refresh lock acquired");
 
     // Double-check: another task may have already refreshed while we waited.
     let probe_client = { state.read().await.client.clone() };
     if probe_client.get_accounts().await.is_ok() {
-        println!("[refresh_cookies_and_rebuild_state] double-check passed — another task already refreshed, skipping");
         activity.mark_success();
         return Ok(());
     }
-    println!("[refresh_cookies_and_rebuild_state] double-check failed — proceeding with refresh");
 
     // Snapshot identity (auth_user + brand account) before mutation.
     let (auth_user, obu) = {
@@ -202,23 +183,14 @@ pub async fn refresh_cookies_and_rebuild_state(
             s.client.on_behalf_of_user().map(String::from),
         )
     };
-    println!(
-        "[refresh_cookies_and_rebuild_state] snapshot identity: auth_user={auth_user}, has_obu={}",
-        obu.is_some()
-    );
 
     // Re-extract cookies from a browser on disk.
-    let (browser, fresh_cookies) = extract_cookies_auto()?;
-    println!(
-        "[refresh_cookies_and_rebuild_state] cookies extracted from {browser} ({} chars)",
-        fresh_cookies.len()
-    );
+    let (_browser, fresh_cookies) = extract_cookies_auto()?;
 
     // Build the new state with the same identity.
     let mut new_state = YtMusicState::new_from_cookies(fresh_cookies.clone(), auth_user)?;
     if let Some(ref pid) = obu {
         new_state.client.set_on_behalf_of_user(Some(pid.clone()));
-        println!("[refresh_cookies_and_rebuild_state] restored on_behalf_of_user={pid}");
     }
 
     // Persist the fresh cookies to disk.
@@ -233,7 +205,6 @@ pub async fn refresh_cookies_and_rebuild_state(
         let mut guard = state.write().await;
         *guard = new_state;
     }
-    println!("[refresh_cookies_and_rebuild_state] state replaced — refresh complete");
 
     activity.mark_success();
     Ok(())
@@ -254,7 +225,7 @@ pub async fn with_session_refresh<T, F, Fut>(
     state: &Arc<RwLock<YtMusicState>>,
     app: &AppHandle,
     activity: &SessionActivity,
-    op_name: &'static str,
+    _op_name: &'static str,
     mut op: F,
 ) -> Result<T, YtError>
 where
@@ -270,24 +241,16 @@ where
             Ok(value)
         }
         Err(err) if is_session_expired(&err) => {
-            println!("[with_session_refresh] {op_name}: 401 detected — refreshing session");
-            if let Err(refresh_err) = refresh_cookies_and_rebuild_state(app, state, activity).await {
-                println!(
-                    "[with_session_refresh] {op_name}: refresh failed ({refresh_err}) — propagating original error"
-                );
+            if let Err(_refresh_err) = refresh_cookies_and_rebuild_state(app, state, activity).await {
                 return Err(err);
             }
-
-            println!("[with_session_refresh] {op_name}: retry attempt with fresh client");
             let client_retry = { state.read().await.client.clone() };
             match op(client_retry).await {
                 Ok(value) => {
                     activity.mark_success();
-                    println!("[with_session_refresh] {op_name}: retry succeeded");
                     Ok(value)
                 }
                 Err(retry_err) => {
-                    println!("[with_session_refresh] {op_name}: retry failed: {retry_err}");
                     Err(retry_err)
                 }
             }

@@ -129,34 +129,14 @@ export function PlaylistPage() {
   }, [hydrateLibraryPlaylists]);
 
   const resolvePlaybackSnapshot = useCallback(async () => {
-    console.log("[PlaylistPage] resolving playback snapshot", {
-      playlistId,
-      loadedTracks: playlist?.tracks?.length ?? 0,
-      knownTrackIds: trackIdsRef.current.length,
-      knownComplete: isCompleteRef.current,
-    });
-
     const snapshot = await ytGetPlaylistTrackIds(playlistId);
     trackIdsRef.current = snapshot.trackIds;
     isCompleteRef.current = snapshot.isComplete;
-
-    console.log("[PlaylistPage] playback snapshot resolved", {
-      playlistId,
-      loadedTracks: playlist?.tracks?.length ?? 0,
-      totalTrackIds: snapshot.trackIds.length,
-      isComplete: snapshot.isComplete,
-    });
     return snapshot;
-  }, [playlist?.tracks?.length, playlistId]);
+  }, [playlistId]);
 
   const handleSharePlaylist = useCallback(async () => {
     const url = `https://music.youtube.com/playlist?list=${playlistId}`;
-    console.log(
-      `[PlaylistPage] share playlist click ${JSON.stringify({
-        playlistId,
-        url,
-      })}`
-    );
     try {
       await navigator.clipboard.writeText(url);
       toast.success("Link da playlist copiado.");
@@ -167,22 +147,8 @@ export function PlaylistPage() {
   }, [playlistId]);
 
   const handleAddPlaylistNextAction = useCallback(async () => {
-    console.log(
-      `[PlaylistPage] add playlist next click ${JSON.stringify({
-        playlistId,
-        loadedTracks: playlist?.tracks?.length ?? 0,
-        knownTrackIds: trackIdsRef.current.length,
-      })}`
-    );
     try {
       const playback = await resolvePlaybackSnapshot();
-      console.log(
-        `[PlaylistPage] add playlist next resolved ${JSON.stringify({
-          playlistId,
-          queueTrackIds: playback.trackIds.length,
-          isComplete: playback.isComplete,
-        })}`
-      );
       await onAddPlaylistNext(playlist?.tracks ?? [], playback.trackIds);
       toast.success("Playlist adicionada para tocar a seguir.");
     } catch (error) {
@@ -192,13 +158,6 @@ export function PlaylistPage() {
   }, [onAddPlaylistNext, playlist?.tracks, resolvePlaybackSnapshot]);
 
   const handleShufflePlayAction = useCallback(async () => {
-    console.log(
-      `[PlaylistPage] shuffle play click ${JSON.stringify({
-        playlistId,
-        loadedTracks: playlist?.tracks?.length ?? 0,
-        knownTrackIds: trackIdsRef.current.length,
-      })}`
-    );
     try {
       const playback = await resolvePlaybackSnapshot();
       onPlayAll(playlist?.tracks ?? [], 0, playlistId, playback.isComplete, {
@@ -212,22 +171,8 @@ export function PlaylistPage() {
   }, [onPlayAll, playlist?.tracks, playlistId, resolvePlaybackSnapshot]);
 
   const handleAppendPlaylistToQueueAction = useCallback(async () => {
-    console.log(
-      `[PlaylistPage] append playlist click ${JSON.stringify({
-        playlistId,
-        loadedTracks: playlist?.tracks?.length ?? 0,
-        knownTrackIds: trackIdsRef.current.length,
-      })}`
-    );
     try {
       const playback = await resolvePlaybackSnapshot();
-      console.log(
-        `[PlaylistPage] append playlist resolved ${JSON.stringify({
-          playlistId,
-          queueTrackIds: playback.trackIds.length,
-          isComplete: playback.isComplete,
-        })}`
-      );
       await onAppendPlaylistToQueue(playlist?.tracks ?? [], playback.trackIds);
       toast.success("Playlist adicionada ao fim da fila.");
     } catch (error) {
@@ -242,13 +187,9 @@ export function PlaylistPage() {
     setError(null);
 
     let request = pendingPlaylistLoads.get(playlistId);
-    if (request) {
-      console.log("[PlaylistPage] reusing in-flight load", { playlistId });
-    } else {
-      console.log("[PlaylistPage] starting load", { playlistId });
+    if (!request) {
       request = ytLoadPlaylist(playlistId).finally(() => {
         pendingPlaylistLoads.delete(playlistId);
-        console.log("[PlaylistPage] load settled", { playlistId });
       });
       pendingPlaylistLoads.set(playlistId, request);
     }
@@ -256,15 +197,6 @@ export function PlaylistPage() {
     request
       .then((data) => {
         if (cancelled) return;
-        console.log("[PlaylistPage] loaded from cache", {
-          title: data.title,
-          tracks: data.tracks.length,
-          totalIds: data.trackIds.length,
-          isComplete: data.isComplete,
-          isOwnedByUser: data.isOwnedByUser,
-          isEditable: data.isEditable,
-          isSpecial: data.isSpecial,
-        });
         setPlaylist({
           playlistId: data.playlistId,
           title: data.title,
@@ -313,14 +245,6 @@ export function PlaylistPage() {
       }
 
       const newTracks = response.items.map((item) => fromWindowItem(playlistId, item));
-      console.log(
-        `[PlaylistPage] loadMore window ${JSON.stringify({
-          offset: response.offset,
-          received: response.items.length,
-          totalLoaded: response.totalLoaded,
-          isComplete: response.isComplete,
-        })}`
-      );
 
       setPlaylist((prev) =>
         prev
@@ -367,16 +291,6 @@ export function PlaylistPage() {
             (likeStatuses[track.videoId] ?? track.likeStatus ?? "INDIFFERENT") === "LIKE"
         )
       : tracks;
-  if (playlistId === "liked") {
-    console.log(
-      `[PlaylistPage] liked filter applied ${JSON.stringify({
-        likesHydrated,
-        totalTracks: tracks.length,
-        visibleTracks: tracksInView.length,
-      })}`
-    );
-  }
-
   const filteredTracks = filter
     ? tracksInView.filter((t) => {
         const q = filter.toLowerCase();
@@ -422,10 +336,7 @@ export function PlaylistPage() {
       onAppendQueue={() => void handleAppendPlaylistToQueueAction()}
       onStartRadio={() => {
         const firstTrack = playlist.tracks?.[0];
-        if (!firstTrack?.videoId) {
-          console.warn("[playlist-page] no tracks loaded, cannot start radio");
-          return;
-        }
+        if (!firstTrack?.videoId) return;
         void onStartRadio({ kind: "video", id: firstTrack.videoId });
       }}
       onSavePlaylist={() => onSavePlaylist(playlistId, playlist.title)}
@@ -494,14 +405,6 @@ export function PlaylistPage() {
               onClick={async () => {
                 const playback = await resolvePlaybackSnapshot();
                 const currentTracks = playlist.tracks ?? [];
-                console.log(
-                  `[PlaylistPage] play all using playback tracks ${JSON.stringify({
-                    playlistId,
-                    tracks: currentTracks.length,
-                    queueTrackIds: playback.trackIds.length,
-                    isComplete: playback.isComplete,
-                  })}`
-                );
                 onPlayAll(currentTracks, 0, playlistId, playback.isComplete, {
                   queueTrackIds: playback.trackIds,
                 });
@@ -515,14 +418,6 @@ export function PlaylistPage() {
               onClick={async () => {
                 const playback = await resolvePlaybackSnapshot();
                 const currentTracks = playlist.tracks ?? [];
-                console.log(
-                  `[PlaylistPage] shuffle play using playback tracks ${JSON.stringify({
-                    playlistId,
-                    tracks: currentTracks.length,
-                    queueTrackIds: playback.trackIds.length,
-                    isComplete: playback.isComplete,
-                  })}`
-                );
                 onPlayAll(currentTracks, 0, playlistId, playback.isComplete, {
                   queueTrackIds: playback.trackIds,
                   shuffle: true,
@@ -573,15 +468,6 @@ export function PlaylistPage() {
             if (index >= 0) {
               resolvePlaybackSnapshot()
                 .then((playback) => {
-                  console.log(
-                    `[PlaylistPage] row play using playback tracks ${JSON.stringify({
-                      playlistId,
-                      requestedIndex: index,
-                      resolvedIndex: index,
-                      videoId: track.videoId,
-                      isComplete: playback.isComplete,
-                    })}`
-                  );
                   onPlayAll(currentTracks, index, playlistId, playback.isComplete, {
                     queueTrackIds: playback.trackIds,
                   });
@@ -600,13 +486,6 @@ export function PlaylistPage() {
             playlist.isEditable
               ? async (track) => {
                   if (!track.setVideoId) return;
-                  console.log(
-                    `[PlaylistPage] remove from playlist ${JSON.stringify({
-                      playlistId,
-                      videoId: track.videoId,
-                      setVideoId: track.setVideoId,
-                    })}`
-                  );
                   await ytRemovePlaylistItems(playlistId, [
                     {
                       videoId: track.videoId,

@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useMemo, useRef } from "react";
+import { useState, useCallback, useEffect, useMemo } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { Router, Route, Switch } from "wouter";
@@ -42,17 +42,12 @@ import { useTrackLikeStore } from "./stores/track-like-store";
 import { ytGetCachedTracks, ytAuthLogout, ytRadioStart, type QueueSnapshot, type RadioSeedKind } from "./services/yt-api";
 import { mapLibraryPlaylists } from "./services/mappers";
 import type { PlayAllOptions, Playlist, Track } from "./types/music";
-import { useRenderTracker, useLeakDetector, startMemoryMonitor } from "@/lib/debug";
 import { useDocumentHiddenClass } from "@/lib/hooks/use-document-hidden-class";
-import { perfMark, startModuleLoad } from "./services/perf";
 
 type AuthState = "loading" | "unauthenticated" | "google-account-select" | "account-select" | "authenticated";
 
 export default function YouTubeMusicModule() {
-  useRenderTracker("YouTubeMusicModule", {});
-  useLeakDetector("YouTubeMusicModule");
   useDocumentHiddenClass();
-  useEffect(() => { startMemoryMonitor(5000); }, []);
   const [authState, setAuthState] = useState<AuthState>("loading");
   const [queueOpen, setQueueOpen] = useState(false);
   const [playlistDialogTrack, setPlaylistDialogTrack] = useState<Track | null>(null);
@@ -67,7 +62,6 @@ export default function YouTubeMusicModule() {
     privacyStatus?: "PUBLIC" | "PRIVATE" | "UNLISTED" | null;
     thumbnailUrl?: string | null;
   } | null>(null);
-  const queueOpenRef = useRef(queueOpen);
 
   const playerPlay = usePlayerStore((s) => s.play);
   const playerCurrentTrackId = usePlayerStore((s) => s.currentTrackId);
@@ -86,45 +80,28 @@ export default function YouTubeMusicModule() {
   const trackLikesHydrate = useTrackLikeStore((s) => s.hydrate);
   const trackLikesClear = useTrackLikeStore((s) => s.clear);
 
-  console.log("[YouTubeMusicModule] render", { authState });
-
   useEffect(() => {
-    queueOpenRef.current = queueOpen;
-  }, [queueOpen]);
-
-  useEffect(() => {
-    console.log("[YouTubeMusicModule] mounted — checking auth status");
-    startModuleLoad();
     let cancelled = false;
 
     async function checkAuth() {
-      const authMark = perfMark("yt_ensure_session", "AUTH");
       try {
-        // yt_ensure_session validates cookies and silently refreshes if expired
-        console.log("[YouTubeMusicModule] invoking yt_ensure_session...");
         const status = await invoke<{
           authenticated: boolean;
           method: string;
           hasPageId: boolean;
         }>("yt_ensure_session");
-        authMark.end({ authenticated: status.authenticated, hasPageId: status.hasPageId });
-        console.log("[YouTubeMusicModule] yt_ensure_session result", JSON.stringify(status));
         if (!cancelled) {
           if (status.authenticated && status.hasPageId) {
-            console.log("[YouTubeMusicModule] auth state transition", { from: "loading", to: "authenticated" });
             setAuthState("authenticated");
           } else if (status.authenticated) {
-            console.log("[YouTubeMusicModule] auth state transition", { from: "loading", to: "account-select", reason: "no pageId" });
             setAuthState("account-select");
           } else {
-            console.log("[YouTubeMusicModule] auth state transition", { from: "loading", to: "unauthenticated" });
             setAuthState("unauthenticated");
           }
         }
       } catch (err) {
         console.error("[YouTubeMusicModule] yt_ensure_session failed", { error: String(err) });
         if (!cancelled) {
-          console.log("[YouTubeMusicModule] auth state transition", { from: "loading", to: "unauthenticated", reason: "invoke error" });
           setAuthState("unauthenticated");
         }
       }
@@ -136,7 +113,6 @@ export default function YouTubeMusicModule() {
 
     return () => {
       cancelled = true;
-      console.log("[YouTubeMusicModule] unmounting — cleaning up stores");
       destroyMediaSession();
       playerCleanup();
       void queueCleanup();
@@ -149,11 +125,10 @@ export default function YouTubeMusicModule() {
   useEffect(() => {
     if (authState !== "authenticated") return;
 
-    const hydrationMark = perfMark("post-auth-hydration", "HYDRATE");
     void Promise.all([
       trackLikesHydrate(true, "auth-ready"),
       playlistLibraryHydrate(true, "auth-ready"),
-    ]).then(() => hydrationMark.end());
+    ]);
 
     const refreshSessionData = () => {
       if (document.visibilityState === "hidden") return;
@@ -184,17 +159,8 @@ export default function YouTubeMusicModule() {
       debounceTimer = null;
       if (pendingIds.length === 0 && !pendingComplete) return;
       const ids = pendingIds;
-      const done = pendingComplete;
       pendingIds = [];
       pendingComplete = false;
-      const queueState = useQueueStore.getState();
-
-      console.log("[YouTubeMusicModule] flush playlist events", {
-        newTracks: ids.length,
-        isComplete: done,
-        queueOpen: queueOpenRef.current,
-        currentQueueSize: queueState.totalLoaded,
-      });
 
       if (ids.length > 0) {
         // Pre-populate L1 cache
@@ -265,7 +231,6 @@ export default function YouTubeMusicModule() {
 
     listen<QueueSnapshot>("radio-extended", (event) => {
       if (cancelled) return;
-      console.log("[YouTubeMusicModule] radio-extended event received", event.payload);
       useQueueStore.getState().applyRadioExtended(event.payload);
     }).then((fn) => {
       if (cancelled) {
@@ -288,7 +253,6 @@ export default function YouTubeMusicModule() {
 
     listen<{ videoIds: string[] }>("liked-track-ids-updated", (event) => {
       if (cancelled) return;
-      console.log("[YouTubeMusicModule] liked-track-ids-updated (SWR)", { count: event.payload.videoIds.length });
       useTrackLikeStore.getState().replaceLikedTrackIds(event.payload.videoIds);
     }).then((fn) => {
       if (cancelled) { fn(); } else { unlisten = fn; }
@@ -306,7 +270,6 @@ export default function YouTubeMusicModule() {
       if (cancelled) return;
       const apiPlaylists = JSON.parse(event.payload.playlistsJson);
       const playlists = mapLibraryPlaylists(apiPlaylists);
-      console.log("[YouTubeMusicModule] library-playlists-updated (SWR)", { count: playlists.length });
       usePlaylistLibraryStore.getState().replaceLibraryPlaylists(playlists);
     }).then((fn) => {
       if (cancelled) { fn(); } else { unlisten = fn; }
@@ -316,44 +279,25 @@ export default function YouTubeMusicModule() {
   }, []);
 
   const handleAuthenticated = useCallback(() => {
-    console.log("[YouTubeMusicModule] handleAuthenticated: browser cookies accepted", {
-      from: "unauthenticated",
-      to: "google-account-select",
-    });
     setAuthState("google-account-select");
   }, []);
 
-  const handleGoogleAccountSelected = useCallback((authUser: number) => {
-    console.log("[YouTubeMusicModule] handleGoogleAccountSelected: Google account confirmed", {
-      authUser,
-      from: "google-account-select",
-      to: "account-select",
-    });
+  const handleGoogleAccountSelected = useCallback((_authUser: number) => {
     setAuthState("account-select");
   }, []);
 
   const handleAccountSelected = useCallback(() => {
-    console.log("[YouTubeMusicModule] handleAccountSelected: channel/brand account confirmed", {
-      from: "account-select",
-      to: "authenticated",
-    });
     setAuthState("authenticated");
   }, []);
 
   const handleLogout = useCallback(async () => {
-    console.log("[YouTubeMusicModule] handleLogout: starting logout flow", {
-      from: "authenticated",
-      to: "unauthenticated",
-    });
     try {
       await ytAuthLogout();
-      console.log("[YouTubeMusicModule] handleLogout: ytAuthLogout succeeded, clearing stores");
       playlistLibraryClear();
       trackCacheClear();
       trackLikesClear();
       playerCleanup();
       void queueCleanup();
-      console.log("[YouTubeMusicModule] handleLogout: stores cleared, setting state to unauthenticated");
       setAuthState("unauthenticated");
     } catch (err) {
       console.error("[YouTubeMusicModule] handleLogout: ytAuthLogout failed", { error: String(err) });
@@ -362,7 +306,6 @@ export default function YouTubeMusicModule() {
 
 
   const handlePlayTrack = useCallback(async (track: Track) => {
-    console.log("[YouTubeMusicModule] handlePlayTrack", { title: track.title });
     trackCachePut([track]);
     const queueTrackId = await queueSetQueue([track.videoId], 0, null, true, false);
     playerPlay(queueTrackId ?? track.videoId);
@@ -379,14 +322,6 @@ export default function YouTubeMusicModule() {
       const ids = (options?.queueTrackIds ?? tracks.map((t) => t.videoId).filter(Boolean));
       if (ids.length === 0) return;
       const idx = Math.min(startIndex ?? 0, ids.length - 1);
-      console.log("[YouTubeMusicModule] handlePlayAll", {
-        count: tracks.length,
-        queueCount: ids.length,
-        startIndex: idx,
-        playlistId,
-        isComplete,
-        shuffle: options?.shuffle ?? false,
-      });
 
       if (tracks.length > 0) {
         trackCachePut(tracks);
@@ -417,38 +352,19 @@ export default function YouTubeMusicModule() {
   );
 
   const handleAddToQueue = useCallback(async (track: Track) => {
-    console.log("[YouTubeMusicModule] handleAddToQueue", { title: track.title });
     trackCachePut([track]);
     await queueAddNext(track.videoId);
   }, [queueAddNext, trackCachePut]);
 
   const handleAddToPlaylist = useCallback((track: Track) => {
-    console.log("[YouTubeMusicModule] handleAddToPlaylist", {
-      title: track.title,
-      videoId: track.videoId,
-    });
     setPlaylistDialogTrack(track);
   }, []);
 
   const handleSavePlaylist = useCallback((playlistId: string, title: string) => {
-    console.log(
-      `[YouTubeMusicModule] handleSavePlaylist ${JSON.stringify({
-        playlistId,
-        title,
-      })}`
-    );
     setSavePlaylistDialog({ playlistId, title });
   }, []);
 
   const handleEditPlaylist = useCallback((playlist: Playlist) => {
-    console.log(
-      `[YouTubeMusicModule] handleEditPlaylist ${JSON.stringify({
-        playlistId: playlist.playlistId,
-        title: playlist.title,
-        hasDescription: Boolean(playlist.description),
-        privacyStatus: playlist.privacyStatus ?? null,
-      })}`
-    );
     setEditPlaylistDialog({
       playlistId: playlist.playlistId,
       title: playlist.title,
@@ -463,14 +379,6 @@ export default function YouTubeMusicModule() {
 
   const handleAddPlaylistNext = useCallback(
     async (tracks: Track[], queueTrackIds: string[]) => {
-      console.log(
-        `[YouTubeMusicModule] handleAddPlaylistNext ${JSON.stringify({
-          loadedTracks: tracks.length,
-          queueTrackIds: queueTrackIds.length,
-          firstTrackId: queueTrackIds[0] ?? null,
-          lastTrackId: queueTrackIds[queueTrackIds.length - 1] ?? null,
-        })}`
-      );
       if (tracks.length > 0) {
         trackCachePut(tracks);
       }
@@ -491,13 +399,6 @@ export default function YouTubeMusicModule() {
               );
             }
           }
-
-          console.log(
-            `[YouTubeMusicModule] booting player from add-next ${JSON.stringify({
-              targetTrackId,
-              source: queueTrackId ? "queue" : "fallback",
-            })}`
-          );
           playerPlay(targetTrackId);
         }
       }
@@ -507,14 +408,6 @@ export default function YouTubeMusicModule() {
 
   const handleAppendPlaylistToQueue = useCallback(
     async (tracks: Track[], queueTrackIds: string[]) => {
-      console.log(
-        `[YouTubeMusicModule] handleAppendPlaylistToQueue ${JSON.stringify({
-          loadedTracks: tracks.length,
-          queueTrackIds: queueTrackIds.length,
-          firstTrackId: queueTrackIds[0] ?? null,
-          lastTrackId: queueTrackIds[queueTrackIds.length - 1] ?? null,
-        })}`
-      );
       if (tracks.length > 0) {
         trackCachePut(tracks);
       }
@@ -535,13 +428,6 @@ export default function YouTubeMusicModule() {
               );
             }
           }
-
-          console.log(
-            `[YouTubeMusicModule] booting player from append ${JSON.stringify({
-              targetTrackId,
-              source: queueTrackId ? "queue" : "fallback",
-            })}`
-          );
           playerPlay(targetTrackId);
         }
       }
@@ -551,14 +437,8 @@ export default function YouTubeMusicModule() {
 
   const handleStartRadio = useCallback(
     async (seed: { kind: RadioSeedKind; id: string }) => {
-      console.log("[YouTubeMusicModule] handleStartRadio", seed);
       try {
         const response = await ytRadioStart(seed.kind, seed.id);
-        console.log("[YouTubeMusicModule] handleStartRadio response", {
-          trackId: response.trackId,
-          totalLoaded: response.snapshot.totalLoaded,
-          isRadio: response.snapshot.isRadio,
-        });
         queueSyncSnapshot(response.snapshot);
         const targetTrackId = response.trackId;
         if (targetTrackId) {
@@ -588,7 +468,6 @@ export default function YouTubeMusicModule() {
   const handleOpenQueue = useCallback(() => setQueueOpen(true), []);
 
   const handlePlaylistDeleted = useCallback((playlistId: string) => {
-    console.log("[YouTubeMusicModule] handlePlaylistDeleted", { playlistId });
     const state = useHistoryStore.getState();
     const currentPath = state.stack[state.index];
     const match = currentPath.match(/^\/playlist\/([^/?]+)/);
@@ -631,13 +510,11 @@ export default function YouTubeMusicModule() {
 
     const goNormal = () => {
       if (isLow) {
-        console.log("[MemoryManager] User active → Normal");
         invoke("yt_set_memory_level", { low: false }).catch(() => {});
         isLow = false;
       }
       if (idleTimer) clearTimeout(idleTimer);
       idleTimer = setTimeout(() => {
-        console.log("[MemoryManager] Idle 5s → Low");
         invoke("yt_set_memory_level", { low: true }).catch(() => {});
         isLow = true;
       }, 5000);

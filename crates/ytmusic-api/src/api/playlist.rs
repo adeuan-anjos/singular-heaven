@@ -14,7 +14,6 @@ impl YtMusicClient {
     /// Returns the first ~100 tracks and an optional continuation token.
     /// Use `get_playlist_continuation` to load more tracks on demand.
     pub async fn get_playlist(&self, playlist_id: &str) -> Result<(PlaylistPage, Option<String>)> {
-        println!("[ytmusic-api] get_playlist(playlist_id=\"{playlist_id}\")");
 
         let browse_id = if playlist_id.starts_with("VL") {
             playlist_id.to_string()
@@ -27,11 +26,6 @@ impl YtMusicClient {
         let result = parse_playlist_response(&response, playlist_id)?;
         let continuation = extract_initial_continuation_token(&response);
 
-        println!(
-            "[ytmusic-api] get_playlist returned: title=\"{}\" tracks={} has_more={}",
-            result.title, result.tracks.len(), continuation.is_some()
-        );
-
         Ok((result, continuation))
     }
 
@@ -42,16 +36,10 @@ impl YtMusicClient {
         &self,
         continuation_token: &str,
     ) -> Result<(Vec<PlaylistTrack>, Option<String>)> {
-        println!("[ytmusic-api] get_playlist_continuation()");
 
         let body = json!({ "continuation": continuation_token });
         let response = self.post_innertube(ENDPOINT_BROWSE, body).await?;
         let (tracks, next_token) = parse_playlist_continuation(&response);
-
-        println!(
-            "[ytmusic-api] get_playlist_continuation returned: {} tracks, has_more={}",
-            tracks.len(), next_token.is_some()
-        );
 
         Ok((tracks, next_token))
     }
@@ -64,12 +52,6 @@ impl YtMusicClient {
         privacy_status: &str,
         video_ids: &[String],
     ) -> Result<serde_json::Value> {
-        println!(
-            "[ytmusic-api] create_playlist title=\"{}\" privacy_status={} video_ids={}",
-            title,
-            privacy_status,
-            video_ids.len()
-        );
 
         self.post_innertube(
             ENDPOINT_PLAYLIST_CREATE,
@@ -85,7 +67,6 @@ impl YtMusicClient {
 
     /// Delete a playlist owned by the user.
     pub async fn delete_playlist(&self, playlist_id: &str) -> Result<serde_json::Value> {
-        println!("[ytmusic-api] delete_playlist playlist_id={}", playlist_id);
         self.post_innertube(
             ENDPOINT_PLAYLIST_DELETE,
             json!({
@@ -126,14 +107,6 @@ impl YtMusicClient {
             }));
         }
 
-        println!(
-            "[ytmusic-api] edit_playlist playlist_id={} title={} description={} privacy_status={:?}",
-            playlist_id,
-            title.is_some(),
-            description.is_some(),
-            privacy_status
-        );
-
         self.post_innertube(
             ENDPOINT_PLAYLIST_EDIT,
             json!({
@@ -168,13 +141,6 @@ impl YtMusicClient {
             }));
         }
 
-        println!(
-            "[ytmusic-api] add_playlist_items playlist_id={} video_ids={} source_playlist_id={:?}",
-            playlist_id,
-            video_ids.len(),
-            source_playlist_id
-        );
-
         self.post_innertube(
             ENDPOINT_PLAYLIST_EDIT,
             json!({
@@ -202,12 +168,6 @@ impl YtMusicClient {
             })
             .collect();
 
-        println!(
-            "[ytmusic-api] remove_playlist_items playlist_id={} items={}",
-            playlist_id,
-            items.len()
-        );
-
         self.post_innertube(
             ENDPOINT_PLAYLIST_EDIT,
             json!({
@@ -225,12 +185,6 @@ impl YtMusicClient {
         image_bytes: &[u8],
         mime_type: &str,
     ) -> Result<serde_json::Value> {
-        println!(
-            "[ytmusic-api] set_playlist_thumbnail playlist_id={} bytes={} mime={}",
-            playlist_id,
-            image_bytes.len(),
-            mime_type
-        );
 
         let upload_json = self
             .post_binary_json(PLAYLIST_THUMBNAIL_UPLOAD_URL, image_bytes.to_vec(), mime_type)

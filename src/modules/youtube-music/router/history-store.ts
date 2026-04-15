@@ -28,20 +28,17 @@ export const useHistoryStore = create<HistoryState & HistoryActions>((set, get) 
 
     if (opts?.replace) {
       const next = stack.slice(0, index).concat(to);
-      console.log(`[history] replace ${JSON.stringify({ from: stack[index], to })}`);
       set({ stack: next, index: next.length - 1, forward: [] });
       return;
     }
 
     const truncated = stack.slice(0, index + 1);
-    console.log(`[history] push ${JSON.stringify({ from: stack[index], to, newIndex: truncated.length })}`);
     set({ stack: [...truncated, to], index: truncated.length, forward: [] });
   },
 
   back: () => {
     const { stack, index, forward } = get();
     if (index === 0) return;
-    console.log(`[history] back ${JSON.stringify({ from: stack[index], to: stack[index - 1] })}`);
     set({ index: index - 1, forward: [stack[index], ...forward] });
   },
 
@@ -49,12 +46,10 @@ export const useHistoryStore = create<HistoryState & HistoryActions>((set, get) 
     const { stack, index, forward } = get();
     if (forward.length === 0) return;
     const [next, ...rest] = forward;
-    console.log(`[history] forward ${JSON.stringify({ from: stack[index], to: next })}`);
     set({ stack: [...stack.slice(0, index + 1), next], index: index + 1, forward: rest });
   },
 
   reset: (to) => {
-    console.log(`[history] reset ${JSON.stringify({ to })}`);
     set({ stack: [to], index: 0, forward: [] });
   },
 }));

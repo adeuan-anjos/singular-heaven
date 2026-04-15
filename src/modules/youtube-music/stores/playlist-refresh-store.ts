@@ -12,7 +12,6 @@ export const usePlaylistRefreshStore = create<PlaylistRefreshState & PlaylistRef
   (set) => ({
     versions: {},
     bump: (playlistId) => {
-      console.log(`[playlist-refresh] bump ${JSON.stringify({ playlistId })}`);
       set((state) => ({
         versions: {
           ...state.versions,

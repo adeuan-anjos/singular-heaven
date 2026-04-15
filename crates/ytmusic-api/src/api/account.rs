@@ -8,7 +8,6 @@ use crate::types::common::AccountInfo;
 impl YtMusicClient {
     /// Get the list of accounts/channels available under the current Google account.
     pub async fn get_accounts(&self) -> Result<Vec<AccountInfo>> {
-        println!("[ytmusic-api] get_accounts()");
         let response = self.post_innertube("account/accounts_list", json!({})).await?;
 
         let mut accounts = Vec::new();
@@ -31,11 +30,6 @@ impl YtMusicClient {
                 .and_then(|t| t.as_str())
                 .filter(|s| s.contains('@'))
                 .map(|s| s.to_string());
-
-            println!(
-                "[ytmusic-api] get_accounts header_email_present={}",
-                header_email.is_some()
-            );
 
             let menu_sections = nav_array(&menu_val, &["sections"]);
             for section in &menu_sections {
@@ -133,8 +127,6 @@ impl YtMusicClient {
                 }
             }
         }
-
-        println!("[ytmusic-api] get_accounts returned {} accounts", accounts.len());
         Ok(accounts)
     }
 }

@@ -93,8 +93,6 @@ impl PlaylistCache {
         std::fs::create_dir_all(app_data_dir).ok();
         let conn = Connection::open(&db_path)?;
 
-        println!("[PlaylistCache] Opened database at {}", db_path.display());
-
         conn.execute_batch(
             "PRAGMA journal_mode = WAL;
              PRAGMA synchronous = NORMAL;
@@ -207,8 +205,6 @@ impl PlaylistCache {
         if !collection_has_set_video_id {
             conn.execute("ALTER TABLE collection_tracks ADD COLUMN set_video_id TEXT", [])?;
         }
-
-        println!("[PlaylistCache] Schema initialized");
         Ok(Self { conn })
     }
 
@@ -227,10 +223,6 @@ impl PlaylistCache {
         is_editable: bool,
         is_special: bool,
     ) -> SqlResult<()> {
-        println!(
-            "[PlaylistCache] save_meta playlist_id={} title={}",
-            playlist_id, title
-        );
         self.conn.execute(
             "INSERT OR REPLACE INTO playlist_meta
              (playlist_id, title, author_name, author_id, description, privacy_status, track_count, thumbnail_url, is_owned_by_user, is_editable, is_special, is_complete, cached_at)
@@ -255,10 +247,6 @@ impl PlaylistCache {
 
     /// Clear cached rows for a playlist before a fresh fetch.
     pub fn clear_playlist_tracks(&self, playlist_id: &str) -> SqlResult<()> {
-        println!(
-            "[PlaylistCache] clear_playlist_tracks playlist_id={}",
-            playlist_id
-        );
         self.conn.execute(
             "DELETE FROM playlist_tracks WHERE playlist_id = ?1",
             params![playlist_id],
@@ -310,16 +298,11 @@ impl PlaylistCache {
             }
         }
         tx.commit()?;
-        println!(
-            "[PlaylistCache] save_tracks playlist_id={} start={} count={}",
-            playlist_id, start_pos, count
-        );
         Ok(count)
     }
 
     /// Mark playlist as fully fetched.
     pub fn mark_complete(&self, playlist_id: &str) -> SqlResult<()> {
-        println!("[PlaylistCache] mark_complete playlist_id={}", playlist_id);
         self.conn.execute(
             "UPDATE playlist_meta SET is_complete = 1 WHERE playlist_id = ?1",
             params![playlist_id],
@@ -350,7 +333,6 @@ impl PlaylistCache {
 
         let mut rows = stmt.query(params![playlist_id])?;
         let Some(row) = rows.next()? else {
-            println!("[PlaylistCache] get_meta playlist_id={} miss", playlist_id);
             return Ok(None);
         };
 
@@ -368,11 +350,6 @@ impl PlaylistCache {
             is_special: row.get::<_, i32>(10)? == 1,
             is_complete: row.get::<_, i32>(11)? == 1,
         };
-
-        println!(
-            "[PlaylistCache] get_meta playlist_id={} hit complete={}",
-            playlist_id, meta.is_complete
-        );
 
         Ok(Some(meta))
     }
@@ -399,10 +376,6 @@ impl PlaylistCache {
         thumbnail_url: Option<&str>,
         is_complete: bool,
     ) -> SqlResult<()> {
-        println!(
-            "[PlaylistCache] save_collection_meta type={} id={} title={}",
-            collection_type, collection_id, title
-        );
         self.conn.execute(
             "INSERT OR REPLACE INTO collection_meta
              (collection_type, collection_id, title, subtitle, thumbnail_url, is_complete, cached_at)
@@ -425,10 +398,6 @@ impl PlaylistCache {
         collection_type: &str,
         collection_id: &str,
     ) -> SqlResult<()> {
-        println!(
-            "[PlaylistCache] clear_collection_tracks type={} id={}",
-            collection_type, collection_id
-        );
         self.conn.execute(
             "DELETE FROM collection_tracks WHERE collection_type = ?1 AND collection_id = ?2",
             params![collection_type, collection_id],
@@ -480,10 +449,6 @@ impl PlaylistCache {
             }
         }
         tx.commit()?;
-        println!(
-            "[PlaylistCache] save_collection_tracks type={} id={} start={} count={}",
-            collection_type, collection_id, start_pos, count
-        );
         Ok(count)
     }
 
@@ -539,12 +504,6 @@ impl PlaylistCache {
                 }
             })
             .collect();
-        println!(
-            "[PlaylistCache] get_collection_track_ids type={} id={} count={}",
-            collection_type,
-            collection_id,
-            ids.len()
-        );
         Ok(ids)
     }
 
@@ -600,15 +559,6 @@ impl PlaylistCache {
             })
             .collect();
 
-        println!(
-            "[PlaylistCache] get_collection_window type={} id={} offset={} limit={} count={}",
-            collection_type,
-            collection_id,
-            offset,
-            limit,
-            items.len()
-        );
-
         Ok(items)
     }
 
@@ -627,11 +577,6 @@ impl PlaylistCache {
                 }
             })
             .collect();
-        println!(
-            "[PlaylistCache] get_track_ids playlist_id={} count={}",
-            playlist_id,
-            ids.len()
-        );
         Ok(ids)
     }
 
@@ -677,12 +622,6 @@ impl PlaylistCache {
                 }
             })
             .collect();
-
-        println!(
-            "[PlaylistCache] get_tracks_for_playlist playlist_id={} count={}",
-            playlist_id,
-            tracks.len()
-        );
 
         Ok(tracks)
     }
@@ -739,14 +678,6 @@ impl PlaylistCache {
             })
             .collect();
 
-        println!(
-            "[PlaylistCache] get_playlist_window playlist_id={} offset={} limit={} count={}",
-            playlist_id,
-            offset,
-            limit,
-            items.len()
-        );
-
         Ok(items)
     }
 
@@ -773,12 +704,6 @@ impl PlaylistCache {
             .iter()
             .filter_map(|video_id| tracks_by_id.get(video_id).cloned())
             .collect();
-
-        println!(
-            "[PlaylistCache] get_tracks_by_ids requested={} found={}",
-            video_ids.len(),
-            ordered_tracks.len()
-        );
         Ok(ordered_tracks)
     }
 
@@ -855,15 +780,10 @@ impl PlaylistCache {
         )?;
         let mut rows = stmt.query(params![cache_key])?;
         let Some(row) = rows.next()? else {
-            println!("[PlaylistCache] get_swr_json key={} miss", cache_key);
             return Ok(None);
         };
         let json_data: String = row.get(0)?;
         let cached_at: i64 = row.get(1)?;
-        println!(
-            "[PlaylistCache] get_swr_json key={} hit cached_at={}",
-            cache_key, cached_at
-        );
         Ok(Some((json_data, cached_at)))
     }
 
@@ -875,12 +795,6 @@ impl PlaylistCache {
              VALUES (?1, ?2, ?3)",
             params![cache_key, json_data, now],
         )?;
-        println!(
-            "[PlaylistCache] save_swr_json key={} len={} cached_at={}",
-            cache_key,
-            json_data.len(),
-            now
-        );
         Ok(())
     }
 }

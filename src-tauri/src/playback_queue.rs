@@ -152,13 +152,6 @@ impl PlaybackQueue {
     }
 
     pub fn set_radio_state(&mut self, state: RadioState) {
-        println!(
-            "[PlaybackQueue] set_radio_state kind={} id={} loaded={} continuation={}",
-            state.seed.kind.as_str(),
-            state.seed.id,
-            state.loaded_count,
-            state.continuation.is_some(),
-        );
         self.radio_state = Some(state);
     }
 
@@ -172,17 +165,12 @@ impl PlaybackQueue {
 
     pub fn set_is_complete(&mut self, complete: bool) {
         if self.is_complete != complete {
-            println!(
-                "[PlaybackQueue] set_is_complete {} → {}",
-                self.is_complete, complete
-            );
             self.is_complete = complete;
         }
     }
 
     pub fn clear_radio(&mut self) {
         if self.radio_state.is_some() {
-            println!("[PlaybackQueue] clear_radio");
         }
         self.radio_state = None;
     }
@@ -223,7 +211,6 @@ impl PlaybackQueue {
         }
 
         self.rebuild_playback(start_index);
-        self.log_state("set_queue");
 
         QueueCommandResponse {
             track_id: self.current_track_id(),
@@ -271,13 +258,6 @@ impl PlaybackQueue {
         }
 
         if changed {
-            println!(
-                "[PlaybackQueue] append_playlist_batch playlist_id={} added={} is_complete={} summary={}",
-                playlist_id,
-                new_ids.len(),
-                is_complete,
-                self.debug_summary()
-            );
         }
 
         changed
@@ -307,15 +287,8 @@ impl PlaybackQueue {
 
     pub fn play_index(&mut self, index: usize) -> QueueCommandResponse {
         if index < self.playback_items.len() {
-            let from = self.current_index;
+            let _from = self.current_index;
             self.move_to_index(index, true);
-            println!(
-                "[PlaybackQueue] play_index from={:?} to={} current_item={:?} summary={}",
-                from,
-                index,
-                self.current_track_id(),
-                self.debug_summary()
-            );
         }
 
         QueueCommandResponse {
@@ -329,7 +302,6 @@ impl PlaybackQueue {
             if !self.playback_items.is_empty() {
                 self.current_index = Some(0);
             }
-            self.log_state("next_track_init");
             return QueueCommandResponse {
                 track_id: self.current_track_id(),
                 snapshot: self.snapshot(),
@@ -343,15 +315,8 @@ impl PlaybackQueue {
         };
 
         if let Some(next_index) = next_index {
-            let from = self.current_index;
+            let _from = self.current_index;
             self.move_to_index(next_index, true);
-            println!(
-                "[PlaybackQueue] next_track from={:?} to={} track_id={:?} summary={}",
-                from,
-                next_index,
-                self.current_track_id(),
-                self.debug_summary()
-            );
             return QueueCommandResponse {
                 track_id: self.current_track_id(),
                 snapshot: self.snapshot(),
@@ -361,21 +326,9 @@ impl PlaybackQueue {
         if self.repeat == RepeatMode::All && !self.playback_items.is_empty() {
             if self.shuffle {
                 self.restart_shuffled_cycle();
-                println!(
-                    "[PlaybackQueue] next_track reshuffle_cycle track_id={:?} summary={} upcoming={}",
-                    self.current_track_id(),
-                    self.debug_summary(),
-                    self.debug_upcoming()
-                );
             } else {
-                let from = self.current_index;
+                let _from = self.current_index;
                 self.move_to_index(0, true);
-                println!(
-                    "[PlaybackQueue] next_track wrap_linear from={:?} to=0 track_id={:?} summary={}",
-                    from,
-                    self.current_track_id(),
-                    self.debug_summary()
-                );
             }
 
             return QueueCommandResponse {
@@ -383,12 +336,6 @@ impl PlaybackQueue {
                 snapshot: self.snapshot(),
             };
         }
-
-        println!(
-            "[PlaybackQueue] next_track at_end repeat={} summary={}",
-            self.repeat.as_str(),
-            self.debug_summary()
-        );
 
         QueueCommandResponse {
             track_id: None,
@@ -398,7 +345,6 @@ impl PlaybackQueue {
 
     pub fn previous_track(&mut self) -> QueueCommandResponse {
         if self.playback_items.is_empty() {
-            self.log_state("previous_track_empty");
             return QueueCommandResponse {
                 track_id: None,
                 snapshot: self.snapshot(),
@@ -408,16 +354,8 @@ impl PlaybackQueue {
         if self.shuffle {
             while let Some(previous_item_id) = self.history_item_ids.pop() {
                 if let Some(previous_index) = self.find_playback_index(previous_item_id) {
-                    let from = self.current_index;
+                    let _from = self.current_index;
                     self.move_to_index(previous_index, false);
-                    println!(
-                        "[PlaybackQueue] previous_track shuffle_history from={:?} to={} item_id={} track_id={:?} summary={}",
-                        from,
-                        previous_index,
-                        previous_item_id,
-                        self.current_track_id(),
-                        self.debug_summary()
-                    );
                     return QueueCommandResponse {
                         track_id: self.current_track_id(),
                         snapshot: self.snapshot(),
@@ -426,15 +364,8 @@ impl PlaybackQueue {
             }
 
             if self.repeat == RepeatMode::All {
-                let from = self.current_index;
+                let _from = self.current_index;
                 self.move_to_index(self.playback_items.len().saturating_sub(1), false);
-                println!(
-                    "[PlaybackQueue] previous_track shuffle_wrap from={:?} to={} track_id={:?} summary={}",
-                    from,
-                    self.current_index.unwrap_or_default(),
-                    self.current_track_id(),
-                    self.debug_summary()
-                );
                 return QueueCommandResponse {
                     track_id: self.current_track_id(),
                     snapshot: self.snapshot(),
@@ -442,15 +373,8 @@ impl PlaybackQueue {
             }
         } else if let Some(current_index) = self.current_index {
             if current_index > 0 {
-                let from = self.current_index;
+                let _from = self.current_index;
                 self.move_to_index(current_index - 1, false);
-                println!(
-                    "[PlaybackQueue] previous_track linear from={:?} to={} track_id={:?} summary={}",
-                    from,
-                    current_index - 1,
-                    self.current_track_id(),
-                    self.debug_summary()
-                );
                 return QueueCommandResponse {
                     track_id: self.current_track_id(),
                     snapshot: self.snapshot(),
@@ -458,28 +382,14 @@ impl PlaybackQueue {
             }
 
             if self.repeat == RepeatMode::All {
-                let from = self.current_index;
+                let _from = self.current_index;
                 self.move_to_index(self.playback_items.len().saturating_sub(1), false);
-                println!(
-                    "[PlaybackQueue] previous_track linear_wrap from={:?} to={} track_id={:?} summary={}",
-                    from,
-                    self.current_index.unwrap_or_default(),
-                    self.current_track_id(),
-                    self.debug_summary()
-                );
                 return QueueCommandResponse {
                     track_id: self.current_track_id(),
                     snapshot: self.snapshot(),
                 };
             }
         }
-
-        println!(
-            "[PlaybackQueue] previous_track no_move repeat={} shuffle={} summary={}",
-            self.repeat.as_str(),
-            self.shuffle,
-            self.debug_summary()
-        );
 
         QueueCommandResponse {
             track_id: self.current_track_id(),
@@ -489,22 +399,11 @@ impl PlaybackQueue {
 
     pub fn handle_track_end(&mut self) -> QueueCommandResponse {
         if self.repeat == RepeatMode::One {
-            println!(
-                "[PlaybackQueue] handle_track_end repeat_one track_id={:?} summary={}",
-                self.current_track_id(),
-                self.debug_summary()
-            );
             return QueueCommandResponse {
                 track_id: self.current_track_id(),
                 snapshot: self.snapshot(),
             };
         }
-
-        println!(
-            "[PlaybackQueue] handle_track_end repeat={} summary={}",
-            self.repeat.as_str(),
-            self.debug_summary()
-        );
 
         self.next_track()
     }
@@ -515,12 +414,6 @@ impl PlaybackQueue {
             video_id,
         };
         self.insert_entry_next(entry);
-
-        println!(
-            "[PlaybackQueue] add_next summary={} upcoming={}",
-            self.debug_summary(),
-            self.debug_upcoming()
-        );
 
         QueueCommandResponse {
             track_id: self.current_track_id(),
@@ -546,12 +439,6 @@ impl PlaybackQueue {
             })
             .collect::<Vec<_>>();
         self.insert_collection_next(entries);
-
-        println!(
-            "[PlaybackQueue] add_collection_next summary={} upcoming={}",
-            self.debug_summary(),
-            self.debug_upcoming()
-        );
 
         QueueCommandResponse {
             track_id: self.current_track_id(),
@@ -588,12 +475,6 @@ impl PlaybackQueue {
 
         self.prune_state();
 
-        println!(
-            "[PlaybackQueue] append_collection summary={} upcoming={}",
-            self.debug_summary(),
-            self.debug_upcoming()
-        );
-
         QueueCommandResponse {
             track_id: self.current_track_id(),
             snapshot: self.snapshot(),
@@ -625,12 +506,6 @@ impl PlaybackQueue {
         };
 
         self.prune_state();
-        println!(
-            "[PlaybackQueue] remove_index index={} current_track={:?} summary={}",
-            index,
-            self.current_track_id(),
-            self.debug_summary()
-        );
 
         QueueCommandResponse {
             track_id: self.current_track_id(),
@@ -670,14 +545,6 @@ impl PlaybackQueue {
             }
         }
 
-        println!(
-            "[PlaybackQueue] toggle_shuffle shuffle={} current_track={:?} history_len={} upcoming={}",
-            self.shuffle,
-            self.current_track_id(),
-            self.history_item_ids.len(),
-            self.debug_upcoming()
-        );
-
         QueueCommandResponse {
             track_id: self.current_track_id(),
             snapshot: self.snapshot(),
@@ -686,11 +553,6 @@ impl PlaybackQueue {
 
     pub fn cycle_repeat(&mut self) -> QueueCommandResponse {
         self.repeat = self.repeat.cycle();
-        println!(
-            "[PlaybackQueue] cycle_repeat repeat={} summary={}",
-            self.repeat.as_str(),
-            self.debug_summary()
-        );
         QueueCommandResponse {
             track_id: self.current_track_id(),
             snapshot: self.snapshot(),
@@ -709,7 +571,6 @@ impl PlaybackQueue {
         self.repeat = RepeatMode::Off;
         self.rng_state = 0;
         self.clear_radio();
-        self.log_state("clear");
 
         QueueCommandResponse {
             track_id: None,
@@ -741,12 +602,6 @@ impl PlaybackQueue {
             .retain(|id| !removed_ids.contains(id));
 
         let removed = removed_entries.len();
-        println!(
-            "[PlaybackQueue] truncate_after_current removed={} kept_before={} current={}",
-            removed,
-            current_idx + 1,
-            current_idx
-        );
         removed
     }
 
@@ -767,13 +622,6 @@ impl PlaybackQueue {
         if self.current_index.is_none() && !self.playback_items.is_empty() {
             self.current_index = Some(0);
         }
-
-        println!(
-            "[PlaybackQueue] append_radio_batch added={} total={} current={:?}",
-            track_ids.len(),
-            self.playback_items.len(),
-            self.current_index
-        );
         track_ids.len()
     }
 
@@ -1060,34 +908,6 @@ impl PlaybackQueue {
         }
     }
 
-    fn log_state(&self, action: &str) {
-        println!("[PlaybackQueue] {} summary={}", action, self.debug_summary());
-    }
-
-    fn debug_summary(&self) -> String {
-        format!(
-            "current_index={:?} current_track={:?} total={} shuffle={} repeat={} history_len={} queued_next_len={}",
-            self.current_index,
-            self.current_track_id(),
-            self.playback_items.len(),
-            self.shuffle,
-            self.repeat.as_str(),
-            self.history_item_ids.len(),
-            self.queued_next_item_ids.len()
-        )
-    }
-
-    fn debug_upcoming(&self) -> String {
-        let start = self.current_index.map(|index| index + 1).unwrap_or(0);
-        let ids = self
-            .playback_items
-            .iter()
-            .skip(start)
-            .take(5)
-            .map(|entry| entry.video_id.as_str())
-            .collect::<Vec<_>>();
-        serde_json::to_string(&ids).unwrap_or_else(|_| "[]".to_string())
-    }
 }
 
 fn shuffle_entries(entries: &mut [QueueEntry], rng_state: &mut u64) {

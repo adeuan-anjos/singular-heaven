@@ -9,12 +9,9 @@ import { usePlaylistLibraryStore } from "../../stores/playlist-library-store";
 import { useTrackLikeStore } from "../../stores/track-like-store";
 import { paths } from "../../router/paths";
 import type { Playlist, Track } from "../../types/music";
-import { useRenderTracker } from "@/lib/debug";
-import { perfMark, endModuleLoad } from "../../services/perf";
 
 export const LibraryView = React.memo(function LibraryView() {
   const [, navigate] = useLocation();
-  useRenderTracker("LibraryView", {});
 
   const playlists = usePlaylistLibraryStore((s) => s.playlists);
   const hydratePlaylists = usePlaylistLibraryStore((s) => s.hydrate);
@@ -22,7 +19,6 @@ export const LibraryView = React.memo(function LibraryView() {
   const playlistsHydrating = usePlaylistLibraryStore((s) => s.hydrating);
   const hydrateLikes = useTrackLikeStore((s) => s.hydrate);
   const likedEntryCount = useTrackLikeStore((s) => s.likedEntryCount);
-  const likedUniqueCount = useTrackLikeStore((s) => s.likedUniqueCount);
   const visiblePlaylists = playlists.filter((playlist) => !playlist.isSpecial);
 
   const [likedSongs, setLikedSongs] = useState<Track[]>([]);
@@ -33,8 +29,6 @@ export const LibraryView = React.memo(function LibraryView() {
     let cancelled = false;
 
     async function fetchLibrary() {
-      const viewMark = perfMark("LibraryView fetch", "VIEW");
-      console.log("[LibraryView] Fetching library data...");
       setError(null);
       setLoadingSongs(true);
       try {
@@ -45,8 +39,6 @@ export const LibraryView = React.memo(function LibraryView() {
         ]);
         if (cancelled) return;
         const mappedSongs = mapLibrarySongs(apiSongs);
-        viewMark.end({ songs: mappedSongs.length });
-        endModuleLoad();
         setLikedSongs(mappedSongs);
       } catch (err) {
         if (cancelled) return;
@@ -63,22 +55,6 @@ export const LibraryView = React.memo(function LibraryView() {
       cancelled = true;
     };
   }, [hydrateLikes, hydratePlaylists]);
-
-  useEffect(() => {
-    console.log(
-        `[LibraryView] liked count resolved ${JSON.stringify({
-          playlistEntryCount: likedEntryCount,
-          uniqueVideoIdCount: likedUniqueCount,
-          playlistCount: visiblePlaylists.length,
-        })}`
-    );
-  }, [likedEntryCount, likedUniqueCount, visiblePlaylists.length]);
-
-  console.log("[LibraryView] render", {
-    playlistCount: visiblePlaylists.length,
-    likedEntryCount,
-    likedUniqueCount,
-  });
 
   if ((loadingSongs && !playlistsHydrated) || playlistsHydrating) {
     return (

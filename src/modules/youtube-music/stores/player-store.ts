@@ -1,7 +1,6 @@
 import { create } from "zustand";
 import { subscribeWithSelector } from "zustand/middleware";
 import { useQueueStore } from "./queue-store";
-import { useTrackCacheStore } from "./track-cache-store";
 
 let audio: HTMLAudioElement | null = null;
 
@@ -9,7 +8,6 @@ function getAudio(): HTMLAudioElement {
   if (!audio) {
     audio = new Audio();
     audio.preload = "auto";
-    console.log("[PlayerStore] Audio singleton created");
   }
   return audio;
 }
@@ -48,25 +46,20 @@ export const usePlayerStore = create<PlayerStore>()(
       });
 
       el.addEventListener("loadedmetadata", () => {
-        console.log("[PlayerStore] loadedmetadata", { duration: el.duration });
         set({ duration: el.duration });
       });
 
       el.addEventListener("ended", () => {
-        console.log("[PlayerStore] track ended (audio event)");
         get()._onTrackEnd();
       });
 
       el.addEventListener("play", () => set({ isPlaying: true }));
       el.addEventListener("pause", () => set({ isPlaying: false }));
-      el.addEventListener("waiting", () => console.log("[PlayerStore] audio buffering..."));
       el.addEventListener("canplay", () => set({ isLoading: false }));
       el.addEventListener("error", (e) => {
         console.error("[PlayerStore] audio error", e);
         set({ isPlaying: false, isLoading: false });
       });
-
-      console.log("[PlayerStore] Audio events wired");
     }
 
     return {
@@ -78,9 +71,6 @@ export const usePlayerStore = create<PlayerStore>()(
       isLoading: false,
 
       play: async (videoId) => {
-        const track = useTrackCacheStore.getState().getTrack(videoId);
-        console.log("[PlayerStore] play", { videoId, title: track?.title ?? "unknown" });
-
         if (!videoId) {
           console.error("[PlayerStore] Cannot play without videoId");
           return;
@@ -96,17 +86,14 @@ export const usePlayerStore = create<PlayerStore>()(
           const streamUrl = isWindows
             ? `http://stream.localhost/${videoId}`
             : `stream://localhost/${videoId}`;
-          console.log("[PlayerStore] Loading audio", { videoId });
 
           if (get().currentTrackId !== videoId) {
-            console.log("[PlayerStore] Track changed during setup, aborting");
             return;
           }
 
           el.src = streamUrl;
           el.volume = get().volume / 100;
           await el.play();
-          console.log("[PlayerStore] Playback started", { videoId });
         } catch (err) {
           console.error("[PlayerStore] Failed to play track", err);
           set({ isPlaying: false, isLoading: false });
@@ -153,10 +140,8 @@ export const usePlayerStore = create<PlayerStore>()(
             }
 
             if (nextId) {
-              console.log("[PlayerStore] queue advanced on track end", { videoId: nextId });
               get().play(nextId);
             } else {
-              console.log("[PlayerStore] queue ended");
               set({ isPlaying: false });
             }
           })
@@ -167,7 +152,6 @@ export const usePlayerStore = create<PlayerStore>()(
       },
 
       cleanup: () => {
-        console.log("[PlayerStore] cleanup");
         if (audio) {
           audio.pause();
           audio.src = "";

@@ -41,7 +41,6 @@ export function AlbumPage() {
     let cancelled = false;
     setLoading(true);
     setError(null);
-    console.log("[AlbumPage] Fetching album:", albumId);
 
     ytGetAlbum(albumId)
       .then(async (raw) => {
@@ -63,7 +62,6 @@ export function AlbumPage() {
           tracks,
         });
         if (cancelled) return;
-        console.log("[AlbumPage] Album loaded:", mapped.title, "tracks:", mapped.tracks?.length);
         trackIdsRef.current = collection.trackIds;
         setCollectionTracks(collection.entries);
         setAlbum(mapped);
@@ -173,10 +171,7 @@ export function AlbumPage() {
               variant="outline"
               onClick={() => {
                 const firstTrack = tracks[0];
-                if (!firstTrack?.videoId) {
-                  console.warn("[album-page] no tracks loaded, cannot start radio");
-                  return;
-                }
+                if (!firstTrack?.videoId) return;
                 void onStartRadio({ kind: "video", id: firstTrack.videoId });
               }}
             >

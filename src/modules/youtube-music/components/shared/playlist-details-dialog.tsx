@@ -258,14 +258,6 @@ export function PlaylistDetailsDialog({
       setCrop({ x: 0, y: 0 });
       setZoom(1);
       setCroppedAreaPixels(null);
-      console.log(
-        `[PlaylistDetailsDialog] image selected ${JSON.stringify({
-          mode,
-          fileName: file.name,
-          size: file.size,
-          mimeType: file.type,
-        })}`
-      );
     } catch (error) {
       URL.revokeObjectURL(objectUrl);
       toast.error(
@@ -297,14 +289,6 @@ export function PlaylistDetailsDialog({
       }
 
       if (mode === "create") {
-        console.log(
-          `[PlaylistDetailsDialog] create submit ${JSON.stringify({
-            title: title.trim(),
-            privacyStatus,
-            initialVideoIds: initialVideoIds.length,
-            hasThumbnail: Boolean(croppedImage),
-          })}`
-        );
         nextPlaylistId = await createPlaylist(
           title.trim(),
           description.trim(),
@@ -315,13 +299,6 @@ export function PlaylistDetailsDialog({
         if (!nextPlaylistId) {
           throw new Error("Playlist inválida para edição.");
         }
-        console.log(
-          `[PlaylistDetailsDialog] edit submit ${JSON.stringify({
-            playlistId: nextPlaylistId,
-            privacyStatus,
-            hasThumbnail: Boolean(croppedImage),
-          })}`
-        );
         await editPlaylist(nextPlaylistId, {
           title: title.trim(),
           description: description.trim() || null,
@@ -330,14 +307,6 @@ export function PlaylistDetailsDialog({
       }
 
       if (nextPlaylistId && croppedImage) {
-        console.log(
-          `[PlaylistDetailsDialog] thumbnail submit ${JSON.stringify({
-            playlistId: nextPlaylistId,
-            bytes: croppedImage.bytes.length,
-            mimeType: croppedImage.mimeType,
-            mode,
-          })}`
-        );
         await setPlaylistThumbnail(
           nextPlaylistId,
           croppedImage.bytes,

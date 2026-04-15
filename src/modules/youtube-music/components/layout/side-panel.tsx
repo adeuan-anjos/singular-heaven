@@ -252,13 +252,6 @@ function SidebarPlaylistOverflowButton({
         onClick={(event) => {
           event.preventDefault();
           event.stopPropagation();
-          console.log(
-            `[SidePanel] overflow button click ${JSON.stringify({
-              playlistId: playlist.playlistId,
-              title: playlist.title,
-              openBefore: open,
-            })}`
-          );
         }}
       >
         <Ellipsis className="h-4 w-4" />
@@ -322,13 +315,6 @@ function SidebarPlaylistMenuAnchor({
 
   const handleDropdownOpenChange = useCallback(
     (open: boolean) => {
-      console.log(
-        `[SidePanel] dropdown menu open ${JSON.stringify({
-          playlistId: playlist.playlistId,
-          title: playlist.title,
-          open,
-        })}`
-      );
       setDropdownOpen(open);
       if (open) {
         onHighlightOpen();
@@ -336,18 +322,11 @@ function SidebarPlaylistMenuAnchor({
         onHighlightClose();
       }
     },
-    [onHighlightClose, onHighlightOpen, playlist.playlistId, playlist.title]
+    [onHighlightClose, onHighlightOpen]
   );
 
   const handleContextOpenChange = useCallback(
     (open: boolean) => {
-      console.log(
-        `[SidePanel] context menu open ${JSON.stringify({
-          playlistId: playlist.playlistId,
-          title: playlist.title,
-          open,
-        })}`
-      );
       if (open) {
         setDropdownOpen(false);
         onHighlightOpen();
@@ -355,7 +334,7 @@ function SidebarPlaylistMenuAnchor({
         onHighlightClose();
       }
     },
-    [onHighlightClose, onHighlightOpen, playlist.playlistId, playlist.title]
+    [onHighlightClose, onHighlightOpen]
   );
 
   const playlistActions = (
@@ -454,28 +433,12 @@ export function SidePanel({
   const [highlightRect, setHighlightRect] = useState<PlaylistHighlightRect | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const triggerRefs = useRef(new Map<string, HTMLDivElement | null>());
-  const lastVisibleRangeRef = useRef<string>("");
-  const lastSidebarStateRef = useRef<string>("");
 
   const resolvePlaylistPlayback = useCallback(async (playlist: Playlist) => {
-    console.log(
-      `[SidePanel] resolve playlist playback ${JSON.stringify({
-        playlistId: playlist.playlistId,
-        title: playlist.title,
-      })}`
-    );
     const [loaded, playback] = await Promise.all([
       ytLoadPlaylist(playlist.playlistId),
       ytGetPlaylistTrackIds(playlist.playlistId),
     ]);
-    console.log(
-      `[SidePanel] resolve playlist playback done ${JSON.stringify({
-        playlistId: playlist.playlistId,
-        loadedTracks: loaded.tracks.length,
-        queueTrackIds: playback.trackIds.length,
-        isComplete: playback.isComplete,
-      })}`
-    );
     return {
       tracks: loaded.tracks,
       queueTrackIds: playback.trackIds,
@@ -531,41 +494,9 @@ export function SidePanel({
   });
 
   const virtualItems = virtualizer.getVirtualItems();
-  const visibleStart = virtualItems[0]?.index ?? -1;
-  const visibleEnd = virtualItems[virtualItems.length - 1]?.index ?? -1;
-
-  useEffect(() => {
-    const snapshot = JSON.stringify({
-      hydrated,
-      hydrating,
-      playlistCount: playlists.length,
-    });
-    if (lastSidebarStateRef.current === snapshot) return;
-    lastSidebarStateRef.current = snapshot;
-    console.log(`[SidePanel] state ${snapshot}`);
-  }, [hydrated, hydrating, playlists.length]);
-
-  useEffect(() => {
-    const snapshot = JSON.stringify({
-      visibleStart,
-      visibleEnd,
-      rendered: virtualItems.length,
-      total: playlists.length,
-    });
-    if (lastVisibleRangeRef.current === snapshot) return;
-    lastVisibleRangeRef.current = snapshot;
-    console.log(`[SidePanel] virtual range ${snapshot}`);
-  }, [playlists.length, visibleEnd, visibleStart, virtualItems.length]);
 
   const handlePlaylistShufflePlay = useCallback(
     (playlist: Playlist) => {
-      console.log(
-        `[SidePanel] playlist action ${JSON.stringify({
-          playlistId: playlist.playlistId,
-          title: playlist.title,
-          action: "shuffle-play",
-        })}`
-      );
       void resolvePlaylistPlayback(playlist)
         .then((playback) => {
           onPlayAll(playback.tracks, 0, playlist.playlistId, playback.isComplete, {
@@ -583,13 +514,6 @@ export function SidePanel({
 
   const handlePlaylistPlayNext = useCallback(
     (playlist: Playlist) => {
-      console.log(
-        `[SidePanel] playlist action ${JSON.stringify({
-          playlistId: playlist.playlistId,
-          title: playlist.title,
-          action: "play-next",
-        })}`
-      );
       void resolvePlaylistPlayback(playlist)
         .then((playback) =>
           onAddPlaylistNext(playback.tracks, playback.queueTrackIds)
@@ -607,13 +531,6 @@ export function SidePanel({
 
   const handlePlaylistAppendQueue = useCallback(
     (playlist: Playlist) => {
-      console.log(
-        `[SidePanel] playlist action ${JSON.stringify({
-          playlistId: playlist.playlistId,
-          title: playlist.title,
-          action: "append-queue",
-        })}`
-      );
       void resolvePlaylistPlayback(playlist)
         .then((playback) =>
           onAppendPlaylistToQueue(playback.tracks, playback.queueTrackIds)
@@ -631,13 +548,6 @@ export function SidePanel({
 
   const handlePlaylistSave = useCallback(
     (playlist: Playlist) => {
-      console.log(
-        `[SidePanel] playlist action ${JSON.stringify({
-          playlistId: playlist.playlistId,
-          title: playlist.title,
-          action: "save-playlist",
-        })}`
-      );
       onSavePlaylist(playlist.playlistId, playlist.title);
     },
     [onSavePlaylist]
@@ -645,13 +555,6 @@ export function SidePanel({
 
   const handlePlaylistStartRadio = useCallback(
     (playlist: Playlist) => {
-      console.log(
-        `[SidePanel] playlist action ${JSON.stringify({
-          playlistId: playlist.playlistId,
-          title: playlist.title,
-          action: "start-radio",
-        })}`
-      );
       void resolvePlaylistPlayback(playlist)
         .then((playback) => {
           const firstTrack = playback.tracks[0];
@@ -671,14 +574,6 @@ export function SidePanel({
 
   const handlePlaylistShare = useCallback((playlist: Playlist) => {
     const url = buildPlaylistShareUrl(playlist.playlistId);
-    console.log(
-      `[SidePanel] playlist action ${JSON.stringify({
-        playlistId: playlist.playlistId,
-        title: playlist.title,
-        action: "share",
-        url,
-      })}`
-    );
     void navigator.clipboard
       .writeText(url)
       .then(() => {
@@ -691,13 +586,6 @@ export function SidePanel({
   }, []);
 
   const handlePlaylistDestructive = useCallback((playlist: Playlist) => {
-    console.log(
-      `[SidePanel] playlist action ${JSON.stringify({
-        playlistId: playlist.playlistId,
-        title: playlist.title,
-        action: playlist.isOwnedByUser ? "delete" : "remove",
-      })}`
-    );
     setTargetPlaylist(playlist);
   }, []);
 
@@ -721,9 +609,6 @@ export function SidePanel({
                 <SidebarMenuItem key={key}>
                   <SidebarMenuButton
                     onClick={() => {
-                      console.log(
-                        `[SidePanel] nav click ${JSON.stringify({ key, path })}`
-                      );
                       navigate(path);
                     }}
                     active={isActive}
@@ -747,7 +632,6 @@ export function SidePanel({
               <SidebarGroupLabel>Todas as playlists</SidebarGroupLabel>
               <SidebarGroupAction
                 onClick={() => {
-                  console.log("[SidePanel] create playlist click");
                   setCreateDialogOpen(true);
                 }}
                 aria-label="Nova playlist"
@@ -796,13 +680,6 @@ export function SidePanel({
                             }
                           }}
                           onSelect={() => {
-                            console.log(
-                              `[SidePanel] playlist click ${JSON.stringify({
-                                playlistId: playlist.playlistId,
-                                title: playlist.title,
-                                index: vItem.index,
-                              })}`
-                            );
                             navigate(paths.playlist(playlist.playlistId));
                           }}
                           onHighlightOpen={() =>

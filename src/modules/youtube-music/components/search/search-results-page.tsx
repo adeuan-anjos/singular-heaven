@@ -55,7 +55,6 @@ export function SearchResultsPage() {
         return;
       }
 
-      console.log("[SearchResultsPage] Searching for:", query);
       setLoading(true);
       setError(null);
       try {
@@ -72,12 +71,6 @@ export function SearchResultsPage() {
           tracks: mapped.songs,
         });
         if (cancelled) return;
-        console.log("[SearchResultsPage] Search results:", {
-          songs: mapped.songs.length,
-          artists: mapped.artists.length,
-          albums: mapped.albums.length,
-          playlists: mapped.playlists.length,
-        });
         trackIdsRef.current = collection.trackIds;
         setSongEntries(collection.entries);
         setResults(mapped);
@@ -96,8 +89,6 @@ export function SearchResultsPage() {
     fetchResults();
     return () => { cancelled = true; };
   }, [query]);
-
-  console.log("[SearchResultsPage] render", { query });
 
   const handleGoToArtist = (artistId: string) => {
     navigate(paths.artist(artistId));

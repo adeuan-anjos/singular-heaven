@@ -46,10 +46,6 @@ export const useTrackCacheStore = create<TrackCacheStore>()((set, get) => ({
       }
       return { tracks: next };
     });
-    console.log("[TrackCache] putTracks", {
-      offered: tracks.length,
-      total: Object.keys(get().tracks).length,
-    });
   },
 
   putTrack: (track) => {
@@ -92,16 +88,8 @@ export const useTrackCacheStore = create<TrackCacheStore>()((set, get) => ({
       (videoId) => !get().tracks[videoId]
     );
     if (ids.length === 0) return;
-    console.log("[TrackCache] hydrateTracks", {
-      requested: ids.length,
-      sample: ids.slice(0, 5),
-    });
     const json = await invoke<string>("yt_get_cached_tracks", { videoIds: ids });
     const tracks: Track[] = JSON.parse(json);
-    console.log("[TrackCache] hydrateTracks resolved", {
-      requested: ids.length,
-      found: tracks.length,
-    });
     if (tracks.length > 0) {
       get().putTracks(tracks);
     }
@@ -122,10 +110,6 @@ export const useTrackCacheStore = create<TrackCacheStore>()((set, get) => ({
       if (!changed) return state;
       return { tracks: next };
     });
-    console.log("[TrackCache] removeTracks", {
-      removed: uniqueIds.length,
-      total: Object.keys(get().tracks).length,
-    });
   },
 
   prefetchTracks: (videoIds) => {
@@ -133,17 +117,12 @@ export const useTrackCacheStore = create<TrackCacheStore>()((set, get) => ({
       (videoId) => !get().tracks[videoId]
     );
     if (ids.length === 0) return;
-    console.log("[TrackCache] prefetchTracks", {
-      requested: ids.length,
-      sample: ids.slice(0, 5),
-    });
     for (const videoId of ids) {
       requestTrackFromDisk(videoId);
     }
   },
 
   clear: () => {
-    console.log("[TrackCache] clear");
     set({ tracks: {} });
   },
 }));
@@ -161,11 +140,9 @@ function scheduleBatchFetch() {
     pendingIds.clear();
     if (ids.length === 0) return;
 
-    console.log("[TrackCache] L2 batch fetch", { count: ids.length, ids: ids.slice(0, 5) });
     invoke<string>("yt_get_cached_tracks", { videoIds: ids })
       .then((json) => {
         const tracks: Track[] = JSON.parse(json);
-        console.log("[TrackCache] L2 batch resolved", { requested: ids.length, found: tracks.length });
         if (tracks.length > 0) {
           // startTransition prevents virtualizer's flushSync from creating
           // a synchronous render cascade when cache updates trigger re-renders

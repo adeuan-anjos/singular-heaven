@@ -43,7 +43,6 @@ export function TopBar({ onLogout }: TopBarProps) {
 
   const handleSearchSubmit = useCallback(
     (q: string) => {
-      console.log("[TopBar] submit search", { query: q });
       navigate(paths.search(q));
     },
     [navigate],
@@ -58,28 +57,13 @@ export function TopBar({ onLogout }: TopBarProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  console.log("[TopBar] render", {
-    hasLogout: Boolean(onLogout),
-    activeAccount: activeAccount
-      ? { name: activeAccount.name, channelHandle: activeAccount.channelHandle ?? null, hasPhoto: Boolean(activeAccount.photoUrl) }
-      : null,
-    query: query.length > 0 ? `"${query}"` : "(empty)",
-  });
-
   useEffect(() => {
     if (!onLogout) return;
-    console.log("[TopBar] fetching active account for avatar...");
     let cancelled = false;
     ytGetAccounts()
       .then((accounts) => {
         if (cancelled) return;
         const active = accounts.find((a) => a.isActive) ?? accounts[0] ?? null;
-        console.log("[TopBar] active account loaded", {
-          hasAccount: Boolean(active),
-          hasHandle: Boolean(active?.channelHandle),
-          hasPhoto: Boolean(active?.photoUrl),
-          isActive: active?.isActive ?? null,
-        });
         setActiveAccount(active);
       })
       .catch((err) => {
@@ -102,7 +86,6 @@ export function TopBar({ onLogout }: TopBarProps) {
     setSearchLoading(true);
     debounceRef.current = setTimeout(async () => {
       try {
-        console.log("[TopBar] Fetching suggestions/results for:", query);
         const [suggestionsData, searchData] = await Promise.all([
           ytSearchSuggestions(query).catch(() => []),
           ytSearch(query).catch(() => null),
@@ -110,13 +93,6 @@ export function TopBar({ onLogout }: TopBarProps) {
         setSuggestions(suggestionsData.map((s) => s.text));
         if (searchData) {
           const mapped = mapSearchResults(searchData);
-          console.log("[TopBar] Inline search results:", {
-            songs: mapped.songs.length,
-            artists: mapped.artists.length,
-            albums: mapped.albums.length,
-            playlists: mapped.playlists.length,
-            suggestions: suggestionsData.length,
-          });
           setResults(mapped);
         }
       } catch (err) {
@@ -422,10 +398,6 @@ export function TopBar({ onLogout }: TopBarProps) {
                 )}
               </div>
               <DropdownMenuItem onClick={() => {
-                console.log("[TopBar] logout button clicked", {
-                  accountName: activeAccount?.name ?? null,
-                  channelHandle: activeAccount?.channelHandle ?? null,
-                });
                 onLogout();
               }}>
                 <LogOut className="mr-2 size-4" />

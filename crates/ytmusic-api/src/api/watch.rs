@@ -34,10 +34,6 @@ impl YtMusicClient {
     /// tracks are collected or the continuation stream ends. Logs progress at
     /// every step.
     pub async fn get_watch_playlist(&self, req: WatchPlaylistRequest<'_>) -> Result<WatchPlaylist> {
-        println!(
-            "[ytmusic-api] get_watch_playlist video_id={:?} playlist_id={:?} radio={} shuffle={} limit={}",
-            req.video_id, req.playlist_id, req.radio, req.shuffle, req.limit
-        );
 
         let body = build_watch_body(&req)?;
 
@@ -52,36 +48,20 @@ impl YtMusicClient {
             .map(|pid| pid.starts_with("PL") || pid.starts_with("OLA"))
             .unwrap_or(false);
 
-        println!("[ytmusic-api] get_watch_playlist request body keys: {:?}",
-            body.as_object().map(|o| o.keys().collect::<Vec<_>>()));
-
         // First page
         let response = self.post_innertube(ENDPOINT_NEXT, body).await?;
         let mut result = parse_watch_response(&response)?;
-
-        println!(
-            "[ytmusic-api] get_watch_playlist first page: tracks={} has_continuation={}",
-            result.tracks.len(),
-            result.continuation.is_some()
-        );
 
         // Continuation loop with safeguards against infinite loops
         const MAX_WATCH_PAGES: usize = 40;
         let mut pages = 1usize;
         while result.tracks.len() < req.limit {
             let Some(token) = result.continuation.clone() else {
-                println!(
-                    "[ytmusic-api] get_watch_playlist: continuation exhausted at {} tracks",
-                    result.tracks.len()
-                );
                 break;
             };
 
             // Guard against theoretical infinite loop: hard cap on pages.
             if pages >= MAX_WATCH_PAGES {
-                println!(
-                    "[ytmusic-api] get_watch_playlist: page cap ({MAX_WATCH_PAGES}) reached — stopping to avoid infinite loop"
-                );
                 break;
             }
 
@@ -94,27 +74,12 @@ impl YtMusicClient {
             // This prevents spinning when the server returns empty pages with
             // non-null continuation tokens (theoretical edge case).
             if cont_result.tracks.is_empty() {
-                println!(
-                    "[ytmusic-api] get_watch_playlist: empty continuation page at page {pages} — stopping to avoid spin"
-                );
                 break;
             }
 
-            let added = cont_result.tracks.len();
             result.tracks.extend(cont_result.tracks);
             result.continuation = cont_result.continuation;
-
-            println!(
-                "[ytmusic-api] get_watch_playlist page {pages}: +{added} -> {} total, has_next={}",
-                result.tracks.len(),
-                result.continuation.is_some()
-            );
         }
-
-        println!(
-            "[ytmusic-api] get_watch_playlist returned: tracks={} pages={} lyrics={:?} related={:?}",
-            result.tracks.len(), pages, result.lyrics_browse_id, result.related_browse_id
-        );
 
         Ok(result)
     }
@@ -127,10 +92,6 @@ impl YtMusicClient {
         continuation: &str,
         is_playlist: bool,
     ) -> Result<WatchPlaylist> {
-        println!(
-            "[ytmusic-api] watch_continuation is_playlist={is_playlist} token={}...",
-            &continuation[..continuation.len().min(12)]
-        );
 
         let ctype = if is_playlist { "" } else { "Radio" };
         // Percent-encode the continuation token to handle special characters in the URL.
@@ -147,26 +108,15 @@ impl YtMusicClient {
 
         let response = self.post_innertube(&endpoint, body).await?;
         let result = parse_watch_continuation_response(&response)?;
-        println!(
-            "[ytmusic-api] watch_continuation: +{} tracks, has_next={}",
-            result.tracks.len(),
-            result.continuation.is_some()
-        );
         Ok(result)
     }
 
     /// Get lyrics for a song by its lyrics browse ID (e.g. "MPLYt_...").
     pub async fn get_lyrics(&self, browse_id: &str) -> Result<Lyrics> {
-        println!("[ytmusic-api] get_lyrics(browse_id=\"{browse_id}\")");
 
         let body = json!({ "browseId": browse_id });
         let response = self.post_innertube(ENDPOINT_BROWSE, body).await?;
         let result = parse_lyrics_response(&response)?;
-
-        println!(
-            "[ytmusic-api] get_lyrics returned: text_len={} source={:?}",
-            result.text.len(), result.source
-        );
 
         Ok(result)
     }

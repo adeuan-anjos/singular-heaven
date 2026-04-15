@@ -343,14 +343,8 @@ mod tests {
 
         let result = parse_watch_response(&value).unwrap();
         assert!(!result.tracks.is_empty(), "should parse at least one track");
-        println!("parsed {} tracks from fixture", result.tracks.len());
-        println!("continuation present: {}", result.continuation.is_some());
         let first = &result.tracks[0];
         assert!(!first.title.is_empty());
         assert!(!first.video_id.is_empty());
-        println!(
-            "first track: title={:?} video_type={:?} views={:?} like_status={:?}",
-            first.title, first.video_type, first.views, first.like_status
-        );
     }
 }

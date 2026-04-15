@@ -99,13 +99,6 @@ export function TrackRow({ track, index, isPlaying, onPlay, onAddToQueue, onAddT
         size="icon"
         className="h-8 w-8 opacity-0 group-hover:opacity-100"
         onClick={() => {
-          console.log(
-            `[TrackRow] like click ${JSON.stringify({
-              videoId: track.videoId,
-              from: liked ? "LIKE" : "INDIFFERENT",
-              to: liked ? "INDIFFERENT" : "LIKE",
-            })}`
-          );
           void toggleTrackLike(track.videoId, track.likeStatus);
         }}
         aria-label="Curtir"

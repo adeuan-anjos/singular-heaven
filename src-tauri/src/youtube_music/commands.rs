@@ -166,7 +166,6 @@ pub async fn yt_search(
     state: State<'_, Arc<RwLock<YtMusicState>>>,
     activity: State<'_, Arc<SessionActivity>>,
 ) -> Result<String, String> {
-    println!("[yt_search] query={query} filter={filter:?}");
     let result = with_session_refresh(
         &state,
         &app,
@@ -189,7 +188,6 @@ pub async fn yt_search_suggestions(
     query: String,
     state: State<'_, Arc<RwLock<YtMusicState>>>,
 ) -> Result<String, String> {
-    println!("[yt_search_suggestions] query={query}");
     let state = state.read().await;
     let result = state.client.get_search_suggestions(&query).await
         .map_err(|e| format!("[yt_search_suggestions] {e}"))?;
@@ -209,7 +207,6 @@ pub async fn yt_get_home(
     activity: State<'_, Arc<SessionActivity>>,
 ) -> Result<String, String> {
     let limit = limit.unwrap_or(6);
-    println!("[yt_get_home] limit={limit}");
     let result = with_session_refresh(
         &state,
         &app,
@@ -230,7 +227,6 @@ pub async fn yt_get_artist(
     state: State<'_, Arc<RwLock<YtMusicState>>>,
     activity: State<'_, Arc<SessionActivity>>,
 ) -> Result<String, String> {
-    println!("[yt_get_artist] browse_id={browse_id}");
     let result = with_session_refresh(
         &state,
         &app,
@@ -254,7 +250,6 @@ pub async fn yt_get_album(
     state: State<'_, Arc<RwLock<YtMusicState>>>,
     activity: State<'_, Arc<SessionActivity>>,
 ) -> Result<String, String> {
-    println!("[yt_get_album] browse_id={browse_id}");
     let result = with_session_refresh(
         &state,
         &app,
@@ -281,7 +276,6 @@ pub async fn yt_get_explore(
     state: State<'_, Arc<RwLock<YtMusicState>>>,
     activity: State<'_, Arc<SessionActivity>>,
 ) -> Result<String, String> {
-    println!("[yt_get_explore]");
     let result = with_session_refresh(
         &state,
         &app,
@@ -301,7 +295,6 @@ pub async fn yt_get_mood_categories(
     state: State<'_, Arc<RwLock<YtMusicState>>>,
     activity: State<'_, Arc<SessionActivity>>,
 ) -> Result<String, String> {
-    println!("[yt_get_mood_categories]");
     let result = with_session_refresh(
         &state,
         &app,
@@ -325,7 +318,6 @@ pub async fn yt_get_library_playlists(
     state: State<'_, Arc<RwLock<YtMusicState>>>,
     activity: State<'_, Arc<SessionActivity>>,
 ) -> Result<String, String> {
-    println!("[yt_get_library_playlists]");
     let result = with_session_refresh(
         &state,
         &app,
@@ -345,7 +337,6 @@ pub async fn yt_get_sidebar_playlists(
     state: State<'_, Arc<RwLock<YtMusicState>>>,
     activity: State<'_, Arc<SessionActivity>>,
 ) -> Result<String, String> {
-    println!("[yt_get_sidebar_playlists]");
     let result = with_session_refresh(
         &state,
         &app,
@@ -366,7 +357,6 @@ pub async fn yt_get_sidebar_playlists_cached(
     activity: State<'_, Arc<SessionActivity>>,
     cache: State<'_, Arc<tokio::sync::Mutex<PlaylistCache>>>,
 ) -> Result<String, String> {
-    println!("[yt_get_sidebar_playlists_cached] start");
 
     // 1. Try reading cached library playlists
     let cached_json = {
@@ -380,10 +370,6 @@ pub async fn yt_get_sidebar_playlists_cached(
         let cached_library: Vec<ytmusic_api::types::library::LibraryPlaylist> =
             serde_json::from_str(&json_data)
                 .map_err(|e| format!("[yt_get_sidebar_playlists_cached] deserialize cache: {e}"))?;
-        println!(
-            "[yt_get_sidebar_playlists_cached] cache hit, {} library playlists, using fast path",
-            cached_library.len()
-        );
         with_session_refresh(
             &state,
             &app,
@@ -398,7 +384,6 @@ pub async fn yt_get_sidebar_playlists_cached(
         .map_err(|e| format!("[yt_get_sidebar_playlists_cached] {e}"))?
     } else {
         // No cache — fall back to full fetch
-        println!("[yt_get_sidebar_playlists_cached] no cache, falling back to full fetch");
         with_session_refresh(
             &state,
             &app,
@@ -420,7 +405,6 @@ pub async fn yt_get_library_songs(
     state: State<'_, Arc<RwLock<YtMusicState>>>,
     activity: State<'_, Arc<SessionActivity>>,
 ) -> Result<String, String> {
-    println!("[yt_get_library_songs]");
     let result = with_session_refresh(
         &state,
         &app,
@@ -440,7 +424,6 @@ pub async fn yt_get_liked_track_ids(
     state: State<'_, Arc<RwLock<YtMusicState>>>,
     activity: State<'_, Arc<SessionActivity>>,
 ) -> Result<Vec<String>, String> {
-    println!("[yt_get_liked_track_ids]");
     with_session_refresh(
         &state,
         &app,
@@ -490,7 +473,6 @@ pub async fn yt_get_liked_track_ids_cached(
     cache: State<'_, Arc<tokio::sync::Mutex<PlaylistCache>>>,
     app: AppHandle,
 ) -> Result<Vec<String>, String> {
-    println!("[yt_get_liked_track_ids_cached] start");
 
     let now = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -506,10 +488,6 @@ pub async fn yt_get_liked_track_ids_cached(
 
     if let Some((json_data, cached_at)) = cached {
         let age = now - cached_at;
-        println!(
-            "[yt_get_liked_track_ids_cached] cache hit, age={}s fresh_threshold={}s",
-            age, SWR_FRESH_SECS
-        );
 
         let ids: Vec<String> = serde_json::from_str(&json_data)
             .map_err(|e| format!("[yt_get_liked_track_ids_cached] deserialize: {e}"))?;
@@ -523,7 +501,6 @@ pub async fn yt_get_liked_track_ids_cached(
                 std::sync::atomic::Ordering::SeqCst,
             );
             if can_refresh.is_ok() {
-                println!("[yt_get_liked_track_ids_cached] spawning background refresh");
                 let state_arc = Arc::clone(&*state);
                 let activity_arc = Arc::clone(&*activity);
                 let cache_arc = Arc::clone(&*cache);
@@ -553,10 +530,6 @@ pub async fn yt_get_liked_track_ids_cached(
                                 eprintln!("[yt_get_liked_track_ids_cached:bg] save: {e}");
                                 return;
                             }
-                            println!(
-                                "[yt_get_liked_track_ids_cached:bg] refreshed {} ids",
-                                ids.len()
-                            );
                             if let Err(e) = app_clone.emit(
                                 "liked-track-ids-updated",
                                 LikedTrackIdsUpdated { video_ids: ids },
@@ -570,7 +543,6 @@ pub async fn yt_get_liked_track_ids_cached(
                     }
                 });
             } else {
-                println!("[yt_get_liked_track_ids_cached] refresh already in-flight, skipping");
             }
         }
 
@@ -578,7 +550,6 @@ pub async fn yt_get_liked_track_ids_cached(
     }
 
     // 2. Cold start — fetch synchronously
-    println!("[yt_get_liked_track_ids_cached] cold start, fetching from API");
     let ids = with_session_refresh(
         &state,
         &app,
@@ -597,10 +568,6 @@ pub async fn yt_get_liked_track_ids_cached(
         db.save_swr_json("liked_track_ids", &json)
             .map_err(|e| format!("[yt_get_liked_track_ids_cached] save: {e}"))?;
     }
-    println!(
-        "[yt_get_liked_track_ids_cached] cold start complete, cached {} ids",
-        ids.len()
-    );
 
     Ok(ids)
 }
@@ -612,7 +579,6 @@ pub async fn yt_get_library_playlists_cached(
     cache: State<'_, Arc<tokio::sync::Mutex<PlaylistCache>>>,
     app: AppHandle,
 ) -> Result<String, String> {
-    println!("[yt_get_library_playlists_cached] start");
 
     let now = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -628,10 +594,6 @@ pub async fn yt_get_library_playlists_cached(
 
     if let Some((json_data, cached_at)) = cached {
         let age = now - cached_at;
-        println!(
-            "[yt_get_library_playlists_cached] cache hit, age={}s fresh_threshold={}s",
-            age, SWR_FRESH_SECS
-        );
 
         if age >= SWR_FRESH_SECS {
             // Stale — return cached but trigger background refresh
@@ -642,7 +604,6 @@ pub async fn yt_get_library_playlists_cached(
                 std::sync::atomic::Ordering::SeqCst,
             );
             if can_refresh.is_ok() {
-                println!("[yt_get_library_playlists_cached] spawning background refresh");
                 let state_arc = Arc::clone(&*state);
                 let activity_arc = Arc::clone(&*activity);
                 let cache_arc = Arc::clone(&*cache);
@@ -674,10 +635,6 @@ pub async fn yt_get_library_playlists_cached(
                                 eprintln!("[yt_get_library_playlists_cached:bg] save: {e}");
                                 return;
                             }
-                            println!(
-                                "[yt_get_library_playlists_cached:bg] refreshed {} playlists",
-                                playlists.len()
-                            );
                             if let Err(e) = app_clone.emit(
                                 "library-playlists-updated",
                                 LibraryPlaylistsUpdated {
@@ -693,9 +650,6 @@ pub async fn yt_get_library_playlists_cached(
                     }
                 });
             } else {
-                println!(
-                    "[yt_get_library_playlists_cached] refresh already in-flight, skipping"
-                );
             }
         }
 
@@ -703,7 +657,6 @@ pub async fn yt_get_library_playlists_cached(
     }
 
     // 2. Cold start — fetch synchronously
-    println!("[yt_get_library_playlists_cached] cold start, fetching from API");
     let playlists = with_session_refresh(
         &state,
         &app,
@@ -723,10 +676,6 @@ pub async fn yt_get_library_playlists_cached(
         db.save_swr_json("library_playlists", &json)
             .map_err(|e| format!("[yt_get_library_playlists_cached] save: {e}"))?;
     }
-    println!(
-        "[yt_get_library_playlists_cached] cold start complete, cached {} playlists",
-        playlists.len()
-    );
 
     Ok(json)
 }
@@ -740,10 +689,6 @@ pub async fn yt_rate_song(
     activity: State<'_, Arc<SessionActivity>>,
 ) -> Result<TrackLikeStatusResponse, String> {
     let like_status: LikeStatus = rating.into();
-    println!(
-        "[yt_rate_song] video_id={} like_status={:?}",
-        video_id, like_status
-    );
     with_session_refresh(
         &state,
         &app,
@@ -772,10 +717,6 @@ pub async fn yt_rate_playlist(
     activity: State<'_, Arc<SessionActivity>>,
 ) -> Result<PlaylistLikeStatusResponse, String> {
     let like_status: LikeStatus = rating.into();
-    println!(
-        "[yt_rate_playlist] playlist_id={} like_status={:?}",
-        playlist_id, like_status
-    );
     with_session_refresh(
         &state,
         &app,
@@ -815,10 +756,6 @@ pub async fn yt_get_playlist(
     activity: State<'_, Arc<SessionActivity>>,
 ) -> Result<String, String> {
     let remote_playlist_id = resolve_remote_playlist_id(&playlist_id).to_string();
-    println!(
-        "[yt_get_playlist] playlist_id={} remote_playlist_id={}",
-        playlist_id, remote_playlist_id
-    );
     let (playlist, continuation) = with_session_refresh(
         &state,
         &app,
@@ -846,7 +783,6 @@ pub async fn yt_get_playlist_continuation(
     state: State<'_, Arc<RwLock<YtMusicState>>>,
     activity: State<'_, Arc<SessionActivity>>,
 ) -> Result<String, String> {
-    println!("[yt_get_playlist_continuation]");
     let (tracks, next_token) = with_session_refresh(
         &state,
         &app,
@@ -878,7 +814,6 @@ pub async fn yt_get_watch_playlist(
     state: State<'_, Arc<RwLock<YtMusicState>>>,
     activity: State<'_, Arc<SessionActivity>>,
 ) -> Result<String, String> {
-    println!("[yt_get_watch_playlist] video_id={video_id}");
     let result = with_session_refresh(
         &state,
         &app,
@@ -906,7 +841,6 @@ pub async fn yt_get_lyrics(
     state: State<'_, Arc<RwLock<YtMusicState>>>,
     activity: State<'_, Arc<SessionActivity>>,
 ) -> Result<String, String> {
-    println!("[yt_get_lyrics] browse_id={browse_id}");
     let result = with_session_refresh(
         &state,
         &app,
@@ -934,7 +868,6 @@ pub async fn yt_get_stream_url(
     state: State<'_, Arc<RwLock<YtMusicState>>>,
     activity: State<'_, Arc<SessionActivity>>,
 ) -> Result<String, String> {
-    println!("[yt_get_stream_url] Fetching stream URL for {video_id}");
     let stream_data = with_session_refresh(
         &state,
         &app,
@@ -947,7 +880,6 @@ pub async fn yt_get_stream_url(
     )
     .await
     .map_err(|e| format!("[yt_get_stream_url] {e}"))?;
-    println!("[yt_get_stream_url] Got URL, mime: {}, bitrate: {}", stream_data.mime_type, stream_data.bitrate);
     serde_json::to_string(&stream_data)
         .map_err(|e| format!("[yt_get_stream_url] serialization: {e}"))
 }
@@ -962,7 +894,6 @@ pub async fn yt_get_accounts(
     state: State<'_, Arc<RwLock<YtMusicState>>>,
     activity: State<'_, Arc<SessionActivity>>,
 ) -> Result<String, String> {
-    println!("[yt_get_accounts]");
     let result = with_session_refresh(
         &state,
         &app,
@@ -983,10 +914,6 @@ pub async fn yt_switch_account(
     state: State<'_, Arc<RwLock<YtMusicState>>>,
     activity: State<'_, Arc<SessionActivity>>,
 ) -> Result<String, String> {
-    println!(
-        "[yt_switch_account] has_page_id={}",
-        page_id.as_ref().is_some()
-    );
 
     // Write lock: mutation + persist to disk
     {
@@ -1024,7 +951,6 @@ pub async fn yt_switch_account(
 /// Detect which installed browsers have YouTube cookies.
 #[tauri::command]
 pub async fn yt_detect_browsers() -> Result<Vec<BrowserInfo>, String> {
-    println!("[yt_detect_browsers] Scanning installed browsers for YouTube cookies...");
 
     let browsers = ["edge", "chrome", "firefox", "brave", "chromium", "opera", "vivaldi"];
     let mut results = Vec::new();
@@ -1039,7 +965,7 @@ pub async fn yt_detect_browsers() -> Result<Vec<BrowserInfo>, String> {
             Err(_) => (false, 0),
         };
 
-        let display_name = match browser {
+        let _display_name = match browser {
             "edge" => "Microsoft Edge",
             "chrome" => "Google Chrome",
             "firefox" => "Mozilla Firefox",
@@ -1051,24 +977,14 @@ pub async fn yt_detect_browsers() -> Result<Vec<BrowserInfo>, String> {
         };
 
         if has_cookies {
-            println!(
-                "[yt_detect_browsers] {display_name}: {} cookies found",
-                cookie_count
-            );
             results.push(BrowserInfo {
                 name: browser.to_string(),
                 has_cookies,
                 cookie_count,
             });
         } else {
-            println!("[yt_detect_browsers] {display_name}: no cookies or not installed");
         }
     }
-
-    println!(
-        "[yt_detect_browsers] Found {} browsers with YouTube cookies",
-        results.len()
-    );
     Ok(results)
 }
 
@@ -1083,21 +999,15 @@ pub async fn yt_auth_from_browser(
     state: State<'_, Arc<RwLock<YtMusicState>>>,
 ) -> Result<AuthStatusResponse, String> {
     let auth_user = auth_user.unwrap_or(0).min(9);
-    println!("[yt_auth_from_browser] browser={browser}, auth_user={auth_user}");
 
     // 1. Extract cookies
-    let (used_browser, cookie_string) = if browser == "auto" {
+    let (_used_browser, cookie_string) = if browser == "auto" {
         session::extract_cookies_auto()?
     } else {
         let cookies = session::extract_cookies_from_browser(&browser)?
             .ok_or_else(|| format!("[yt_auth_from_browser] No YouTube cookies found in {browser}"))?;
         (browser.clone(), cookies)
     };
-
-    println!(
-        "[yt_auth_from_browser] Using cookies from {used_browser} ({} chars)",
-        cookie_string.len()
-    );
 
     // 2. Create YtMusicState with cookies (sync — no .await)
     let new_state = YtMusicState::new_from_cookies(cookie_string.clone(), auth_user)?;
@@ -1113,7 +1023,6 @@ pub async fn yt_auth_from_browser(
     // 4. Replace state
     let mut state_guard = state.write().await;
     *state_guard = new_state;
-    println!("[yt_auth_from_browser] Cookie-auth client is now active (from {used_browser}).");
 
     Ok(AuthStatusResponse {
         authenticated: true,
@@ -1131,7 +1040,6 @@ pub async fn yt_auth_status(
     let authenticated = state.is_authenticated();
     let method = state.auth_method().to_string();
     let has_page_id = state.client.on_behalf_of_user().is_some();
-    println!("[yt_auth_status] authenticated={authenticated}, method={method}, has_page_id={has_page_id}");
     Ok(AuthStatusResponse {
         authenticated,
         method,
@@ -1154,10 +1062,7 @@ pub async fn yt_ensure_session(
         (s.is_authenticated(), s.client.on_behalf_of_user().is_some())
     };
 
-    println!("[yt_ensure_session] authenticated={is_auth}, has_page_id={has_page_id}");
-
     if !is_auth {
-        println!("[yt_ensure_session] branch: not authenticated — skipping validation, returning unauthenticated");
         return Ok(AuthStatusResponse {
             authenticated: false,
             method: "none".to_string(),
@@ -1167,25 +1072,21 @@ pub async fn yt_ensure_session(
 
     // 2. Test session with a lightweight API call. Clone the client so we don't
     //    hold the read lock during the network round trip.
-    println!("[yt_ensure_session] testing session validity via get_accounts...");
     let test_client = { state.read().await.client.clone() };
     let test_result = test_client.get_accounts().await;
 
     let needs_refresh = match &test_result {
         Err(e) => {
             let expired = is_session_expired(e);
-            println!("[yt_ensure_session] test result: error=\"{e}\" expired={expired}");
             expired
         }
-        Ok(accounts) => {
-            println!("[yt_ensure_session] test result: valid=true account_count={}", accounts.len());
+        Ok(_accounts) => {
             activity.mark_success();
             false
         }
     };
 
     if !needs_refresh {
-        println!("[yt_ensure_session] branch: session valid — returning authenticated (has_page_id={has_page_id})");
         return Ok(AuthStatusResponse {
             authenticated: true,
             method: "cookie".to_string(),
@@ -1194,22 +1095,18 @@ pub async fn yt_ensure_session(
     }
 
     // 3. Session expired — delegate to the shared refresh helper.
-    println!("[yt_ensure_session] branch: session expired — attempting silent cookie refresh...");
 
     match refresh_cookies_and_rebuild_state(&app, &state, &activity).await {
         Ok(()) => {
             // Re-read has_page_id in case the refresh restored it.
             let has_page_id = state.read().await.client.on_behalf_of_user().is_some();
-            println!("[yt_ensure_session] branch: silent refresh complete (has_page_id={has_page_id})");
             Ok(AuthStatusResponse {
                 authenticated: true,
                 method: "cookie".to_string(),
                 has_page_id,
             })
         }
-        Err(e) => {
-            println!("[yt_ensure_session] branch: refresh failed — {e}");
-            println!("[yt_ensure_session] deleting stale credentials and reverting to unauthenticated");
+        Err(_e) => {
             let app_data_dir = app
                 .path()
                 .app_data_dir()
@@ -1222,7 +1119,6 @@ pub async fn yt_ensure_session(
                 let mut guard = state.write().await;
                 *guard = new_state;
             }
-            println!("[yt_ensure_session] reverted to unauthenticated — returning unauthenticated");
             Ok(AuthStatusResponse {
                 authenticated: false,
                 method: "none".to_string(),
@@ -1238,7 +1134,6 @@ pub async fn yt_auth_logout(
     app: AppHandle,
     state: State<'_, Arc<RwLock<YtMusicState>>>,
 ) -> Result<AuthStatusResponse, String> {
-    println!("[yt_auth_logout] Logging out...");
 
     let app_data_dir = app
         .path()
@@ -1246,24 +1141,18 @@ pub async fn yt_auth_logout(
         .map_err(|e| format!("[yt_auth_logout] Failed to resolve app data dir: {e}"))?;
 
     // Delete saved cookie file, page_id, and auth_user
-    println!("[yt_auth_logout] deleting credentials: cookies, page_id, auth_user...");
-    let cookies_path = YtMusicState::get_cookie_path(&app_data_dir);
-    let page_id_path = YtMusicState::get_page_id_path(&app_data_dir);
-    let auth_user_path = YtMusicState::get_auth_user_path(&app_data_dir);
-    println!("[yt_auth_logout] cookies file exists={}, page_id file exists={}, auth_user file exists={}",
-        cookies_path.exists(), page_id_path.exists(), auth_user_path.exists());
+    let _cookies_path = YtMusicState::get_cookie_path(&app_data_dir);
+    let _page_id_path = YtMusicState::get_page_id_path(&app_data_dir);
+    let _auth_user_path = YtMusicState::get_auth_user_path(&app_data_dir);
     YtMusicState::delete_cookies(&app_data_dir)?;
     YtMusicState::delete_page_id(&app_data_dir);
     YtMusicState::delete_auth_user(&app_data_dir);
-    println!("[yt_auth_logout] all credential files deleted");
 
     // Recreate unauthenticated state (sync — no .await)
-    println!("[yt_auth_logout] recreating unauthenticated client...");
     let new_state = YtMusicState::new_unauthenticated()?;
 
     let mut state_guard = state.write().await;
     *state_guard = new_state;
-    println!("[yt_auth_logout] reverted to unauthenticated client — logout complete");
 
     Ok(AuthStatusResponse {
         authenticated: false,
@@ -1282,7 +1171,6 @@ pub async fn yt_auth_logout(
 pub async fn yt_dev_corrupt_cookies(
     state: State<'_, Arc<RwLock<YtMusicState>>>,
 ) -> Result<String, String> {
-    println!("[yt_dev_corrupt_cookies] replacing in-memory cookies with garbage so the next authenticated call returns 401");
     let obu = {
         let s = state.read().await;
         s.client.on_behalf_of_user().map(String::from)
@@ -1299,7 +1187,6 @@ pub async fn yt_dev_corrupt_cookies(
         let mut g = state.write().await;
         *g = new_state;
     }
-    println!("[yt_dev_corrupt_cookies] done — next authenticated call should hit 401 → refresh → retry");
     Ok("ok".to_string())
 }
 
@@ -1310,7 +1197,6 @@ pub async fn yt_dev_backdate_activity(
     activity: State<'_, Arc<SessionActivity>>,
 ) -> Result<String, String> {
     let secs = seconds_ago.unwrap_or(2400); // default: 40 minutes ago (> 30min threshold)
-    println!("[yt_dev_backdate_activity] backdating last_success to {secs}s ago");
     activity.set_seconds_ago(secs);
     Ok(format!("backdated to {secs}s ago"))
 }
@@ -1337,7 +1223,6 @@ pub async fn yt_dev_session_stats(
         "authenticated={authenticated} auth_user={auth_user} has_page_id={has_page_id} seconds_since={secs:?} stale={stale} (threshold={}s)",
         super::session::STALE_THRESHOLD_SECS
     );
-    println!("[yt_dev_session_stats] {report}");
     Ok(report)
 }
 
@@ -1364,7 +1249,6 @@ pub struct GoogleAccountInfo {
 pub async fn yt_detect_google_accounts(
     state: State<'_, Arc<RwLock<YtMusicState>>>,
 ) -> Result<Vec<GoogleAccountInfo>, String> {
-    println!("[yt_detect_google_accounts] Starting account detection...");
 
     // Clone cookies and drop the lock before any network I/O.
     let cookies = {
@@ -1381,8 +1265,7 @@ pub async fn yt_detect_google_accounts(
     let probes = (0..MAX_AUTH_USER).filter_map(|auth_user| {
         match YtMusicClient::from_cookies(&cookies, auth_user) {
             Ok(client) => Some((auth_user, client)),
-            Err(e) => {
-                println!("[yt_detect_google_accounts] Failed to build client for auth_user={auth_user}: {e}");
+            Err(_e) => {
                 None
             }
         }
@@ -1402,14 +1285,12 @@ pub async fn yt_detect_google_accounts(
     for (auth_user, result) in results {
         let account_list = match result {
             Ok(list) => list,
-            Err(e) => {
-                println!("[yt_detect_google_accounts] get_accounts error for auth_user={auth_user}: {e}. Skipping.");
+            Err(_e) => {
                 continue;
             }
         };
 
         if account_list.is_empty() {
-            println!("[yt_detect_google_accounts] Empty account list at auth_user={auth_user}. Skipping.");
             continue;
         }
 
@@ -1417,23 +1298,13 @@ pub async fn yt_detect_google_accounts(
             .or_else(|| account_list.first());
 
         let Some(identity) = identity else {
-            println!("[yt_detect_google_accounts] No identity found for auth_user={auth_user}. Skipping.");
             continue;
         };
 
         let key = (identity.name.clone(), identity.channel_handle.clone());
         if seen_keys.contains(&key) {
-            println!(
-                "[yt_detect_google_accounts] Duplicate identity at auth_user={auth_user}. Skipping."
-            );
             continue;
         }
-
-        println!(
-            "[yt_detect_google_accounts] Found account: auth_user={auth_user}, has_email={}, has_handle={}",
-            identity.email.is_some(),
-            identity.channel_handle.is_some()
-        );
         seen_keys.insert(key);
         accounts.push(GoogleAccountInfo {
             auth_user,
@@ -1443,8 +1314,6 @@ pub async fn yt_detect_google_accounts(
             channel_handle: identity.channel_handle.clone(),
         });
     }
-
-    println!("[yt_detect_google_accounts] Detection complete. Found {} account(s).", accounts.len());
     Ok(accounts)
 }
 
@@ -1516,25 +1385,11 @@ async fn ensure_playlist_track_ids_complete(
             .is_complete(playlist_id)
             .map_err(|e| format!("[yt_get_playlist_track_ids_complete] is_complete: {e}"))?;
         if is_complete {
-            println!(
-                "[yt_get_playlist_track_ids_complete] cache-hit playlist_id={} count={}",
-                playlist_id,
-                track_ids.len()
-            );
             return Ok((track_ids, true));
         }
-        println!(
-            "[yt_get_playlist_track_ids_complete] cache-partial playlist_id={} cached_count={}",
-            playlist_id,
-            track_ids.len()
-        );
     }
 
     let remote_playlist_id = resolve_remote_playlist_id(playlist_id).to_string();
-    println!(
-        "[yt_get_playlist_track_ids_complete] fetching full playlist playlist_id={} remote_playlist_id={}",
-        playlist_id, remote_playlist_id
-    );
 
     let (page, mut continuation) = {
         let st = state.read().await;
@@ -1594,14 +1449,6 @@ async fn ensure_playlist_track_ids_complete(
                 .await
                 .map_err(|e| format!("[yt_get_playlist_track_ids_complete] continuation: {e}"))?
         };
-
-        println!(
-            "[yt_get_playlist_track_ids_complete] continuation playlist_id={} offset={} received={} has_more={}",
-            playlist_id,
-            offset,
-            tracks.len(),
-            next_token.is_some()
-        );
 
         let ids: Vec<String> = tracks.iter().map(|t| t.video_id.clone()).collect();
         let rows = playlist_cache::playlist_tracks_to_rows(&tracks);
@@ -1699,10 +1546,6 @@ pub async fn yt_load_playlist(
     app: AppHandle,
 ) -> Result<String, String> {
     let remote_playlist_id = resolve_remote_playlist_id(&playlist_id).to_string();
-    println!(
-        "[yt_load_playlist] playlist_id={} remote_playlist_id={}",
-        playlist_id, remote_playlist_id
-    );
 
     let already_loading = {
         let loads = playlist_loads.lock().await;
@@ -1710,10 +1553,6 @@ pub async fn yt_load_playlist(
     };
 
     if already_loading {
-        println!(
-            "[yt_load_playlist] playlist_id={} already loading, reusing cached snapshot",
-            playlist_id
-        );
         let db = cache.lock().await;
         let meta = db
             .get_meta(&playlist_id)
@@ -1726,18 +1565,9 @@ pub async fn yt_load_playlist(
             .map_err(|e| format!("[yt_load_playlist] get_tracks_for_playlist: {e}"))?;
 
         if let Some(meta) = meta {
-            println!(
-                "[yt_load_playlist] playlist_id={} returning cached snapshot with {} tracks",
-                playlist_id,
-                track_ids.len()
-            );
             return build_cached_playlist_response(&meta, tracks, track_ids);
         }
 
-        println!(
-            "[yt_load_playlist] playlist_id={} marked in-flight but no cached snapshot yet; continuing with direct fetch",
-            playlist_id
-        );
     }
 
     // 1. Fetch first page from InnerTube
@@ -1753,13 +1583,6 @@ pub async fn yt_load_playlist(
     )
     .await
     .map_err(|e| format!("[yt_load_playlist] API error: {e}"))?;
-
-    println!(
-        "[yt_load_playlist] Got page: title={} tracks={} continuation={}",
-        page.title,
-        page.tracks.len(),
-        continuation.is_some()
-    );
 
     // 2. Save to SQLite
     let track_rows = playlist_cache::playlist_tracks_to_rows(&page.tracks);
@@ -1810,16 +1633,8 @@ pub async fn yt_load_playlist(
         let should_spawn = {
             let mut loads = playlist_loads.lock().await;
             if loads.insert(playlist_id.clone()) {
-                println!(
-                    "[yt_load_playlist] playlist_id={} registered as in-flight",
-                    playlist_id
-                );
                 true
             } else {
-                println!(
-                    "[yt_load_playlist] playlist_id={} already registered in-flight after fetch; skipping duplicate spawn",
-                    playlist_id
-                );
                 false
             }
         };
@@ -1838,7 +1653,6 @@ pub async fn yt_load_playlist(
         let collection_thumbnail = page.thumbnails.first().map(|t| t.url.clone());
 
         tokio::spawn(async move {
-            println!("[yt_load_playlist:bg] Starting background fetch for {pid}");
             let mut token = cont_token;
             const MAX_CONTINUATION_PAGES: usize = 200;
             let mut page_count: usize = 0;
@@ -1854,8 +1668,6 @@ pub async fn yt_load_playlist(
 
                 // Throttle between API calls
                 tokio::time::sleep(std::time::Duration::from_millis(300)).await;
-
-                println!("[yt_load_playlist:bg] Fetching continuation for {pid} offset={offset}");
                 let fetch_result = with_session_refresh(
                     &state_arc,
                     &app_handle,
@@ -1931,11 +1743,6 @@ pub async fn yt_load_playlist(
                             emit_queue_state_updated(&app_handle, &snapshot);
                         }
 
-                        println!(
-                            "[yt_load_playlist:bg] Saved {} tracks, total={offset}, complete={complete}",
-                            track_count
-                        );
-
                         if complete {
                             break;
                         }
@@ -1950,13 +1757,8 @@ pub async fn yt_load_playlist(
 
             {
                 let mut loads = loads_arc.lock().await;
-                let removed = loads.remove(&pid);
-                println!(
-                    "[yt_load_playlist:bg] playlist_id={} cleared from in-flight registry removed={}",
-                    pid, removed
-                );
+                let _removed = loads.remove(&pid);
             }
-            println!("[yt_load_playlist:bg] Background fetch done for {pid}");
         });
         }
     }
@@ -1979,11 +1781,6 @@ pub async fn yt_load_playlist(
         "isComplete": is_complete,
     });
 
-    println!(
-        "[yt_load_playlist] Returning {} tracks, isComplete={is_complete}",
-        cached_tracks.len()
-    );
-
     serde_json::to_string(&response)
         .map_err(|e| format!("[yt_load_playlist] serialization: {e}"))
 }
@@ -1995,21 +1792,11 @@ pub async fn yt_get_cached_tracks(
     cache: State<'_, Arc<tokio::sync::Mutex<PlaylistCache>>>,
 ) -> Result<String, String> {
     validate_vec_len(&video_ids, MAX_TRACK_IDS, "yt_get_cached_tracks")?;
-    println!(
-        "[yt_get_cached_tracks] Resolving {} video IDs",
-        video_ids.len()
-    );
 
     let db = cache.lock().await;
     let tracks = db
         .get_tracks_by_ids(&video_ids)
         .map_err(|e| format!("[yt_get_cached_tracks] {e}"))?;
-
-    println!(
-        "[yt_get_cached_tracks] Found {} tracks out of {} requested",
-        tracks.len(),
-        video_ids.len()
-    );
 
     serde_json::to_string(&tracks)
         .map_err(|e| format!("[yt_get_cached_tracks] serialization: {e}"))
@@ -2021,7 +1808,6 @@ pub async fn yt_get_playlist_track_ids(
     playlist_id: String,
     cache: State<'_, Arc<tokio::sync::Mutex<PlaylistCache>>>,
 ) -> Result<String, String> {
-    println!("[yt_get_playlist_track_ids] playlist_id={playlist_id}");
 
     let db = cache.lock().await;
     let track_ids = db
@@ -2030,11 +1816,6 @@ pub async fn yt_get_playlist_track_ids(
     let is_complete = db
         .is_complete(&playlist_id)
         .map_err(|e| format!("[yt_get_playlist_track_ids] is_complete: {e}"))?;
-
-    println!(
-        "[yt_get_playlist_track_ids] Found {} track IDs, isComplete={is_complete}",
-        track_ids.len()
-    );
 
     let response = serde_json::json!({
         "trackIds": track_ids,
@@ -2051,15 +1832,9 @@ pub async fn yt_get_playlist_track_ids_complete(
     state: State<'_, Arc<RwLock<YtMusicState>>>,
     cache: State<'_, Arc<tokio::sync::Mutex<PlaylistCache>>>,
 ) -> Result<String, String> {
-    println!("[yt_get_playlist_track_ids_complete] playlist_id={playlist_id}");
 
     let (track_ids, is_complete) =
         ensure_playlist_track_ids_complete(&playlist_id, state.inner(), cache.inner()).await?;
-
-    println!(
-        "[yt_get_playlist_track_ids_complete] Found {} track IDs, isComplete={is_complete}",
-        track_ids.len()
-    );
 
     let response = serde_json::json!({
         "trackIds": track_ids,
@@ -2079,10 +1854,6 @@ pub async fn yt_get_playlist_window(
     cache: State<'_, Arc<tokio::sync::Mutex<PlaylistCache>>>,
 ) -> Result<String, String> {
     let limit = limit.min(MAX_WINDOW_LIMIT);
-    println!(
-        "[yt_get_playlist_window] playlist_id={} offset={} limit={}",
-        playlist_id, offset, limit
-    );
 
     let db = cache.lock().await;
     let items = db
@@ -2095,27 +1866,18 @@ pub async fn yt_get_playlist_window(
         .is_complete(&playlist_id)
         .map_err(|e| format!("[yt_get_playlist_window] is_complete: {e}"))?;
 
-    let first = items.first().map(|item| {
+    let _first = items.first().map(|item| {
         serde_json::json!({
             "position": item.position,
             "videoId": item.track.video_id,
         })
     });
-    let last = items.last().map(|item| {
+    let _last = items.last().map(|item| {
         serde_json::json!({
             "position": item.position,
             "videoId": item.track.video_id,
         })
     });
-
-    println!(
-        "[yt_get_playlist_window] returned={} totalLoaded={} isComplete={} first={} last={}",
-        items.len(),
-        total_loaded,
-        is_complete,
-        first.unwrap_or_default(),
-        last.unwrap_or_default()
-    );
 
     let response = serde_json::json!({
         "items": items,
@@ -2137,12 +1899,6 @@ pub async fn yt_cache_collection_snapshot(
     validate_vec_len(&snapshot.tracks, MAX_COLLECTION_TRACKS, "yt_cache_collection_snapshot")?;
     validate_string_len(&snapshot.collection_id, MAX_STRING_LEN, "collection_id")?;
     validate_string_len(&snapshot.title, MAX_STRING_LEN, "title")?;
-    println!(
-        "[yt_cache_collection_snapshot] type={} id={} tracks={}",
-        snapshot.collection_type,
-        snapshot.collection_id,
-        snapshot.tracks.len()
-    );
     let db = cache.lock().await;
     persist_collection_snapshot(&db, &snapshot)?;
     Ok(CachedCollectionMeta {
@@ -2161,10 +1917,6 @@ pub async fn yt_get_collection_track_ids(
     collection_id: String,
     cache: State<'_, Arc<tokio::sync::Mutex<PlaylistCache>>>,
 ) -> Result<CollectionTrackIdsResponse, String> {
-    println!(
-        "[yt_get_collection_track_ids] type={} id={}",
-        collection_type, collection_id
-    );
     let db = cache.lock().await;
     let track_ids = db
         .get_collection_track_ids(&collection_type, &collection_id)
@@ -2185,12 +1937,6 @@ pub async fn yt_create_playlist(
     state: State<'_, Arc<RwLock<YtMusicState>>>,
     activity: State<'_, Arc<SessionActivity>>,
 ) -> Result<String, String> {
-    println!(
-        "[yt_create_playlist] title=\"{}\" privacy={:?} video_ids={}",
-        input.title,
-        input.privacy_status,
-        input.video_ids.as_ref().map(|ids| ids.len()).unwrap_or(0)
-    );
     let title = input.title.clone();
     let description = input.description.clone().unwrap_or_default();
     let privacy = input.privacy_status.clone().unwrap_or_else(|| "PRIVATE".to_string());
@@ -2225,7 +1971,6 @@ pub async fn yt_delete_playlist(
     state: State<'_, Arc<RwLock<YtMusicState>>>,
     activity: State<'_, Arc<SessionActivity>>,
 ) -> Result<String, String> {
-    println!("[yt_delete_playlist] playlist_id={}", playlist_id);
     let response = with_session_refresh(
         &state,
         &app,
@@ -2250,13 +1995,6 @@ pub async fn yt_edit_playlist(
     activity: State<'_, Arc<SessionActivity>>,
     cache: State<'_, Arc<tokio::sync::Mutex<PlaylistCache>>>,
 ) -> Result<String, String> {
-    println!(
-        "[yt_edit_playlist] playlist_id={} title={} description={} privacy={:?}",
-        input.playlist_id,
-        input.title.is_some(),
-        input.description.is_some(),
-        input.privacy_status
-    );
 
     let pid = input.playlist_id.clone();
     let title = input.title.clone();
@@ -2349,12 +2087,6 @@ pub async fn yt_set_playlist_thumbnail(
     activity: State<'_, Arc<SessionActivity>>,
     cache: State<'_, Arc<tokio::sync::Mutex<PlaylistCache>>>,
 ) -> Result<String, String> {
-    println!(
-        "[yt_set_playlist_thumbnail] playlist_id={} bytes={} mime={}",
-        input.playlist_id,
-        input.image_bytes.len(),
-        input.mime_type
-    );
 
     // SECURITY: Cap image size at 10 MB
     const MAX_IMAGE_BYTES: usize = 10 * 1024 * 1024;
@@ -2455,12 +2187,6 @@ pub async fn yt_add_playlist_items(
     activity: State<'_, Arc<SessionActivity>>,
 ) -> Result<String, String> {
     validate_vec_len(&video_ids, MAX_PLAYLIST_ITEMS, "yt_add_playlist_items")?;
-    println!(
-        "[yt_add_playlist_items] playlist_id={} video_ids={} source_playlist_id={:?}",
-        playlist_id,
-        video_ids.len(),
-        source_playlist_id
-    );
     let response = with_session_refresh(
         &state,
         &app,
@@ -2491,11 +2217,6 @@ pub async fn yt_remove_playlist_items(
     state: State<'_, Arc<RwLock<YtMusicState>>>,
     activity: State<'_, Arc<SessionActivity>>,
 ) -> Result<String, String> {
-    println!(
-        "[yt_remove_playlist_items] playlist_id={} items={}",
-        playlist_id,
-        items.len()
-    );
     let items: Vec<(String, String)> = items
         .into_iter()
         .map(|item| (item.video_id, item.set_video_id))
@@ -2526,10 +2247,6 @@ pub async fn yt_get_collection_window(
     cache: State<'_, Arc<tokio::sync::Mutex<PlaylistCache>>>,
 ) -> Result<String, String> {
     let limit = limit.min(MAX_WINDOW_LIMIT);
-    println!(
-        "[yt_get_collection_window] type={} id={} offset={} limit={}",
-        collection_type, collection_id, offset, limit
-    );
     let db = cache.lock().await;
     let items = db
         .get_collection_window(&collection_type, &collection_id, offset, limit)
@@ -2540,26 +2257,18 @@ pub async fn yt_get_collection_window(
     let is_complete = db
         .is_collection_complete(&collection_type, &collection_id)
         .map_err(|e| format!("[yt_get_collection_window] is_collection_complete: {e}"))?;
-    let first = items.first().map(|item| {
+    let _first = items.first().map(|item| {
         serde_json::json!({
             "position": item.position,
             "videoId": item.track.video_id,
         })
     });
-    let last = items.last().map(|item| {
+    let _last = items.last().map(|item| {
         serde_json::json!({
             "position": item.position,
             "videoId": item.track.video_id,
         })
     });
-    println!(
-        "[yt_get_collection_window] returned={} totalLoaded={} isComplete={} first={} last={}",
-        items.len(),
-        total_loaded,
-        is_complete,
-        first.unwrap_or_default(),
-        last.unwrap_or_default()
-    );
 
     let response = serde_json::json!({
         "items": items,
@@ -2584,14 +2293,6 @@ pub async fn yt_queue_set(
     app: AppHandle,
 ) -> Result<QueueCommandResponse, String> {
     validate_vec_len(&track_ids, MAX_TRACK_IDS, "yt_queue_set")?;
-    println!(
-        "[yt_queue_set] count={} start_index={} playlist_id={:?} is_complete={} shuffle={}",
-        track_ids.len(),
-        start_index,
-        playlist_id,
-        is_complete,
-        shuffle
-    );
 
     let response = {
         let mut queue = queue.lock().await;
@@ -2619,26 +2320,18 @@ pub async fn yt_queue_get_window(
     let limit = limit.min(MAX_WINDOW_LIMIT);
     let queue = queue.lock().await;
     let response = queue.get_window(offset, limit);
-    let first = response.items.first().map(|item| {
+    let _first = response.items.first().map(|item| {
         serde_json::json!({
             "index": item.index,
             "videoId": item.video_id,
         })
     });
-    let last = response.items.last().map(|item| {
+    let _last = response.items.last().map(|item| {
         serde_json::json!({
             "index": item.index,
             "videoId": item.video_id,
         })
     });
-    println!(
-        "[yt_queue_get_window] offset={} limit={} returned={} first={} last={}",
-        offset,
-        limit,
-        response.items.len(),
-        first.unwrap_or_default(),
-        last.unwrap_or_default()
-    );
     Ok(response)
 }
 
@@ -2708,9 +2401,6 @@ pub async fn yt_queue_handle_track_end(
                 && !rs.fetching;
             drop(q);
             if should_continue {
-                println!(
-                    "[yt_queue_handle_track_end] radio low ({remaining} remaining) — spawning continuation"
-                );
                 let app_clone = app.clone();
                 tokio::spawn(async move {
                     continue_radio_background(app_clone).await;
@@ -2728,7 +2418,6 @@ pub async fn yt_queue_add_next(
     queue: State<'_, Arc<tokio::sync::Mutex<PlaybackQueue>>>,
     app: AppHandle,
 ) -> Result<QueueCommandResponse, String> {
-    println!("[yt_queue_add_next] video_id={video_id}");
     let response = {
         let mut queue = queue.lock().await;
         queue.add_next(video_id)
@@ -2744,12 +2433,6 @@ pub async fn yt_queue_add_collection_next(
     app: AppHandle,
 ) -> Result<QueueCommandResponse, String> {
     validate_vec_len(&track_ids, MAX_TRACK_IDS, "yt_queue_add_collection_next")?;
-    println!(
-        "[yt_queue_add_collection_next] count={} sample={}",
-        track_ids.len(),
-        serde_json::to_string(&track_ids.iter().take(5).cloned().collect::<Vec<_>>())
-            .unwrap_or_else(|_| "[]".to_string())
-    );
     let response = {
         let mut queue = queue.lock().await;
         queue.add_collection_next(track_ids)
@@ -2765,12 +2448,6 @@ pub async fn yt_queue_append_collection(
     app: AppHandle,
 ) -> Result<QueueCommandResponse, String> {
     validate_vec_len(&track_ids, MAX_TRACK_IDS, "yt_queue_append_collection")?;
-    println!(
-        "[yt_queue_append_collection] count={} sample={}",
-        track_ids.len(),
-        serde_json::to_string(&track_ids.iter().take(5).cloned().collect::<Vec<_>>())
-            .unwrap_or_else(|_| "[]".to_string())
-    );
     let response = {
         let mut queue = queue.lock().await;
         queue.append_collection(track_ids)
@@ -2785,7 +2462,6 @@ pub async fn yt_queue_remove(
     queue: State<'_, Arc<tokio::sync::Mutex<PlaybackQueue>>>,
     app: AppHandle,
 ) -> Result<QueueCommandResponse, String> {
-    println!("[yt_queue_remove] index={index}");
     let response = {
         let mut queue = queue.lock().await;
         queue.remove_index(index)
@@ -2903,7 +2579,6 @@ fn radio_request<'a>(seed: &'a RadioSeed, limit: usize) -> WatchPlaylistRequest<
 /// `get_tracks_by_ids`. Emits `radio-extended` on success so the frontend can
 /// invalidate any cached pages.
 pub async fn continue_radio_background(app: AppHandle) {
-    println!("[continue_radio] start");
 
     let state = app.state::<Arc<RwLock<YtMusicState>>>();
     let activity = app.state::<Arc<SessionActivity>>();
@@ -2915,19 +2590,15 @@ pub async fn continue_radio_background(app: AppHandle) {
     let (token, is_playlist_seed, collection_id) = {
         let mut q = queue.lock().await;
         let Some(rs) = q.radio_state_mut() else {
-            println!("[continue_radio] queue no longer in radio mode — aborting");
             return;
         };
         if rs.pool_exhausted {
-            println!("[continue_radio] pool already exhausted — aborting");
             return;
         }
         if rs.fetching {
-            println!("[continue_radio] another fetch in flight — aborting");
             return;
         }
         let Some(tok) = rs.continuation.clone() else {
-            println!("[continue_radio] no continuation token — aborting");
             return;
         };
         rs.fetching = true;
@@ -2956,8 +2627,7 @@ pub async fn continue_radio_background(app: AppHandle) {
 
     let page = match result {
         Ok(p) => p,
-        Err(e) => {
-            println!("[continue_radio] error: {e} — aborting");
+        Err(_e) => {
             // Release the in-flight guard so future triggers can retry.
             let mut q = queue.lock().await;
             if let Some(rs) = q.radio_state_mut() {
@@ -2980,18 +2650,16 @@ pub async fn continue_radio_background(app: AppHandle) {
         match cache_guard.collection_track_count("radio", &collection_id) {
             Ok(start_pos) => {
                 let rows = playlist_cache::cached_tracks_to_rows(&cached);
-                if let Err(e) = cache_guard.save_collection_tracks("radio", &collection_id, start_pos, &rows) {
-                    println!("[continue_radio] save_collection_tracks error: {e}");
+                if let Err(_e) = cache_guard.save_collection_tracks("radio", &collection_id, start_pos, &rows) {
                 }
             }
-            Err(e) => {
-                println!("[continue_radio] collection_track_count error: {e} — skipping cache write");
+            Err(_e) => {
             }
         }
     }
 
     // 4. Append to queue and update RadioState.
-    let added = {
+    let _added = {
         let mut q = queue.lock().await;
         let added = q.append_radio_batch(&track_ids);
         let exhausted = track_ids.is_empty() || page.continuation.is_none();
@@ -3001,7 +2669,6 @@ pub async fn continue_radio_background(app: AppHandle) {
             rs.fetching = false;
             if exhausted {
                 rs.pool_exhausted = true;
-                println!("[continue_radio] pool_exhausted=true");
             }
         }
         if exhausted {
@@ -3017,7 +2684,6 @@ pub async fn continue_radio_background(app: AppHandle) {
         q.snapshot()
     };
     let _ = app.emit("radio-extended", &snapshot_payload);
-    println!("[continue_radio] done — added {added} tracks");
 }
 
 // ---------------------------------------------------------------------------
@@ -3037,7 +2703,6 @@ pub async fn yt_radio_start(
     activity: State<'_, Arc<SessionActivity>>,
     queue: State<'_, Arc<tokio::sync::Mutex<PlaybackQueue>>>,
 ) -> Result<String, String> {
-    println!("[yt_radio_start] seed_kind={seed_kind} seed_id={seed_id}");
 
     validate_string_len(&seed_kind, MAX_STRING_LEN, "yt_radio_start seed_kind")?;
     validate_string_len(&seed_id, MAX_STRING_LEN, "yt_radio_start seed_id")?;
@@ -3081,8 +2746,7 @@ pub async fn yt_radio_start(
         let rows = playlist_cache::cached_tracks_to_rows(&cached);
         // Fresh start — overwrite any previous radio rows for this seed from
         // position 0.
-        if let Err(e) = cache_guard.save_collection_tracks("radio", &collection_id, 0, &rows) {
-            println!("[yt_radio_start] save_collection_tracks error: {e}");
+        if let Err(_e) = cache_guard.save_collection_tracks("radio", &collection_id, 0, &rows) {
         }
     }
 
@@ -3122,11 +2786,6 @@ pub async fn yt_radio_start(
     // a single `continue_radio_background` when the queue runs low.
     let _ = has_more;
 
-    println!(
-        "[yt_radio_start] loaded {} tracks, is_radio={}",
-        loaded_count, response.snapshot.is_radio
-    );
-
     serde_json::to_string(&response)
         .map_err(|e| format!("[yt_radio_start] serialization: {e}"))
 }
@@ -3142,7 +2801,6 @@ pub async fn yt_radio_reroll(
     activity: State<'_, Arc<SessionActivity>>,
     queue: State<'_, Arc<tokio::sync::Mutex<PlaybackQueue>>>,
 ) -> Result<String, String> {
-    println!("[yt_radio_reroll] entering");
 
     // 1. Clone the seed WITHOUT holding lock during network I/O.
     let seed = {
@@ -3179,8 +2837,7 @@ pub async fn yt_radio_reroll(
         let cache_state = app.state::<Arc<tokio::sync::Mutex<PlaylistCache>>>();
         let cache_guard = cache_state.lock().await;
         let rows = playlist_cache::cached_tracks_to_rows(&cached);
-        if let Err(e) = cache_guard.save_collection_tracks("radio", &collection_id, 0, &rows) {
-            println!("[yt_radio_reroll] save_collection_tracks error: {e}");
+        if let Err(_e) = cache_guard.save_collection_tracks("radio", &collection_id, 0, &rows) {
         }
     }
 
@@ -3190,7 +2847,7 @@ pub async fn yt_radio_reroll(
     let response = {
         let mut q = queue.lock().await;
         let current = q.current_track_id();
-        let removed = q.truncate_after_current();
+        let _removed = q.truncate_after_current();
         let track_ids_to_append: Vec<String> = track_ids
             .iter()
             .filter(|id| Some(id.as_str()) != current.as_deref())
@@ -3206,14 +2863,6 @@ pub async fn yt_radio_reroll(
         // Sync is_complete: if reroll fetched a page with continuation,
         // recover a previously stale is_complete=true.
         q.set_is_complete(!has_more);
-        println!(
-            "[yt_radio_reroll] removed={} added={} pool_exhausted={}",
-            removed,
-            added,
-            q.radio_state()
-                .map(|rs| rs.pool_exhausted)
-                .unwrap_or(false)
-        );
         QueueCommandResponse {
             track_id: q.current_track_id(),
             snapshot: q.snapshot(),
@@ -3241,7 +2890,6 @@ pub async fn yt_radio_load_more(
     activity: State<'_, Arc<SessionActivity>>,
     queue: State<'_, Arc<tokio::sync::Mutex<PlaybackQueue>>>,
 ) -> Result<String, String> {
-    println!("[yt_radio_load_more] entering");
 
     // In-flight guard: check if another load is running.
     let (token, is_playlist_seed, collection_id) = {
@@ -3258,7 +2906,6 @@ pub async fn yt_radio_load_more(
                 .map_err(|e| format!("[yt_radio_load_more] serialization: {e}"));
         }
         if rs.fetching {
-            println!("[yt_radio_load_more] another fetch in flight — returning current snapshot");
             let snapshot = q.snapshot();
             let track_id = q.current_track_id();
             let response = QueueCommandResponse { track_id, snapshot };
@@ -3310,16 +2957,12 @@ pub async fn yt_radio_load_more(
         match cache_guard.collection_track_count("radio", &collection_id) {
             Ok(start_pos) => {
                 let rows = playlist_cache::cached_tracks_to_rows(&cached);
-                if let Err(e) =
+                if let Err(_e) =
                     cache_guard.save_collection_tracks("radio", &collection_id, start_pos, &rows)
                 {
-                    println!("[yt_radio_load_more] save_collection_tracks error: {e}");
                 }
             }
-            Err(e) => {
-                println!(
-                    "[yt_radio_load_more] collection_track_count error: {e} — skipping cache write"
-                );
+            Err(_e) => {
             }
         }
     }
@@ -3334,15 +2977,9 @@ pub async fn yt_radio_load_more(
             rs.fetching = false;
             if track_ids.is_empty() || page.continuation.is_none() {
                 rs.pool_exhausted = true;
-                println!("[yt_radio_load_more] pool_exhausted=true");
             }
         }
         q.set_is_complete(page.continuation.is_none());
-        println!(
-            "[yt_radio_load_more] added {} tracks, total={}",
-            added,
-            q.snapshot().total_loaded
-        );
         QueueCommandResponse {
             track_id: q.current_track_id(),
             snapshot: q.snapshot(),

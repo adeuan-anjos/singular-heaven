@@ -1,21 +1,5 @@
-import { invoke as _invoke } from "@tauri-apps/api/core";
+import { invoke } from "@tauri-apps/api/core";
 import type { Track } from "../types/music";
-import { perfMark } from "./perf";
-
-// Timed invoke wrapper — logs timing for every IPC call
-async function invoke<T>(cmd: string, args?: Record<string, unknown>): Promise<T> {
-  const mark = perfMark(cmd, "IPC");
-  try {
-    const result = await _invoke<T>(cmd, args);
-    const meta: Record<string, unknown> = {};
-    if (typeof result === "string") meta.jsonBytes = result.length;
-    mark.end(meta);
-    return result;
-  } catch (err) {
-    mark.end({ error: String(err) });
-    throw err;
-  }
-}
 
 // ---------------------------------------------------------------------------
 // API response types — match the Rust ytmusic-api crate (camelCase via serde)

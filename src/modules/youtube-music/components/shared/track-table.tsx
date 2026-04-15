@@ -202,13 +202,6 @@ const TrackTableRow = React.memo(function TrackTableRow({
             className="h-7 w-7 shrink-0 opacity-50 group-hover:opacity-100"
             onClick={(e) => {
               e.stopPropagation();
-              console.log(
-                `[TrackTableRow] like click ${JSON.stringify({
-                  videoId: track.videoId,
-                  from: liked ? "LIKE" : "INDIFFERENT",
-                  to: liked ? "INDIFFERENT" : "LIKE",
-                })}`
-              );
               void toggleTrackLike(track.videoId, track.likeStatus);
             }}
             aria-label="Curtir"
@@ -428,10 +421,6 @@ function VirtualizedTrackTable({
       );
       setScrollMargin((prev) => {
         if (Math.abs(prev - next) < 1) return prev;
-        console.log("[TrackTable:Virtual] scrollMargin update", {
-          previous: prev,
-          current: next,
-        });
         return next;
       });
     };
@@ -483,12 +472,6 @@ function VirtualizedTrackTable({
       }
     }
 
-    console.log(
-      "[TrackTable:Virtual] onEndReached — lastItem.index:",
-      lastItem.index,
-      "tracks.length:",
-      tracks.length
-    );
     lastLoadedAtLengthRef.current = tracks.length;
     lastLoadScrollTopRef.current = viewport.scrollTop;
     onEndReachedRef.current();

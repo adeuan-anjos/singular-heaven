@@ -50,7 +50,6 @@ export function ArtistPage() {
     let cancelled = false;
     setLoading(true);
     setError(null);
-    console.log("[ArtistPage] Fetching artist:", artistId);
 
     ytGetArtist(artistId)
       .then(async (raw) => {
@@ -71,7 +70,6 @@ export function ArtistPage() {
           tracks: allSongs,
         });
         if (cancelled) return;
-        console.log("[ArtistPage] Artist loaded:", mapped.name);
         trackIdsRef.current = collection.trackIds;
         setCollectionTracks(collection.entries);
         setArtist(mapped);

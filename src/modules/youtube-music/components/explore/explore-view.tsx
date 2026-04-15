@@ -15,7 +15,6 @@ import {
 import { useYtActions } from "../../router/actions-context";
 import { paths } from "../../router/paths";
 import type { ExploreData, ChartTrack } from "../../types/music";
-import { perfMark, endModuleLoad } from "../../services/perf";
 
 export function ExploreView() {
   const [, navigate] = useLocation();
@@ -29,8 +28,6 @@ export function ExploreView() {
     let cancelled = false;
 
     async function fetchExplore() {
-      const viewMark = perfMark("ExploreView fetch", "VIEW");
-      console.log("[ExploreView] Fetching explore data...");
       setLoading(true);
       setError(null);
       try {
@@ -38,15 +35,6 @@ export function ExploreView() {
         if (cancelled) return;
         const mapped = mapExplorePage(apiData);
         const charts = apiData.topSongs.map((s, i) => mapExploreSongToChart(s, i));
-        viewMark.end({ newReleases: mapped.newReleases.length, trending: mapped.trending.length, charts: charts.length });
-        endModuleLoad();
-        console.log("[ExploreView] Loaded explore data:", {
-          newReleases: mapped.newReleases.length,
-          trending: mapped.trending.length,
-          chartTracks: charts.length,
-          moods: mapped.moodsAndGenres.length,
-          newVideos: mapped.newVideos.length,
-        });
         void cacheFiniteTrackCollection({
           collectionType: "explore-section",
           collectionId: createTrackCollectionId("explore", "top-songs"),

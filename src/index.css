@@ -206,38 +206,14 @@ html.document-hidden .equalizer span {
   animation-play-state: paused;
 }
 
-/* Titlebar glow — soft breathing pulse on the text */
+/* Titlebar glow */
 .titlebar-glow {
-  animation: glow-breathe 6s ease-in-out infinite;
+  text-shadow: 0 0 6px rgba(168, 140, 255, 0.45);
 }
 
-@keyframes glow-breathe {
-  0%, 100% {
-    opacity: 0.6;
-    filter: drop-shadow(0 0 2px rgba(168, 140, 255, 0.2));
-  }
-  50% {
-    opacity: 1;
-    filter: drop-shadow(0 0 8px rgba(168, 140, 255, 0.7)) drop-shadow(0 0 20px rgba(168, 140, 255, 0.3));
-  }
-}
-
-/* Animated gradient text — shifting color gradient on small text elements.
- *
- * Uses background-position animation on an oversized gradient with
- * background-clip:text. Not compositor-only, but the repaint area is
- * just the text bounding box — negligible cost for small labels.
- * Industry-standard approach (Vercel, Stripe, etc). */
 .animated-gradient-text {
-  background: linear-gradient(90deg, #a78bfa, #e879f9, #fb923c, #e879f9, #a78bfa);
-  background-size: 200% 100%;
+  background: linear-gradient(90deg, #a78bfa, #e879f9, #fb923c);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
-  animation: gradient-shift 4s ease-in-out infinite;
-}
-
-@keyframes gradient-shift {
-  0%, 100% { background-position: 0% 50%; }
-  50%      { background-position: 100% 50%; }
 }

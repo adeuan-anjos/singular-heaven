@@ -60,7 +60,7 @@ export const useTrackLikeStore = create<TrackLikeStore>()((set, get) => ({
   hydrating: false,
   pending: {},
 
-  hydrate: async (force = false, reason = "unknown") => {
+  hydrate: async (force = false, _reason = "unknown") => {
     const now = Date.now();
     const recentlyHydrated = now - lastHydratedAt < REVALIDATE_INTERVAL_MS;
 
@@ -73,14 +73,6 @@ export const useTrackLikeStore = create<TrackLikeStore>()((set, get) => ({
     }
 
     if (!force && get().hydrated && recentlyHydrated) {
-      console.log(
-        `[TrackLikeStore] hydrate skipped ${JSON.stringify({
-          force,
-          reason,
-          hydrated: get().hydrated,
-          ageMs: now - lastHydratedAt,
-        })}`
-      );
       return Promise.resolve();
     }
 
@@ -88,15 +80,6 @@ export const useTrackLikeStore = create<TrackLikeStore>()((set, get) => ({
     hydrationPromise = ytGetLikedTrackIdsCached()
       .then((videoIds) => {
         lastHydratedAt = Date.now();
-        console.log(
-          `[TrackLikeStore] hydrate ${JSON.stringify({
-            force,
-            reason,
-            playlistEntryCount: videoIds.length,
-            uniqueVideoIdCount: new Set(videoIds).size,
-            sample: videoIds.slice(0, 5),
-          })}`
-        );
         get().replaceLikedTrackIds(videoIds);
       })
       .finally(() => {
@@ -109,13 +92,6 @@ export const useTrackLikeStore = create<TrackLikeStore>()((set, get) => ({
 
   replaceLikedTrackIds: (videoIds) => {
     const likedSet = new Set(videoIds.filter(Boolean));
-    console.log(
-      `[TrackLikeStore] replaceLikedTrackIds ${JSON.stringify({
-        playlistEntryCount: videoIds.length,
-        uniqueVideoIdCount: likedSet.size,
-        sample: Array.from(likedSet).slice(0, 5),
-      })}`
-    );
     set((state) => {
       const next: LikeStatusMap = { ...state.likeStatuses };
 
@@ -151,14 +127,6 @@ export const useTrackLikeStore = create<TrackLikeStore>()((set, get) => ({
     const previous = get().getResolvedLikeStatus(videoId, fallback);
     const next = previous === "LIKE" ? "INDIFFERENT" : "LIKE";
 
-    console.log(
-      `[TrackLikeStore] optimistic update ${JSON.stringify({
-        videoId,
-        previous,
-        next,
-      })}`
-    );
-
     set((state) => ({
       likeStatuses: {
         ...state.likeStatuses,
@@ -186,12 +154,6 @@ export const useTrackLikeStore = create<TrackLikeStore>()((set, get) => ({
         };
       });
       syncTrackCacheLikeStatus(videoId, confirmed);
-      console.log(
-        `[TrackLikeStore] toggleTrackLike confirmed ${JSON.stringify({
-          videoId,
-          likeStatus: confirmed,
-        })}`
-      );
       return confirmed;
     } catch (error) {
       set((state) => {

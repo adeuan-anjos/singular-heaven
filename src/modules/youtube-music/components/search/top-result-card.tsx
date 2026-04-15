@@ -19,8 +19,6 @@ export function TopResultCard({
 }: TopResultCardProps) {
   const imgUrl = thumbnail[0]?.url ?? "";
 
-  console.log("[TopResultCard] render", { name, typeLabel });
-
   return (
     <button
       type="button"

@@ -12,8 +12,6 @@ import {
 import { useYtActions } from "../../router/actions-context";
 import { paths } from "../../router/paths";
 import type { Track, Album, Artist, Playlist, HomeSection } from "../../types/music";
-import { useRenderTracker } from "@/lib/debug";
-import { perfMark, endModuleLoad } from "../../services/perf";
 
 type NavigateFn = (to: string) => void;
 
@@ -108,7 +106,6 @@ function getItemActions(
 export function HomeView() {
   const [, navigate] = useLocation();
   const { onPlayTrack } = useYtActions();
-  useRenderTracker("HomeView", {});
   const [sections, setSections] = useState<HomeSection[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -117,17 +114,12 @@ export function HomeView() {
     let cancelled = false;
 
     async function fetchHome() {
-      const viewMark = perfMark("HomeView fetch", "VIEW");
-      console.log("[HomeView] Fetching home sections...");
       setLoading(true);
       setError(null);
       try {
         const apiSections = await ytGetHome(6);
         if (cancelled) return;
         const mapped = mapHomeSections(apiSections);
-        viewMark.end({ sections: mapped.length });
-        endModuleLoad();
-        console.log("[HomeView] Loaded home sections:", mapped.length);
         mapped.forEach((section, index) => {
           const tracks = section.contents.filter(isTrack);
           if (tracks.length === 0) return;

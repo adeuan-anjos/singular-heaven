@@ -144,7 +144,6 @@ export const useQueueStore = create<QueueStore>()((set, get) => ({
 
   hydrate: async () => {
     const snapshot = await ytQueueGetState();
-    console.log("[QueueStore] hydrate", snapshot);
     set({
       ...applySnapshot(snapshot),
       revealedCount: deriveRevealedCount(0, snapshot, true),
@@ -153,14 +152,6 @@ export const useQueueStore = create<QueueStore>()((set, get) => ({
 
   setQueue: async (trackIds, startIndex = 0, playlistId = null, isComplete = true, shuffle = false) => {
     const response = await ytQueueSet(trackIds, startIndex, playlistId, isComplete, shuffle);
-    console.log("[QueueStore] setQueue", {
-      count: trackIds.length,
-      startIndex,
-      playlistId,
-      isComplete,
-      shuffle,
-      totalLoaded: response.snapshot.totalLoaded,
-    });
     set({
       ...applySnapshot(response.snapshot),
       revealedCount: deriveRevealedCount(0, response.snapshot, true),
@@ -185,12 +176,6 @@ export const useQueueStore = create<QueueStore>()((set, get) => ({
         return state;
       }
 
-      console.log("[QueueStore] initializeReveal", {
-        previous: state.revealedCount,
-        next: nextRevealedCount,
-        totalLoaded: state.totalLoaded,
-      });
-
       return {
         revealedCount: nextRevealedCount,
       };
@@ -210,12 +195,6 @@ export const useQueueStore = create<QueueStore>()((set, get) => ({
           computeMinimumRevealCount(state.totalLoaded, state.currentIndex)
         )
       );
-
-      console.log("[QueueStore] revealMore", {
-        previous: state.revealedCount,
-        next: nextRevealedCount,
-        totalLoaded: state.totalLoaded,
-      });
 
       return {
         revealedCount: nextRevealedCount,
@@ -237,12 +216,6 @@ export const useQueueStore = create<QueueStore>()((set, get) => ({
         return state;
       }
 
-      console.log("[QueueStore] ensureCurrentIndexRevealed", {
-        currentIndex: state.currentIndex,
-        previous: state.revealedCount,
-        next: nextRevealedCount,
-      });
-
       return {
         revealedCount: nextRevealedCount,
       };
@@ -254,11 +227,6 @@ export const useQueueStore = create<QueueStore>()((set, get) => ({
       if (state.revealedCount === 0 && Object.keys(state.pages).length === 0) {
         return state;
       }
-
-      console.log("[QueueStore] resetVisualState", {
-        revealedCount: state.revealedCount,
-        loadedPages: Object.keys(state.pages).length,
-      });
 
       return {
         revealedCount: 0,
@@ -290,25 +258,6 @@ export const useQueueStore = create<QueueStore>()((set, get) => ({
       promises.push(
         ytQueueGetWindow(pageOffset, pageSize)
           .then((response) => {
-            console.log(
-              `[QueueStore] loadWindow ${JSON.stringify({
-                offset: pageOffset,
-                received: response.items.length,
-                totalLoaded: response.snapshot.totalLoaded,
-                first: response.items[0]
-                  ? {
-                      index: response.items[0].index,
-                      videoId: response.items[0].videoId,
-                    }
-                  : null,
-                last: response.items[response.items.length - 1]
-                  ? {
-                      index: response.items[response.items.length - 1].index,
-                      videoId: response.items[response.items.length - 1].videoId,
-                    }
-                  : null,
-              })}`
-            );
             set((state) => ({
               ...applySnapshot(response.snapshot),
               pagesVersion: state.pagesVersion + 1,
@@ -385,7 +334,6 @@ export const useQueueStore = create<QueueStore>()((set, get) => ({
 
   addNext: async (trackId) => {
     const response = await ytQueueAddNext(trackId);
-    console.log("[QueueStore] addNext", { trackId });
     set((state) => ({
       ...applySnapshot(response.snapshot),
       revealedCount: deriveRevealedCount(state.revealedCount, response.snapshot, false),
@@ -396,15 +344,6 @@ export const useQueueStore = create<QueueStore>()((set, get) => ({
 
   addCollectionNext: async (trackIds) => {
     const response = await ytQueueAddCollectionNext(trackIds);
-    console.log(
-      `[QueueStore] addCollectionNext ${JSON.stringify({
-        count: trackIds.length,
-        firstTrackId: trackIds[0] ?? null,
-        lastTrackId: trackIds[trackIds.length - 1] ?? null,
-        totalLoaded: response.snapshot.totalLoaded,
-        shuffle: response.snapshot.shuffle,
-      })}`
-    );
     set((state) => ({
       ...applySnapshot(response.snapshot),
       revealedCount: deriveRevealedCount(state.revealedCount, response.snapshot, false),
@@ -416,15 +355,6 @@ export const useQueueStore = create<QueueStore>()((set, get) => ({
 
   appendCollection: async (trackIds) => {
     const response = await ytQueueAppendCollection(trackIds);
-    console.log(
-      `[QueueStore] appendCollection ${JSON.stringify({
-        count: trackIds.length,
-        firstTrackId: trackIds[0] ?? null,
-        lastTrackId: trackIds[trackIds.length - 1] ?? null,
-        totalLoaded: response.snapshot.totalLoaded,
-        shuffle: response.snapshot.shuffle,
-      })}`
-    );
     set((state) => ({
       ...applySnapshot(response.snapshot),
       revealedCount: deriveRevealedCount(state.revealedCount, response.snapshot, false),
@@ -436,7 +366,6 @@ export const useQueueStore = create<QueueStore>()((set, get) => ({
 
   removeFromQueue: async (index) => {
     const response = await ytQueueRemove(index);
-    console.log("[QueueStore] removeFromQueue", { index });
     set((state) => ({
       ...applySnapshot(response.snapshot),
       revealedCount: Math.min(
@@ -450,14 +379,8 @@ export const useQueueStore = create<QueueStore>()((set, get) => ({
 
   toggleShuffle: async () => {
     if (get().isRadio) {
-      console.log("[QueueStore] toggleShuffle in radio mode → re-roll");
       try {
         const response = await ytRadioReroll();
-        console.log("[QueueStore] radio re-roll snapshot", {
-          totalLoaded: response.snapshot.totalLoaded,
-          currentIndex: response.snapshot.currentIndex,
-          isComplete: response.snapshot.isComplete,
-        });
         set((state) => ({
           ...applySnapshot(response.snapshot),
           revealedCount: deriveRevealedCount(state.revealedCount, response.snapshot, true),
@@ -471,7 +394,6 @@ export const useQueueStore = create<QueueStore>()((set, get) => ({
       return;
     }
     const response = await ytQueueToggleShuffle();
-    console.log("[QueueStore] toggleShuffle", { shuffle: response.snapshot.shuffle });
     set((state) => ({
       ...applySnapshot(response.snapshot),
       revealedCount: deriveRevealedCount(state.revealedCount, response.snapshot, false),
@@ -482,7 +404,6 @@ export const useQueueStore = create<QueueStore>()((set, get) => ({
 
   cycleRepeat: async () => {
     const response = await ytQueueCycleRepeat();
-    console.log("[QueueStore] cycleRepeat", { repeat: response.snapshot.repeat });
     set((state) => ({
       ...applySnapshot(response.snapshot),
       revealedCount: deriveRevealedCount(state.revealedCount, response.snapshot, false),
@@ -498,7 +419,6 @@ export const useQueueStore = create<QueueStore>()((set, get) => ({
     loadMoreInflight = true;
 
     try {
-      console.log("[queue-store] loadMoreRadio → ytRadioLoadMore()");
       const r = await ytRadioLoadMore();
       set(applySnapshot(r.snapshot));
     } catch (err) {
@@ -509,10 +429,6 @@ export const useQueueStore = create<QueueStore>()((set, get) => ({
   },
 
   applyRadioExtended: (snapshot: QueueSnapshot) => {
-    console.log("[QueueStore] radio-extended event → applying snapshot", {
-      totalLoaded: snapshot.totalLoaded,
-      isComplete: snapshot.isComplete,
-    });
     set(() => ({
       ...applySnapshot(snapshot),
       // DO NOT touch `pages` — existing cached windows are still valid.
@@ -521,7 +437,6 @@ export const useQueueStore = create<QueueStore>()((set, get) => ({
 
   cleanup: async () => {
     const response = await ytQueueClear();
-    console.log("[QueueStore] cleanup");
     inflightWindows.clear();
     set({
       ...applySnapshot(response.snapshot),

@@ -194,7 +194,6 @@ function QueueSheetContent() {
 
   useEffect(() => {
     const timer = setTimeout(() => {
-      console.log("[QueueSheetContent] animation settled, activating virtualizer");
       setAnimationDone(true);
     }, 400);
     return () => clearTimeout(timer);
@@ -261,19 +260,10 @@ function QueueSheetContent() {
     }
 
     if (terminalRowVisibleRef.current !== terminalRowType) {
-      console.log(
-        terminalRowType === "reveal"
-          ? "[QueueSheetContent] Queue reveal row visible"
-          : "[QueueSheetContent] Queue loading row visible",
-        {
-          revealedCount,
-          totalLoaded,
-        }
-      );
       terminalRowVisibleRef.current = terminalRowType;
       reachedTerminalRowRef.current = null;
     }
-  }, [revealedCount, terminalRowType, totalLoaded]);
+  }, [terminalRowType]);
 
   // Radio demand-driven loading: when the loading row becomes visible and
   // we're in radio mode, fetch ONE continuation page. The in-flight guard
@@ -325,15 +315,9 @@ function QueueSheetContent() {
       return;
     }
 
-    console.log("[QueueSheetContent] Queue reached reveal row", {
-      revealedCount,
-      totalLoaded,
-      distanceToBottom,
-    });
-
     lastRevealRequestRef.current = revealedCount;
     revealMore();
-  }, [terminalRowType, revealedCount, totalLoaded, revealMore]);
+  }, [terminalRowType, revealedCount, revealMore]);
 
   const handleScroll = useCallback(() => {
     attemptRevealMore();
@@ -359,15 +343,6 @@ function QueueSheetContent() {
 
     const reachedTerminalRow = lastVisibleIndex >= terminalRowIndex;
     if (reachedTerminalRow && reachedTerminalRowRef.current !== terminalRowType) {
-      console.log(
-        terminalRowType === "reveal"
-          ? "[QueueSheetContent] Queue reached reveal row"
-          : "[QueueSheetContent] Queue reached loading row",
-        {
-          revealedCount,
-          totalLoaded,
-        }
-      );
       reachedTerminalRowRef.current = terminalRowType;
       return;
     }
@@ -375,7 +350,7 @@ function QueueSheetContent() {
     if (!reachedTerminalRow && reachedTerminalRowRef.current === terminalRowType) {
       reachedTerminalRowRef.current = null;
     }
-  }, [lastVisibleIndex, revealedCount, terminalRowIndex, terminalRowType, totalLoaded]);
+  }, [lastVisibleIndex, terminalRowIndex, terminalRowType]);
 
   useEffect(() => {
     if (virtualItems.length === 0 || revealedCount === 0) return;
@@ -389,10 +364,6 @@ function QueueSheetContent() {
 
   useEffect(() => {
     if (missingVisibleTrackIds.length === 0) return;
-    console.log("[QueueSheetContent] prefetch visible tracks", {
-      missing: missingVisibleTrackIds.length,
-      sample: missingVisibleTrackIds.slice(0, 5),
-    });
     prefetchTracks(missingVisibleTrackIds);
   }, [missingVisibleTrackIds, prefetchTracks]);
 
@@ -495,16 +466,6 @@ function QueueSheetContent() {
                   terminalRowType !== null && virtualRow.index === terminalRowIndex;
                 const entry = getItemAt(virtualRow.index);
                 const videoId = entry?.videoId;
-                if (entry && virtualRow.index >= Math.max(0, currentIndex - 2) && virtualRow.index <= currentIndex + 2) {
-                  console.log(
-                    `[QueueSheetContent] render row mapping ${JSON.stringify({
-                      virtualIndex: virtualRow.index,
-                      entryIndex: entry.index,
-                      videoId: entry.videoId,
-                      isCurrent: virtualRow.index === currentIndex,
-                    })}`
-                  );
-                }
 
                 return (
                   <div
@@ -554,8 +515,6 @@ function QueueSheetContent() {
 export const QueueSheet = React.memo(function QueueSheet({ open, onOpenChange }: QueueSheetProps) {
   const resetVisualState = useQueueStore((s) => s.resetVisualState);
   const getLoadedVideoIds = useQueueStore((s) => s.getLoadedVideoIds);
-  const revealedCount = useQueueStore((s) => s.revealedCount);
-  const totalLoaded = useQueueStore((s) => s.totalLoaded);
   const currentTrackId = usePlayerStore((s) => s.currentTrackId);
   const removeTracks = useTrackCacheStore((s) => s.removeTracks);
   const cacheBaselineRef = useRef<Set<string>>(new Set());
@@ -565,16 +524,8 @@ export const QueueSheet = React.memo(function QueueSheet({ open, onOpenChange }:
       cacheBaselineRef.current = new Set(
         Object.keys(useTrackCacheStore.getState().tracks)
       );
-      console.log(
-        `[QueueSheet] opening ${JSON.stringify({
-          revealedCount,
-          totalLoaded,
-          currentTrackId,
-          cacheBaseline: cacheBaselineRef.current.size,
-        })}`
-      );
     }
-  }, [currentTrackId, open, revealedCount, totalLoaded]);
+  }, [open]);
 
   const handleOpenChange = useCallback(
     (nextOpen: boolean) => {
@@ -583,15 +534,6 @@ export const QueueSheet = React.memo(function QueueSheet({ open, onOpenChange }:
         const loadedIds = getLoadedVideoIds().filter(
           (videoId) =>
             videoId !== currentTrackId && !baselineIds.has(videoId)
-        );
-        console.log(
-          `[QueueSheet] closing — resetting visual state ${JSON.stringify({
-            revealedCount,
-            totalLoaded,
-            loadedIdsToEvict: loadedIds.length,
-            cacheBaseline: baselineIds.size,
-            currentTrackId,
-          })}`
         );
         if (loadedIds.length > 0) {
           removeTracks(loadedIds);
@@ -607,8 +549,6 @@ export const QueueSheet = React.memo(function QueueSheet({ open, onOpenChange }:
       onOpenChange,
       removeTracks,
       resetVisualState,
-      revealedCount,
-      totalLoaded,
     ]
   );
 

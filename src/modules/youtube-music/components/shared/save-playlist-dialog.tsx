@@ -44,12 +44,6 @@ export function SavePlaylistDialog({
       setCreateDialogOpen(false);
       return;
     }
-    console.log(
-      `[SavePlaylistDialog] opened ${JSON.stringify({
-        sourcePlaylistId,
-        sourcePlaylistTitle,
-      })}`
-    );
     void hydrate(false, "save-playlist-open");
   }, [hydrate, open, sourcePlaylistId, sourcePlaylistTitle]);
 
@@ -67,12 +61,6 @@ export function SavePlaylistDialog({
     if (!sourcePlaylistId) return "noop";
 
     if (duplicatePolicy === "allow") {
-      console.log(
-        `[SavePlaylistDialog] copy allow duplicates ${JSON.stringify({
-          sourcePlaylistId,
-          targetPlaylistId,
-        })}`
-      );
       await ytAddPlaylistItems(targetPlaylistId, [], sourcePlaylistId);
       return "copied";
     }
@@ -85,16 +73,6 @@ export function SavePlaylistDialog({
     const targetIds = new Set(target.trackIds);
     const missing = source.trackIds.filter((videoId) => !targetIds.has(videoId));
 
-    console.log(
-      `[SavePlaylistDialog] copy avoid duplicates ${JSON.stringify({
-        sourcePlaylistId,
-        targetPlaylistId,
-        sourceTrackIds: source.trackIds.length,
-        targetTrackIds: target.trackIds.length,
-        filteredTrackIds: missing.length,
-      })}`
-    );
-
     if (missing.length === 0) {
       toast.info("A playlist destino já contém todas as músicas.");
       return "noop";
@@ -106,13 +84,6 @@ export function SavePlaylistDialog({
 
   const handleSave = async (targetPlaylistId: string) => {
     if (!sourcePlaylistId) return;
-    console.log(
-      `[SavePlaylistDialog] save click ${JSON.stringify({
-        sourcePlaylistId,
-        targetPlaylistId,
-        duplicatePolicy,
-      })}`
-    );
     setPendingPlaylistId(targetPlaylistId);
     try {
       const result = await copyPlaylist(targetPlaylistId);
@@ -150,10 +121,7 @@ export function SavePlaylistDialog({
               <Button
                 type="button"
                   variant={duplicatePolicy === "allow" ? "default" : "outline"}
-                onClick={() => {
-                  console.log("[SavePlaylistDialog] duplicate policy allow");
-                  setDuplicatePolicy("allow");
-                }}
+                onClick={() => setDuplicatePolicy("allow")}
                 className="flex-1"
               >
                 Permitir duplicatas
@@ -161,10 +129,7 @@ export function SavePlaylistDialog({
               <Button
                 type="button"
                   variant={duplicatePolicy === "avoid" ? "default" : "outline"}
-                onClick={() => {
-                  console.log("[SavePlaylistDialog] duplicate policy avoid");
-                  setDuplicatePolicy("avoid");
-                }}
+                onClick={() => setDuplicatePolicy("avoid")}
                 className="flex-1"
               >
                 Evitar novas duplicatas
@@ -227,13 +192,6 @@ export function SavePlaylistDialog({
         onCreated={(playlistId) => {
           if (!playlistId || !sourcePlaylistId) return;
           setPendingPlaylistId("__create__");
-          console.log(
-            `[SavePlaylistDialog] create and save ${JSON.stringify({
-              sourcePlaylistId,
-              targetPlaylistId: playlistId,
-              duplicatePolicy,
-            })}`
-          );
           void ytAddPlaylistItems(playlistId, [], sourcePlaylistId)
             .then(() => {
               toast.success("Playlist criada e preenchida com sucesso.");

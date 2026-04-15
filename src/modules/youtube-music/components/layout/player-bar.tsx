@@ -23,7 +23,6 @@ import { usePlayerStore } from "../../stores/player-store";
 import { useQueueStore } from "../../stores/queue-store";
 import { useTrack } from "../../stores/track-cache-store";
 import { useTrackLikeStore } from "../../stores/track-like-store";
-import { useRenderTracker } from "@/lib/debug";
 import { ProgressBar } from "./progress-bar";
 import { thumbUrl } from "../../utils/thumb-url";
 import { paths } from "../../router/paths";
@@ -33,7 +32,6 @@ interface PlayerBarProps {
 }
 
 export const PlayerBar = React.memo(function PlayerBar({ onOpenQueue }: PlayerBarProps) {
-  useRenderTracker("PlayerBar", { onOpenQueue });
   const [, navigate] = useLocation();
 
   const currentTrackId = usePlayerStore((s) => s.currentTrackId);
@@ -62,8 +60,6 @@ export const PlayerBar = React.memo(function PlayerBar({ onOpenQueue }: PlayerBa
   const queuePrevious = useQueueStore((s) => s.previous);
   const toggleShuffle = useQueueStore((s) => s.toggleShuffle);
   const cycleRepeat = useQueueStore((s) => s.cycleRepeat);
-
-  console.log("[PlayerBar] render", { track: track?.title });
 
   if (!track) return null;
 
@@ -141,13 +137,6 @@ export const PlayerBar = React.memo(function PlayerBar({ onOpenQueue }: PlayerBa
           size="icon"
           onClick={() => {
             if (!currentTrackId) return;
-            console.log(
-              `[PlayerBar] like click ${JSON.stringify({
-                videoId: currentTrackId,
-                from: liked ? "LIKE" : "INDIFFERENT",
-                to: liked ? "INDIFFERENT" : "LIKE",
-              })}`
-            );
             void toggleTrackLike(currentTrackId, track?.likeStatus);
           }}
           aria-label="Curtir"

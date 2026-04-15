@@ -2,7 +2,6 @@ import React, { useState, useRef, useCallback } from "react";
 import { usePlayerStore } from "../../stores/player-store";
 import { useTrack } from "../../stores/track-cache-store";
 import { thumbUrl } from "../../utils/thumb-url";
-import { useRenderTracker } from "@/lib/debug";
 
 const FILTER_STYLE = "url(#liquid-glass) blur(40px) saturate(1.6)";
 const OPACITY_VISIBLE = 0.18;
@@ -13,8 +12,6 @@ const OPACITY_VISIBLE = 0.18;
  * then fades in the new image over 3s — no black flash between tracks.
  */
 export const AmbientBackground = React.memo(function AmbientBackground() {
-  useRenderTracker("AmbientBackground", {});
-
   const currentTrackId = usePlayerStore((s) => s.currentTrackId);
   const track = useTrack(currentTrackId ?? undefined);
   const imgUrl = track?.thumbnails[0]?.url ?? "";

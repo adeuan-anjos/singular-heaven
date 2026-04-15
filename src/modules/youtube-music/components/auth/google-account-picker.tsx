@@ -33,26 +33,16 @@ export function GoogleAccountPicker({
   const [selecting, setSelecting] = useState<number | null>(null);
 
   useEffect(() => {
-    console.log("[GoogleAccountPicker] mounted");
     let cancelled = false;
 
     async function detect() {
       try {
-        console.log("[GoogleAccountPicker] detecting Google accounts...");
         const result = await ytDetectGoogleAccounts();
-        console.log("[GoogleAccountPicker] detected accounts", {
-          count: result.length,
-          authUsers: result.map((a) => a.authUser),
-          withEmail: result.filter((a) => Boolean(a.email)).length,
-        });
 
         if (cancelled) return;
 
         if (result.length <= 1) {
           const selectedAuthUser = result[0]?.authUser ?? 0;
-          console.log("[GoogleAccountPicker] single account — auto-skipping picker", {
-            authUser: selectedAuthUser,
-          });
           onAccountSelected(selectedAuthUser);
           return;
         }
@@ -64,7 +54,6 @@ export function GoogleAccountPicker({
           detail: err instanceof Error ? err.message : err,
         });
         if (!cancelled) {
-          console.log("[GoogleAccountPicker] falling back to authUser=0 due to detection error");
           onAccountSelected(0);
         }
       } finally {
@@ -75,18 +64,13 @@ export function GoogleAccountPicker({
     detect();
     return () => {
       cancelled = true;
-      console.log("[GoogleAccountPicker] unmounted");
     };
   }, [onAccountSelected]);
 
   const handleSelect = async (account: ApiGoogleAccountInfo) => {
-    console.log("[GoogleAccountPicker] account clicked", {
-      authUser: account.authUser,
-    });
     setSelecting(account.authUser);
     try {
       await ytAuthFromBrowser("auto", account.authUser);
-      console.log("[GoogleAccountPicker] authenticated", { authUser: account.authUser });
       onAccountSelected(account.authUser);
     } catch (err) {
       console.error("[GoogleAccountPicker] auth failed", {
@@ -96,8 +80,6 @@ export function GoogleAccountPicker({
       setSelecting(null);
     }
   };
-
-  console.log("[GoogleAccountPicker] render", { loading, total: accounts.length, selecting });
 
   return (
     <div className="flex h-full items-center justify-center p-6">

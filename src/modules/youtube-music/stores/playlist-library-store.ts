@@ -83,7 +83,7 @@ export const usePlaylistLibraryStore = create<PlaylistLibraryStore>()((set, get)
   sidebarHydrating: false,
   pending: {},
 
-  hydrate: async (force = false, reason = "unknown") => {
+  hydrate: async (force = false, _reason = "unknown") => {
     const now = Date.now();
     const recentlyHydrated = now - lastHydratedAt < REVALIDATE_INTERVAL_MS;
 
@@ -96,13 +96,6 @@ export const usePlaylistLibraryStore = create<PlaylistLibraryStore>()((set, get)
     }
 
     if (!force && get().hydrated && recentlyHydrated) {
-      console.log(
-        `[PlaylistLibraryStore] hydrate skipped ${JSON.stringify({
-          force,
-          reason,
-          ageMs: now - lastHydratedAt,
-        })}`
-      );
       return Promise.resolve();
     }
 
@@ -111,19 +104,6 @@ export const usePlaylistLibraryStore = create<PlaylistLibraryStore>()((set, get)
       .then((apiPlaylists) => {
         const playlists = mapLibraryPlaylists(apiPlaylists);
         lastHydratedAt = Date.now();
-        console.log(
-          `[PlaylistLibraryStore] hydrate ${JSON.stringify({
-            force,
-            reason,
-            playlistCount: playlists.length,
-            sample: playlists.slice(0, 5).map((playlist) => ({
-              playlistId: playlist.playlistId,
-              title: playlist.title,
-              isOwnedByUser: playlist.isOwnedByUser ?? false,
-              isSpecial: playlist.isSpecial ?? false,
-            })),
-          })}`
-        );
         get().replaceLibraryPlaylists(playlists);
       })
       .finally(() => {
@@ -134,7 +114,7 @@ export const usePlaylistLibraryStore = create<PlaylistLibraryStore>()((set, get)
     return hydrationPromise;
   },
 
-  hydrateSidebar: async (force = false, reason = "unknown") => {
+  hydrateSidebar: async (force = false, _reason = "unknown") => {
     const now = Date.now();
     const recentlyHydrated = now - lastSidebarHydratedAt < REVALIDATE_INTERVAL_MS;
 
@@ -147,13 +127,6 @@ export const usePlaylistLibraryStore = create<PlaylistLibraryStore>()((set, get)
     }
 
     if (!force && get().sidebarHydrated && recentlyHydrated) {
-      console.log(
-        `[PlaylistLibraryStore] hydrateSidebar skipped ${JSON.stringify({
-          force,
-          reason,
-          ageMs: now - lastSidebarHydratedAt,
-        })}`
-      );
       return Promise.resolve();
     }
 
@@ -162,19 +135,6 @@ export const usePlaylistLibraryStore = create<PlaylistLibraryStore>()((set, get)
       .then((apiPlaylists) => {
         const playlists = mapLibraryPlaylists(apiPlaylists);
         lastSidebarHydratedAt = Date.now();
-        console.log(
-          `[PlaylistLibraryStore] hydrateSidebar ${JSON.stringify({
-            force,
-            reason,
-            playlistCount: playlists.length,
-            sample: playlists.slice(0, 5).map((playlist) => ({
-              playlistId: playlist.playlistId,
-              title: playlist.title,
-              isOwnedByUser: playlist.isOwnedByUser ?? false,
-              isSpecial: playlist.isSpecial ?? false,
-            })),
-          })}`
-        );
         get().replaceSidebarPlaylists(playlists);
       })
       .finally(() => {
@@ -186,11 +146,6 @@ export const usePlaylistLibraryStore = create<PlaylistLibraryStore>()((set, get)
   },
 
   replaceLibraryPlaylists: (playlists) => {
-    console.log(
-      `[PlaylistLibraryStore] replaceLibraryPlaylists ${JSON.stringify({
-        playlistCount: playlists.length,
-      })}`
-    );
     set({
       playlists,
       savedPlaylistIds: toSavedIdMap(playlists),
@@ -199,11 +154,6 @@ export const usePlaylistLibraryStore = create<PlaylistLibraryStore>()((set, get)
   },
 
   replaceSidebarPlaylists: (playlists) => {
-    console.log(
-      `[PlaylistLibraryStore] replaceSidebarPlaylists ${JSON.stringify({
-        playlistCount: playlists.length,
-      })}`
-    );
     set({
       sidebarPlaylists: playlists,
       sidebarHydrated: true,
@@ -224,14 +174,6 @@ export const usePlaylistLibraryStore = create<PlaylistLibraryStore>()((set, get)
     const previous = get().isSaved(playlistId);
     const next = !previous;
 
-    console.log(
-      `[PlaylistLibraryStore] optimistic toggle ${JSON.stringify({
-        playlistId,
-        previous,
-        next,
-      })}`
-    );
-
     set((state) => {
       const savedPlaylistIds = { ...state.savedPlaylistIds };
       if (next) {
@@ -250,12 +192,6 @@ export const usePlaylistLibraryStore = create<PlaylistLibraryStore>()((set, get)
 
     try {
       await ytRatePlaylist(playlistId, next ? "LIKE" : "INDIFFERENT");
-      console.log(
-        `[PlaylistLibraryStore] toggle confirmed ${JSON.stringify({
-          playlistId,
-          saved: next,
-        })}`
-      );
       await Promise.all([
         get().hydrate(true, next ? "playlist-saved" : "playlist-removed"),
         get().hydrateSidebar(true, next ? "playlist-saved" : "playlist-removed"),
@@ -299,13 +235,6 @@ export const usePlaylistLibraryStore = create<PlaylistLibraryStore>()((set, get)
     videoIds = [],
     privacyStatus = "PRIVATE"
   ) => {
-    console.log(
-      `[PlaylistLibraryStore] createPlaylist ${JSON.stringify({
-        title,
-        videoIds: videoIds.length,
-        privacyStatus,
-      })}`
-    );
     const response = await ytCreatePlaylist({
       title,
       description,
@@ -320,14 +249,6 @@ export const usePlaylistLibraryStore = create<PlaylistLibraryStore>()((set, get)
   },
 
   editPlaylist: async (playlistId, input) => {
-    console.log(
-      `[PlaylistLibraryStore] editPlaylist ${JSON.stringify({
-        playlistId,
-        title: input.title ?? null,
-        description: input.description ?? null,
-        privacyStatus: input.privacyStatus ?? null,
-      })}`
-    );
     set((state) => ({
       pending: {
         ...state.pending,
@@ -355,13 +276,6 @@ export const usePlaylistLibraryStore = create<PlaylistLibraryStore>()((set, get)
   },
 
   setPlaylistThumbnail: async (playlistId, imageBytes, mimeType) => {
-    console.log(
-      `[PlaylistLibraryStore] setPlaylistThumbnail ${JSON.stringify({
-        playlistId,
-        bytes: imageBytes.length,
-        mimeType,
-      })}`
-    );
     set((state) => ({
       pending: {
         ...state.pending,
@@ -388,9 +302,6 @@ export const usePlaylistLibraryStore = create<PlaylistLibraryStore>()((set, get)
   },
 
   deletePlaylist: async (playlistId) => {
-    console.log(
-      `[PlaylistLibraryStore] deletePlaylist ${JSON.stringify({ playlistId })}`
-    );
     set((state) => ({
       pending: {
         ...state.pending,

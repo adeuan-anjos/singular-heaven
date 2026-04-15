@@ -25,23 +25,19 @@ export function AccountPicker({ onAccountSelected }: AccountPickerProps) {
   const [switching, setSwitching] = useState<string | null>(null);
 
   useEffect(() => {
-    console.log("[AccountPicker] mounted");
     let cancelled = false;
     async function load() {
       try {
         const result = await ytGetAccounts();
-        console.log("[AccountPicker] accounts loaded", { total: result.length });
         if (!cancelled) {
           setAccounts(result);
           const channelAccounts = result.filter((a) => a.hasChannel);
           if (channelAccounts.length === 1) {
-            console.log("[AccountPicker] auto-selecting single channel");
             await ytSwitchAccount(channelAccounts[0].pageId);
             onAccountSelected();
             return;
           }
           if (channelAccounts.length === 0) {
-            console.log("[AccountPicker] no channel accounts, proceeding");
             onAccountSelected();
             return;
           }
@@ -56,19 +52,13 @@ export function AccountPicker({ onAccountSelected }: AccountPickerProps) {
     load();
     return () => {
       cancelled = true;
-      console.log("[AccountPicker] unmounted");
     };
   }, [onAccountSelected]);
 
   const handleSelect = async (account: ApiAccountInfo) => {
-    console.log("[AccountPicker] channel clicked", {
-      hasPageId: Boolean(account.pageId),
-      hasChannelHandle: Boolean(account.channelHandle),
-    });
     setSwitching(account.pageId ?? "main");
     try {
       await ytSwitchAccount(account.pageId);
-      console.log("[AccountPicker] switched");
       onAccountSelected();
     } catch (err) {
       console.error("[AccountPicker] switch failed", { error: String(err) });
@@ -77,12 +67,6 @@ export function AccountPicker({ onAccountSelected }: AccountPickerProps) {
   };
 
   const channelAccounts = accounts.filter((a) => a.hasChannel);
-
-  console.log("[AccountPicker] render", {
-    loading,
-    withChannel: channelAccounts.length,
-    switching,
-  });
 
   return (
     <div className="flex h-full items-center justify-center p-6">

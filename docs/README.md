@@ -27,6 +27,7 @@ Documentação viva do projeto.
 - [Memory Optimization](explanation/memory-optimization.md)
 - [WebView2 Memory Level](explanation/webview2-memory-level.md)
 - [Keep-Alive Screens](explanation/keep-alive-screens.md)
+- [Network Connection Pool](explanation/network-connection-pool.md)
 
 ## Reference
 
