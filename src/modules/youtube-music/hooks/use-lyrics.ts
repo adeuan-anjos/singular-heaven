@@ -16,7 +16,7 @@ export interface UseLyricsResult {
  * on scale/opacity/blur, so the line finishes animating into place
  * exactly when the singer reaches it.
  */
-const ANTICIPATION_SECONDS = 0.25;
+const ANTICIPATION_SECONDS = 0.35;
 
 /**
  * Reads from the LRCLIB-backed fetch store. The store itself owns

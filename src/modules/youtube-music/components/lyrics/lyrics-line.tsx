@@ -66,9 +66,9 @@ export const LyricsLine = React.memo(
       ? { duration: 0.15, ease: "linear" as const }
       : {
           type: "spring" as const,
-          stiffness: 100,
-          damping: 25,
-          mass: 2,
+          stiffness: 200,
+          damping: 26,
+          mass: 1,
         };
 
     return (
