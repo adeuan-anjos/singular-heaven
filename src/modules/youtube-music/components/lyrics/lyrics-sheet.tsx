@@ -16,7 +16,10 @@ import { LyricsArtworkPanel } from "./lyrics-artwork-panel";
 import { LyricsLines } from "./lyrics-lines";
 import { FALLBACK_COLORS } from "../../constants/lyrics";
 
-const LAYOUT_SPRING = { type: "spring" as const, stiffness: 200, damping: 30 };
+const SLIDE_SPRING = { type: "spring" as const, stiffness: 200, damping: 30 };
+
+/** Fixed width for the left artwork column when lyrics are shown. */
+const ARTWORK_COL_WIDTH = "28rem";
 
 export function LyricsSheet() {
   const open = useLyricsStore((s) => s.open);
@@ -26,6 +29,7 @@ export function LyricsSheet() {
   const { data, activeLineIndex } = useLyrics(currentTrackId);
 
   const colors = data?.colors ?? FALLBACK_COLORS;
+  const hasLyrics = data !== null && data.type !== "missing";
 
   return (
     <Sheet open={open} onOpenChange={setOpen}>
@@ -48,19 +52,30 @@ export function LyricsSheet() {
         ) : (
           <>
             <LyricsHeader />
-            <div className="relative z-10 flex min-h-0 flex-1 items-center justify-center gap-12 overflow-hidden px-12 pb-8">
-              <motion.div layout="position" transition={LAYOUT_SPRING} className="shrink-0">
+            <div className="relative z-10 min-h-0 flex-1 overflow-hidden">
+              {/* Artwork panel: slides between centered (no lyrics) and left (with lyrics). */}
+              <motion.div
+                className="absolute top-1/2 -translate-y-1/2"
+                animate={{
+                  left: hasLyrics ? "3rem" : "50%",
+                  x: hasLyrics ? "0%" : "-50%",
+                }}
+                transition={SLIDE_SPRING}
+              >
                 <LyricsArtworkPanel track={track} />
               </motion.div>
+
+              {/* Lyrics pane: slides in from the right when available. */}
               <AnimatePresence>
                 {data && data.type !== "missing" && (
                   <motion.div
                     key="lyrics-pane"
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    transition={{ duration: 0.4 }}
-                    className="min-w-0 max-w-2xl flex-1 self-stretch"
+                    className="absolute top-0 bottom-8 right-12 w-[min(40rem,calc(100%-28rem-6rem))]"
+                    style={{ left: `calc(${ARTWORK_COL_WIDTH} + 6rem)` }}
+                    initial={{ x: "8%", opacity: 0 }}
+                    animate={{ x: "0%", opacity: 1 }}
+                    exit={{ x: "8%", opacity: 0 }}
+                    transition={SLIDE_SPRING}
                   >
                     <LyricsLines data={data} activeLineIndex={activeLineIndex} />
                   </motion.div>
