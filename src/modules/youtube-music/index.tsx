@@ -21,6 +21,7 @@ import { ArtistSongsPage } from "./components/pages/artist-songs-page";
 import { AlbumPage } from "./components/pages/album-page";
 import { PlaylistPage } from "./components/pages/playlist-page";
 import { QueueSheet } from "./components/queue/queue-sheet";
+import { LyricsSheet } from "./components/lyrics/lyrics-sheet";
 import { AmbientBackground } from "./components/layout/ambient-background";
 import { SearchResultsPage } from "./components/search/search-results-page";
 import { AddToPlaylistDialog } from "./components/shared/add-to-playlist-dialog";
@@ -606,6 +607,7 @@ export default function YouTubeMusicModule() {
             </div>
 
             <QueueSheet open={queueOpen} onOpenChange={setQueueOpen} />
+            <LyricsSheet />
 
             <AddToPlaylistDialog
               open={playlistDialogTrack !== null}
