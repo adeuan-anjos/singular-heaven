@@ -577,7 +577,7 @@ git commit -m "feat(lyrics): add empty state for tracks without lyrics"
 
 ```tsx
 // src/modules/youtube-music/components/lyrics/lyrics-lines.tsx
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useRef } from "react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { LyricsLine, type LyricsLineState } from "./lyrics-line";
 import { usePlayerStore } from "../../stores/player-store";
@@ -598,12 +598,6 @@ export function LyricsLines({ data, activeLineIndex }: LyricsLinesProps) {
   const seek = usePlayerStore((s) => s.seek);
   const viewportRef = useRef<HTMLDivElement>(null);
   const lineRefs = useRef<(HTMLButtonElement | null)[]>([]);
-
-  // Keep the refs array sized to the number of lines
-  const lineCount = data.lines.length;
-  useMemo(() => {
-    lineRefs.current = new Array(lineCount).fill(null);
-  }, [lineCount]);
 
   useEffect(() => {
     if (activeLineIndex < 0) return;
