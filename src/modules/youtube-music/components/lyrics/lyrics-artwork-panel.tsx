@@ -67,7 +67,7 @@ export function LyricsArtworkPanel({ track }: LyricsArtworkPanelProps) {
   const artistName = track.artists.map((a) => a.name).join(", ");
 
   return (
-    <div className="flex h-full flex-col items-start justify-center gap-6">
+    <div className="flex flex-col items-start gap-6">
       <Avatar className="size-80 rounded-2xl shadow-2xl">
         <AvatarImage
           src={thumbUrl(imgUrl, 400)}

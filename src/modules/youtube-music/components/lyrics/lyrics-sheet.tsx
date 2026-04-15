@@ -1,4 +1,5 @@
 // src/modules/youtube-music/components/lyrics/lyrics-sheet.tsx
+import { AnimatePresence, motion } from "motion/react";
 import {
   Sheet,
   SheetContent,
@@ -13,15 +14,16 @@ import { LyricsBackground } from "./lyrics-background";
 import { LyricsHeader } from "./lyrics-header";
 import { LyricsArtworkPanel } from "./lyrics-artwork-panel";
 import { LyricsLines } from "./lyrics-lines";
-import { LyricsEmpty } from "./lyrics-empty";
 import { FALLBACK_COLORS } from "../../constants/lyrics";
+
+const LAYOUT_SPRING = { type: "spring" as const, stiffness: 200, damping: 30 };
 
 export function LyricsSheet() {
   const open = useLyricsStore((s) => s.open);
   const setOpen = useLyricsStore((s) => s.setOpen);
   const currentTrackId = usePlayerStore((s) => s.currentTrackId);
   const track = useTrack(currentTrackId ?? undefined);
-  const { data, activeLineIndex, isLoading } = useLyrics(currentTrackId);
+  const { data, activeLineIndex } = useLyrics(currentTrackId);
 
   const colors = data?.colors ?? FALLBACK_COLORS;
 
@@ -46,13 +48,24 @@ export function LyricsSheet() {
         ) : (
           <>
             <LyricsHeader />
-            <div className="relative z-10 grid min-h-0 flex-1 grid-cols-2 grid-rows-1 gap-12 overflow-hidden px-12 pb-8">
-              <LyricsArtworkPanel track={track} />
-              {data && data.type !== "missing" ? (
-                <LyricsLines data={data} activeLineIndex={activeLineIndex} />
-              ) : (
-                <LyricsEmpty track={track} showMessage={!isLoading} />
-              )}
+            <div className="relative z-10 flex min-h-0 flex-1 items-center justify-center gap-12 overflow-hidden px-12 pb-8">
+              <motion.div layout transition={LAYOUT_SPRING} className="shrink-0">
+                <LyricsArtworkPanel track={track} />
+              </motion.div>
+              <AnimatePresence>
+                {data && data.type !== "missing" && (
+                  <motion.div
+                    key="lyrics-pane"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 0.4 }}
+                    className="min-w-0 max-w-2xl flex-1 self-stretch"
+                  >
+                    <LyricsLines data={data} activeLineIndex={activeLineIndex} />
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
           </>
         )}
