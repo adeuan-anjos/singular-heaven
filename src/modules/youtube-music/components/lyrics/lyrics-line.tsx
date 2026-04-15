@@ -82,8 +82,15 @@ export const LyricsLine = React.memo(
           filter: filterValue,
         }}
         transition={transition}
-        style={{ originX: 0, originY: 0.5 }}
-        className="block w-full cursor-pointer text-left text-3xl font-semibold leading-snug will-change-transform"
+        style={{
+          originX: 0,
+          originY: 0.5,
+          // Fluid font-size: max(5vh, 2.5vw) with a hard floor/ceiling via
+          // clamp so lines stay readable from 1280×800 up to 4K. Spec §5.1–5.2.
+          fontSize: "clamp(20px, max(2.5vh, 2vw), 48px)",
+          lineHeight: "1.2em",
+        }}
+        className="block w-full cursor-pointer text-left font-semibold will-change-transform"
       >
         {text}
       </motion.button>

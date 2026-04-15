@@ -18,8 +18,13 @@ import { FALLBACK_COLORS } from "../../constants/lyrics";
 
 const SLIDE_SPRING = { type: "spring" as const, stiffness: 200, damping: 30 };
 
-/** Fixed width for the left artwork column when lyrics are shown. */
-const ARTWORK_COL_WIDTH = "28rem";
+/**
+ * Grid template column string for CSS grid-template-columns transition.
+ * Chromium 2024+ supports animating grid-template-columns with CSS transitions.
+ * We apply it via inline style so Tailwind's purger doesn't strip it.
+ */
+const GRID_WITH_LYRICS = "minmax(0, 0.45fr) minmax(0, 0.55fr)";
+const GRID_NO_LYRICS = "minmax(0, 1fr) 0fr";
 
 export function LyricsSheet() {
   const open = useLyricsStore((s) => s.open);
@@ -52,36 +57,59 @@ export function LyricsSheet() {
         ) : (
           <>
             <LyricsHeader />
-            <div className="relative z-10 min-h-0 flex-1 overflow-hidden">
-              {/* Artwork panel: slides between centered (no lyrics) and left (with lyrics). */}
+
+            {/*
+             * Responsive grid layout:
+             *   - No lyrics: single 1fr column — artwork panel centers naturally
+             *   - With lyrics: 0.45fr artwork | 0.55fr lyrics
+             * max-w-screen-2xl + mx-auto caps the layout at 1536px on ultrawide
+             * displays so the content doesn't stretch indefinitely on 21:9 / 4K.
+             *
+             * The grid-template-columns transition is handled by the motion.div
+             * via `animate` so Framer Motion drives the interpolation. Because
+             * grid-template-columns animated via Framer Motion on a div works in
+             * Chromium (the Tauri WebView runtime), this avoids any absolute-
+             * positioning stretch artefacts from the previous implementation.
+             */}
+            <motion.div
+              className="relative z-10 mx-auto flex max-w-screen-2xl min-h-0 flex-1 items-stretch gap-2 overflow-hidden px-8 w-full"
+              style={{
+                display: "grid",
+                // Start with no-lyrics layout and animate to with-lyrics
+                gridTemplateColumns: hasLyrics ? GRID_WITH_LYRICS : GRID_NO_LYRICS,
+                transition: "grid-template-columns 500ms cubic-bezier(0.4,0,0.2,1)",
+              }}
+            >
+              {/*
+               * Artwork column: flex-center so the artwork is always centered
+               * within its 0.45fr column regardless of whether lyrics are shown.
+               * motion.div keeps the spring slide from the previous position
+               * as the grid column width changes.
+               */}
               <motion.div
-                className="absolute top-1/2 -translate-y-1/2"
-                animate={{
-                  left: hasLyrics ? "3rem" : "50%",
-                  x: hasLyrics ? "0%" : "-50%",
-                }}
+                className="flex items-center justify-center py-8"
+                layout
                 transition={SLIDE_SPRING}
               >
                 <LyricsArtworkPanel track={track} />
               </motion.div>
 
-              {/* Lyrics pane: slides in from the right when available. */}
+              {/* Lyrics column: slides in/out via AnimatePresence. */}
               <AnimatePresence>
                 {data && data.type !== "missing" && (
                   <motion.div
                     key="lyrics-pane"
-                    className="absolute top-0 bottom-8 right-12 w-[min(40rem,calc(100%-28rem-6rem))]"
-                    style={{ left: `calc(${ARTWORK_COL_WIDTH} + 6rem)` }}
-                    initial={{ x: "8%", opacity: 0 }}
-                    animate={{ x: "0%", opacity: 1 }}
-                    exit={{ x: "8%", opacity: 0 }}
+                    className="min-w-0 overflow-hidden py-8 pb-10"
+                    initial={{ opacity: 0, x: "4%" }}
+                    animate={{ opacity: 1, x: "0%" }}
+                    exit={{ opacity: 0, x: "4%" }}
                     transition={SLIDE_SPRING}
                   >
                     <LyricsLines data={data} activeLineIndex={activeLineIndex} />
                   </motion.div>
                 )}
               </AnimatePresence>
-            </div>
+            </motion.div>
           </>
         )}
       </SheetContent>

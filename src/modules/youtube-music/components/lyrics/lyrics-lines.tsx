@@ -37,8 +37,20 @@ export function LyricsLines({ data, activeLineIndex }: LyricsLinesProps) {
   }, [activeLineIndex]);
 
   return (
+    /*
+     * ScrollArea fills the full column height. The edge-fade mask gradient
+     * softens the top and bottom clip edges.
+     *
+     * The inner div sets right padding to 15% of the column width on large
+     * screens (≥ 1600px) and 8% below that, via Tailwind v4 arbitrary-value
+     * variants — spec §2 requires this to prevent lines from touching the
+     * right edge. max-w is removed so lines use the full 80% spec §5.5.
+     */
     <ScrollArea className="h-full" style={EDGE_FADE_STYLE}>
-      <div className="mx-auto flex max-w-2xl flex-col gap-4 px-4 py-[40vh]">
+      <div
+        className="flex flex-col gap-4 py-[40vh] pl-4 max-[1600px]:pr-[8%] min-[1600px]:pr-[15%]"
+        style={{ width: "80%" }}
+      >
         {data.lines.map((line, i) => (
           <LyricsLine
             key={`${line.time}-${i}`}

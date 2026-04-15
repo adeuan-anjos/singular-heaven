@@ -18,6 +18,18 @@ function formatTime(seconds: number): string {
 }
 
 /**
+ * Fluid artwork size: limited by whichever is smaller — 50% of the viewport
+ * height or 38% of the viewport width. Spec §3.
+ * This keeps artwork from growing unbounded on ultrawide / 4K displays while
+ * matching the same formula used in the centered (no-lyrics) state so the
+ * artwork does not change size when lyrics appear or disappear.
+ */
+const ARTWORK_SIZE_STYLE: React.CSSProperties = {
+  width: "min(50vh, 38vw)",
+  height: "min(50vh, 38vw)",
+};
+
+/**
  * Left column of the lyrics view: artwork, title/artist, scrubbable
  * Slider, and inline controls. Subscribes to progress via
  * usePlayerStore.subscribe so only this panel re-renders on tick,
@@ -67,23 +79,44 @@ export function LyricsArtworkPanel({ track }: LyricsArtworkPanelProps) {
   const artistName = track.artists.map((a) => a.name).join(", ");
 
   return (
-    <div className="flex w-80 flex-col items-start gap-6">
-      <Avatar className="size-80 rounded-2xl shadow-2xl">
+    <div
+      className="flex flex-col items-start gap-6"
+      style={{ width: "min(50vh, 38vw)" }}
+    >
+      {/* Artwork: fluid square via min(50vh, 38vw) — same formula in both centered
+          and docked states so the artwork size is stable across transitions. */}
+      <Avatar
+        className="rounded-2xl shadow-2xl"
+        style={ARTWORK_SIZE_STYLE}
+      >
         <AvatarImage
           src={thumbUrl(imgUrl, 400)}
           alt={track.title}
           className="rounded-2xl object-cover"
         />
-        <AvatarFallback className="rounded-2xl text-5xl">
+        <AvatarFallback
+          className="rounded-2xl"
+          style={{ fontSize: "min(5vh, 3.8vw)" }}
+        >
           {track.title.charAt(0)}
         </AvatarFallback>
       </Avatar>
 
+      {/* Title / artist: fluid typography via clamp so they scale with the
+          artwork from 1280×800 all the way to 4K. Spec §4.1–4.2. */}
       <div className="w-full font-heading">
-        <h2 className="text-2xl font-semibold leading-tight text-foreground">
+        <h2
+          className="font-semibold leading-tight text-foreground"
+          style={{ fontSize: "clamp(18px, 2vh, 32px)", letterSpacing: "0.4px" }}
+        >
           {track.title}
         </h2>
-        <p className="text-base text-muted-foreground">{artistName}</p>
+        <p
+          className="text-muted-foreground"
+          style={{ fontSize: "clamp(14px, 1.4vh, 22px)" }}
+        >
+          {artistName}
+        </p>
       </div>
 
       <div className="flex w-full flex-col gap-1">
@@ -108,7 +141,10 @@ export function LyricsArtworkPanel({ track }: LyricsArtworkPanelProps) {
             }}
           />
         </div>
-        <div className="flex justify-between text-xs tabular-nums text-muted-foreground">
+        <div
+          className="flex justify-between tabular-nums text-muted-foreground"
+          style={{ fontSize: "clamp(11px, 1.2vh, 16px)" }}
+        >
           <span ref={currentTimeRef}>0:00</span>
           <span>{formatTime(duration)}</span>
         </div>
