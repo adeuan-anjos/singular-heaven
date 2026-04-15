@@ -19,7 +19,7 @@ import { FALLBACK_COLORS } from "../../constants/lyrics";
 const SLIDE_SPRING = { type: "spring" as const, stiffness: 200, damping: 30 };
 
 /** Fixed width for the left artwork column when lyrics are shown. */
-const ARTWORK_COL_WIDTH = "28rem";
+const ARTWORK_COL_WIDTH = "24rem";
 
 export function LyricsSheet() {
   const open = useLyricsStore((s) => s.open);
@@ -70,7 +70,7 @@ export function LyricsSheet() {
                 {data && data.type !== "missing" && (
                   <motion.div
                     key="lyrics-pane"
-                    className="absolute top-0 bottom-8 right-12 w-[min(40rem,calc(100%-28rem-6rem))]"
+                    className="absolute bottom-8 right-12 top-0"
                     style={{ left: `calc(${ARTWORK_COL_WIDTH} + 6rem)` }}
                     initial={{ x: "8%", opacity: 0 }}
                     animate={{ x: "0%", opacity: 1 }}

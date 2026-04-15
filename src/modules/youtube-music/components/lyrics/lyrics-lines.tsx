@@ -38,7 +38,7 @@ export function LyricsLines({ data, activeLineIndex }: LyricsLinesProps) {
 
   return (
     <ScrollArea className="h-full" style={EDGE_FADE_STYLE}>
-      <div className="mx-auto flex max-w-2xl flex-col gap-4 px-4 py-[40vh]">
+      <div className="mx-auto flex w-full max-w-3xl flex-col gap-4 px-4 py-[40vh]">
         {data.lines.map((line, i) => (
           <LyricsLine
             key={`${line.time}-${i}`}
