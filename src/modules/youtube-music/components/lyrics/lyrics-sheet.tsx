@@ -49,7 +49,7 @@ export function LyricsSheet() {
           <>
             <LyricsHeader />
             <div className="relative z-10 flex min-h-0 flex-1 items-center justify-center gap-12 overflow-hidden px-12 pb-8">
-              <motion.div layout transition={LAYOUT_SPRING} className="shrink-0">
+              <motion.div layout="position" transition={LAYOUT_SPRING} className="shrink-0">
                 <LyricsArtworkPanel track={track} />
               </motion.div>
               <AnimatePresence>
