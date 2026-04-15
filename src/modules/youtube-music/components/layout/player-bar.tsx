@@ -18,11 +18,13 @@ import {
   List,
   Heart,
   Radio,
+  Mic2,
 } from "lucide-react";
 import { usePlayerStore } from "../../stores/player-store";
 import { useQueueStore } from "../../stores/queue-store";
 import { useTrack } from "../../stores/track-cache-store";
 import { useTrackLikeStore } from "../../stores/track-like-store";
+import { useLyricsStore } from "../../stores/lyrics-store";
 import { ProgressBar } from "./progress-bar";
 import { thumbUrl } from "../../utils/thumb-url";
 import { paths } from "../../router/paths";
@@ -60,6 +62,7 @@ export const PlayerBar = React.memo(function PlayerBar({ onOpenQueue }: PlayerBa
   const queuePrevious = useQueueStore((s) => s.previous);
   const toggleShuffle = useQueueStore((s) => s.toggleShuffle);
   const cycleRepeat = useQueueStore((s) => s.cycleRepeat);
+  const openLyrics = useLyricsStore((s) => s.openLyrics);
 
   if (!track) return null;
 
@@ -90,7 +93,8 @@ export const PlayerBar = React.memo(function PlayerBar({ onOpenQueue }: PlayerBa
         <button
           type="button"
           className="shrink-0"
-          onClick={() => track.album && navigate(paths.album(track.album.id))}
+          onClick={openLyrics}
+          aria-label="Abrir letra"
         >
           <Avatar className="h-12 w-12 rounded-md">
             <AvatarImage src={thumbUrl(imgUrl, 96)} alt={track.title} className="object-cover" />
@@ -99,7 +103,13 @@ export const PlayerBar = React.memo(function PlayerBar({ onOpenQueue }: PlayerBa
         </button>
         <div className="min-w-0">
           <div className="flex items-center gap-2">
-            <p className="truncate text-sm font-medium text-foreground">{track.title}</p>
+            <button
+              type="button"
+              onClick={openLyrics}
+              className="truncate text-left text-sm font-medium text-foreground hover:underline"
+            >
+              {track.title}
+            </button>
             {isRadio && (
               <span className="inline-flex items-center gap-1 shrink-0 rounded-full bg-accent px-2 py-0.5 text-xs text-accent-foreground">
                 <Radio className="size-3" />
@@ -174,7 +184,7 @@ export const PlayerBar = React.memo(function PlayerBar({ onOpenQueue }: PlayerBa
         <ProgressBar />
       </div>
 
-      {/* Right: Volume + queue */}
+      {/* Right: Volume + lyrics + queue */}
       <div className="flex items-center justify-end gap-1">
         <Popover>
           <PopoverTrigger
@@ -195,7 +205,16 @@ export const PlayerBar = React.memo(function PlayerBar({ onOpenQueue }: PlayerBa
             />
           </PopoverContent>
         </Popover>
-        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onOpenQueue}>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-8 w-8"
+          onClick={openLyrics}
+          aria-label="Abrir letra"
+        >
+          <Mic2 className="h-4 w-4" />
+        </Button>
+        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onOpenQueue} aria-label="Abrir fila">
           <List className="h-4 w-4" />
         </Button>
       </div>
