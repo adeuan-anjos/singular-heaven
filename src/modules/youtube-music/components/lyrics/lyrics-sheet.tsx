@@ -39,13 +39,13 @@ export function LyricsSheet() {
         <LyricsBackground colors={colors} />
 
         {!track ? (
-          <div className="flex h-full items-center justify-center text-muted-foreground">
+          <div className="relative z-10 flex h-full items-center justify-center text-muted-foreground">
             Nenhuma música tocando.
           </div>
         ) : (
           <>
             <LyricsHeader />
-            <div className="grid min-h-0 flex-1 grid-cols-2 gap-12 overflow-hidden px-12 pb-8">
+            <div className="relative z-10 grid min-h-0 flex-1 grid-cols-2 gap-12 overflow-hidden px-12 pb-8">
               <LyricsArtworkPanel track={track} />
               {data && data.type !== "missing" ? (
                 <LyricsLines data={data} activeLineIndex={activeLineIndex} />
