@@ -72,7 +72,7 @@ export function LyricsSheet() {
              * positioning stretch artefacts from the previous implementation.
              */}
             <motion.div
-              className="relative z-10 mx-auto flex max-w-screen-2xl min-h-0 flex-1 items-stretch gap-2 overflow-hidden px-8 w-full"
+              className="relative z-10 mx-auto flex max-w-screen-2xl min-h-0 flex-1 items-stretch gap-12 overflow-hidden px-8 w-full"
               style={{
                 display: "grid",
                 // Start with no-lyrics layout and animate to with-lyrics
@@ -87,7 +87,9 @@ export function LyricsSheet() {
                * as the grid column width changes.
                */}
               <motion.div
-                className="flex items-center justify-center py-8"
+                className={`flex items-center py-8 ${
+                  hasLyrics ? "justify-end" : "justify-center"
+                }`}
                 layout
                 transition={SLIDE_SPRING}
               >
