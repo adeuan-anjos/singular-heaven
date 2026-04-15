@@ -30,7 +30,7 @@ export function LyricsSheet() {
       <SheetContent
         side="bottom"
         showCloseButton={false}
-        className="h-svh w-screen max-w-none gap-0 border-0 bg-transparent p-0"
+        className="!h-svh w-screen max-w-none gap-0 border-0 bg-transparent p-0"
       >
         <SheetTitle className="sr-only">Letra</SheetTitle>
         <SheetDescription className="sr-only">
