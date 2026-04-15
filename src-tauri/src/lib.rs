@@ -558,6 +558,7 @@ pub fn run() {
             youtube_music::commands::yt_remove_playlist_items,
             youtube_music::commands::yt_get_watch_playlist,
             youtube_music::commands::yt_get_lyrics,
+            youtube_music::lyrics_lrclib::yt_lyrics_lrclib,
             youtube_music::commands::yt_auth_status,
             youtube_music::commands::yt_ensure_session,
             youtube_music::commands::yt_auth_logout,
