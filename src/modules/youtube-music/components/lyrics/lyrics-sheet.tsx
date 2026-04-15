@@ -14,14 +14,14 @@ import { LyricsHeader } from "./lyrics-header";
 import { LyricsArtworkPanel } from "./lyrics-artwork-panel";
 import { LyricsLines } from "./lyrics-lines";
 import { LyricsEmpty } from "./lyrics-empty";
-import { FALLBACK_COLORS } from "../../mocks/lyrics-mock";
+import { FALLBACK_COLORS } from "../../constants/lyrics";
 
 export function LyricsSheet() {
   const open = useLyricsStore((s) => s.open);
   const setOpen = useLyricsStore((s) => s.setOpen);
   const currentTrackId = usePlayerStore((s) => s.currentTrackId);
   const track = useTrack(currentTrackId ?? undefined);
-  const { data, activeLineIndex } = useLyrics(currentTrackId);
+  const { data, activeLineIndex, isLoading } = useLyrics(currentTrackId);
 
   const colors = data?.colors ?? FALLBACK_COLORS;
 
@@ -51,7 +51,7 @@ export function LyricsSheet() {
               {data && data.type !== "missing" ? (
                 <LyricsLines data={data} activeLineIndex={activeLineIndex} />
               ) : (
-                <LyricsEmpty track={track} />
+                <LyricsEmpty track={track} showMessage={!isLoading} />
               )}
             </div>
           </>
